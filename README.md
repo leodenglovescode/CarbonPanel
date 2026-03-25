@@ -7,7 +7,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-CarbonPanel is a lightweight server monitoring panel built with **FastAPI** and **Vue 3**. It provides a clean dashboard for live system metrics, basic site/service management, and account settings with optional TOTP-based 2FA.
+CarbonPanel is a lightweight **self-hosted** server monitoring panel built with **FastAPI** and **Vue 3**. It provides a clean dashboard for live system metrics, basic site/service management, and account settings with optional TOTP-based 2FA.
 
 ## Features
 
@@ -21,7 +21,7 @@ CarbonPanel is a lightweight server monitoring panel built with **FastAPI** and 
 - Adjustable metric refresh interval and process display limits
 - SQLite-backed backend with Alembic migrations
 - Local development workflow via `make`
-- Docker Compose support for running frontend and backend together
+- Docker support for running the full self-hosted stack as a single image
 
 ## Tech Stack
 
@@ -44,12 +44,50 @@ CarbonPanel is a lightweight server monitoring panel built with **FastAPI** and 
 ```text
 .
 ├── backend/     # FastAPI app, database models, API routes, services, migrations
+├── docker/      # nginx config and startup script for the combined image
 ├── frontend/    # Vue 3 app, widgets, pages, stores, API client
+├── Dockerfile   # combined frontend + backend container image
 ├── Makefile     # local setup and dev commands
 └── docker-compose.yml
 ```
 
 ## Quick Start
+
+### Docker / self-hosted deployment
+
+CarbonPanel is intended as a self-hosted app. The Docker setup builds a **single image** containing the Vue frontend, nginx, and the FastAPI backend.
+
+1. Copy the backend environment file:
+
+```bash
+cp /home/leodeng/Desktop/CarbonPanel/backend/.env.example /home/leodeng/Desktop/CarbonPanel/backend/.env
+```
+
+2. Build the image:
+
+```bash
+docker build -t carbonpanel /home/leodeng/Desktop/CarbonPanel
+```
+
+3. Run it directly with Docker:
+
+```bash
+docker run -d \
+  --name carbonpanel \
+  --network host \
+  --restart unless-stopped \
+  --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
+  -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
+  carbonpanel
+```
+
+Or run it with Docker Compose:
+
+```bash
+docker compose up --build -d
+```
+
+With the default setup, the app is available at `http://localhost`.
 
 ### Local development
 
@@ -79,18 +117,17 @@ make dev
 
 ## Docker
 
-Run the full stack with Docker Compose:
+Run the self-hosted app with Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-Default container ports:
+Default URL:
 
-- Frontend: `http://localhost`
-- Backend: `http://localhost:8000`
+- App: `http://localhost`
 
-> Note: the backend uses `network_mode: host` in Docker Compose so system/network metrics can reflect the host more accurately.
+> Note: the container uses `network_mode: host` so system/network metrics can reflect the host more accurately.
 
 ## Configuration
 
