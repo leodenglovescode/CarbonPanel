@@ -100,7 +100,7 @@ function handleLogout() {
   border-left: 2px solid transparent;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
 }
-.nav-item:hover { background: rgba(255,255,255,0.03); color: var(--fg); }
+.nav-item:hover { background: var(--bg-hover); color: var(--fg); }
 .nav-item.active {
   background: var(--accent-dim);
   color: var(--accent);

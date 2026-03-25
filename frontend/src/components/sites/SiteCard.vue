@@ -101,7 +101,7 @@ function statusClass(s?: string) {
 .service-label {
   font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;
   padding: 1px 5px; border-radius: 2px;
-  background: rgba(255,255,255,0.05); color: var(--fg-dim); border: 1px solid var(--border);
+  background: var(--bg-badge); color: var(--fg-dim); border: 1px solid var(--border);
 }
 .service-name { font-size: 11px; color: var(--fg-muted); }
 

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(docker --version)",
+      "Bash(nvidia-smi --query-gpu=name,memory.total,memory.used,utilization.gpu --format=csv,noheader)",
+      "Bash(pip3 list:*)",
+      "Bash(find /home/leodeng/Desktop/CarbonPanel/frontend -name *.vue -o -name *.ts -o -name *.css)"
+    ]
+  }
+}

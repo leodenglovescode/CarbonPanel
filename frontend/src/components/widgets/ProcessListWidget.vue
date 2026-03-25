@@ -3,7 +3,7 @@
     <template #header>
       <span class="card-title">Processes</span>
       <div class="header-right">
-        <span class="badge badge-gray">top 2</span>
+        <span class="badge badge-gray">{{ displayCount }}/{{ processes.length }}</span>
         <button
           v-for="s in ['cpu', 'memory']"
           :key="s"
@@ -12,6 +12,20 @@
         >{{ s }}</button>
       </div>
     </template>
+
+    <div class="search-row">
+      <input
+        v-model="searchQuery"
+        class="search-input"
+        placeholder="filter by name…"
+        spellcheck="false"
+      />
+      <button
+        :class="['expand-btn', { active: expanded }]"
+        @click="expanded = !expanded"
+        :title="expanded ? 'show less' : 'show all'"
+      >{{ expanded ? '▲ less' : '▼ all' }}</button>
+    </div>
 
     <div class="table-wrap">
       <table>
@@ -41,6 +55,9 @@
               <span class="status-txt">{{ p.status }}</span>
             </td>
           </tr>
+          <tr v-if="visibleProcesses.length === 0">
+            <td colspan="6" class="no-results">no matching processes</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -48,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import type { ProcessMetrics } from '@/types/metrics'
 import { useMetricsStore } from '@/stores/metrics'
@@ -56,10 +73,22 @@ import { useMetricsStore } from '@/stores/metrics'
 const props = defineProps<{ processes: ProcessMetrics[] }>()
 const emit = defineEmits<{ sortChange: [sort: 'cpu' | 'memory'] }>()
 
-const visibleProcesses = computed(() => props.processes.slice(0, 2))
-
 const store = useMetricsStore()
 const currentSort = store.processSort
+const searchQuery = ref('')
+const expanded = ref(false)
+
+const filtered = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return props.processes
+  return props.processes.filter(p => p.name.toLowerCase().includes(q))
+})
+
+const visibleProcesses = computed(() =>
+  expanded.value || searchQuery.value ? filtered.value : filtered.value.slice(0, 2)
+)
+
+const displayCount = computed(() => visibleProcesses.value.length)
 
 function setSort(s: 'cpu' | 'memory') {
   store.processSort = s
@@ -96,6 +125,42 @@ function statusClass(status: string) {
 .sort-btn.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .sort-btn:hover:not(.active) { color: var(--fg-muted); border-color: var(--fg-dim); }
 
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.search-input {
+  flex: 1;
+  background: var(--bg-input, var(--bg-subtle));
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color var(--transition);
+}
+.search-input::placeholder { color: var(--fg-dim); }
+.search-input:focus { border-color: var(--accent-border); }
+
+.expand-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg-dim);
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+.expand-btn:hover { color: var(--fg-muted); border-color: var(--fg-dim); }
+.expand-btn.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 thead th {
@@ -110,18 +175,19 @@ thead th {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  transition: color var(--transition);
 }
 thead th:hover { color: var(--fg-muted); }
 .sort-arrow { color: var(--accent); }
 
 tbody tr { transition: background var(--transition); }
-tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
-tbody tr:hover { background: rgba(255,255,255,0.04); }
+tbody tr:nth-child(even) { background: var(--bg-stripe); }
+tbody tr:hover { background: var(--bg-hover); }
 tbody td {
   font-size: 11px;
   padding: 4px 8px;
   color: var(--fg);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border-row);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -132,6 +198,7 @@ tbody td {
 .name { font-weight: 500; }
 .user { max-width: 80px; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+.no-results { text-align: center; color: var(--fg-dim); font-size: 11px; padding: 12px 8px; }
 
 .status-dot {
   display: inline-block;

@@ -25,6 +25,10 @@
               :class="['theme-btn', { active: theme.theme === 'light' }]"
               @click="theme.setTheme('light')"
             >○ Light</button>
+            <button
+              :class="['theme-btn', { active: theme.theme === 'auto' }]"
+              @click="theme.setTheme('auto')"
+            >⟳ Auto</button>
           </div>
         </div>
 
@@ -57,6 +61,31 @@
               :class="['preset-btn', { active: metrics.updateInterval === p.value }]"
               @click="applyPreset(p.value)"
             >{{ p.label }}</button>
+          </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Alert Thresholds</span>
+            <span class="badge badge-gray">toast on exceed</span>
+          </div>
+          <p class="section-desc">Set a % threshold for CPU, RAM, or any disk. A toast notification fires when exceeded. Set to 0 to disable.</p>
+
+          <div v-for="metric in alertMetrics" :key="metric.key" class="alert-row">
+            <span class="alert-lbl">{{ metric.label }}</span>
+            <input
+              type="range"
+              class="interval-slider"
+              :value="alerts.thresholds[metric.key]"
+              min="0"
+              max="100"
+              step="5"
+              @input="e => alerts.setThreshold(metric.key, parseInt((e.target as HTMLInputElement).value))"
+            />
+            <span class="alert-val">
+              {{ alerts.thresholds[metric.key] === 0 ? 'off' : alerts.thresholds[metric.key] + '%' }}
+            </span>
           </div>
         </div>
 
@@ -194,6 +223,7 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMetricsStore } from '@/stores/metrics'
 import { useThemeStore } from '@/stores/theme'
+import { useAlertsStore } from '@/stores/alerts'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { settingsApi } from '@/api'
 import QRCode from 'qrcode'
@@ -201,7 +231,14 @@ import QRCode from 'qrcode'
 const auth = useAuthStore()
 const metrics = useMetricsStore()
 const theme = useThemeStore()
+const alerts = useAlertsStore()
 const { sendInterval } = useWebSocket()
+
+const alertMetrics = [
+  { key: 'cpu'  as const, label: 'CPU' },
+  { key: 'ram'  as const, label: 'RAM' },
+  { key: 'disk' as const, label: 'Disk' },
+]
 
 const presets = [
   { label: '0.4s', value: 0.4 },
@@ -247,9 +284,12 @@ async function startSetup() {
     setupData.value = res.data
     await nextTick()
     if (qrCanvas.value) {
+      const style = getComputedStyle(document.documentElement)
+      const fg = style.getPropertyValue('--fg').trim() || '#e0e0e0'
+      const bg = style.getPropertyValue('--bg-card').trim() || '#111111'
       await QRCode.toCanvas(qrCanvas.value, res.data.otpauth_uri, {
         width: 180,
-        color: { dark: '#e0e0e0', light: '#111111' },
+        color: { dark: fg, light: bg },
       })
     }
   } finally {
@@ -484,4 +524,8 @@ async function handleChangeCreds() {
   transition: color var(--transition);
 }
 .toggle-link:hover { color: var(--accent); }
+
+.alert-row { display: flex; align-items: center; gap: 10px; }
+.alert-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); width: 34px; flex-shrink: 0; }
+.alert-val { font-size: 11px; color: var(--fg-muted); width: 28px; text-align: right; flex-shrink: 0; }
 </style>

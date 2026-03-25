@@ -38,8 +38,8 @@ defineProps<{ variant?: 'primary' | 'ghost' | 'danger'; disabled?: boolean }>()
   border-color: var(--accent);
 }
 .btn-primary:hover:not(:disabled) {
-  background: #33ffaa;
-  border-color: #33ffaa;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
   box-shadow: 0 0 12px rgba(0,255,136,0.25);
 }
 

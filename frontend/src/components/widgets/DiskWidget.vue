@@ -78,8 +78,9 @@ function pctBadge(pct: number) {
 .sep { color: var(--fg-dim); }
 .total-val { font-size: 13px; color: var(--fg-muted); }
 
-.bar-track { height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; transition: width 400ms ease, background 400ms ease; }
+.bar-track { height: 8px; background: var(--bg-subtle); border-radius: 4px; overflow: hidden; transition: background var(--transition); }
+.bar-track:hover { background: var(--bg-hover); }
+.bar-fill { height: 100%; border-radius: 4px; transition: width var(--bar-transition), background var(--transition); }
 
 .io-totals { display: flex; gap: 20px; }
 .io-item { display: flex; align-items: center; gap: 4px; }

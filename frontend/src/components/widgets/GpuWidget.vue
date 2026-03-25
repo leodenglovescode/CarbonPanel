@@ -70,8 +70,8 @@ function fmt(mb: number) { return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : 
 
 .stat-row { display: flex; align-items: center; gap: 7px; }
 .stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); width: 26px; flex-shrink: 0; }
-.bar-track { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 2px; transition: width 400ms ease; }
+.bar-track { flex: 1; height: 5px; background: var(--bg-subtle); border-radius: 2px; overflow: hidden; transition: background var(--transition); }
+.bar-fill { height: 100%; border-radius: 2px; transition: width var(--bar-transition); }
 .bar-fill.util { background: #a78bfa; }
 .bar-fill.vram { background: #60a5fa; }
 .stat-val { font-size: 10px; color: var(--fg-muted); white-space: nowrap; }

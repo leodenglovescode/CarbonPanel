@@ -25,6 +25,13 @@
   --bar-transition: 500ms cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-card: 0 2px 12px rgba(0,0,0,0.4);
   --shadow-card-hover: 0 4px 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,255,136,0.06);
+  /* theme-direction-dependent transparent values */
+  --bg-subtle:  rgba(255,255,255,0.06);
+  --bg-hover:   rgba(255,255,255,0.04);
+  --bg-stripe:  rgba(255,255,255,0.015);
+  --border-row: rgba(255,255,255,0.03);
+  --bg-badge:   rgba(255,255,255,0.05);
+  --accent-hover: #33ffaa;
 }
 
 [data-theme="light"] {
@@ -47,6 +54,13 @@
   --info: #2266dd;
   --shadow-card: 0 2px 8px rgba(0,0,0,0.08);
   --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,170,85,0.12);
+  /* override for light backgrounds */
+  --bg-subtle:  rgba(0,0,0,0.06);
+  --bg-hover:   rgba(0,0,0,0.05);
+  --bg-stripe:  rgba(0,0,0,0.025);
+  --border-row: rgba(0,0,0,0.06);
+  --bg-badge:   rgba(0,0,0,0.06);
+  --accent-hover: #00cc77;
 }
 
 *, *::before, *::after {

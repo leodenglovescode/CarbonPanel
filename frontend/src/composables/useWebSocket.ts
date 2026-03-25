@@ -1,6 +1,7 @@
 import { onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMetricsStore } from '@/stores/metrics'
+import { useAlertsStore } from '@/stores/alerts'
 import type { MetricsSnapshot } from '@/types/metrics'
 import router from '@/router'
 
@@ -9,6 +10,7 @@ const WS_BASE = import.meta.env.VITE_WS_BASE_URL || ''
 export function useWebSocket() {
   const auth = useAuthStore()
   const metrics = useMetricsStore()
+  const alertsStore = useAlertsStore()
   let ws: WebSocket | null = null
   let retryDelay = 1000
   let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -30,7 +32,9 @@ export function useWebSocket() {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'metrics') {
-          metrics.handleSnapshot(data as MetricsSnapshot)
+          const snap = data as MetricsSnapshot
+          metrics.handleSnapshot(snap)
+          alertsStore.check(snap)
         } else if (data.type === 'error' && data.code === 'auth_failed') {
           auth.logout()
           router.push('/login')

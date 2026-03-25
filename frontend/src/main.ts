@@ -6,7 +6,10 @@ import './assets/main.css'
 
 // Apply saved theme before first render to avoid flash
 const savedTheme = localStorage.getItem('cp_theme') ?? 'dark'
-document.documentElement.setAttribute('data-theme', savedTheme)
+const resolvedTheme = savedTheme === 'auto'
+  ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  : savedTheme
+document.documentElement.setAttribute('data-theme', resolvedTheme)
 
 const app = createApp(App)
 app.use(createPinia())
