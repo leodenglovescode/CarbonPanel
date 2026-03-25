@@ -80,10 +80,13 @@ docker run -d \
   --name carbonpanel \
   --network host \
   --restart unless-stopped \
+  -e APP_PORT=8787 \
   --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
   -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
   ghcr.io/leodenglovescode/carbonpanel:latest
 ```
+
+> Default app port is `8787`. Change `APP_PORT` if you want CarbonPanel to listen on a different port, including when using `--network host`.
 
 Or run it with Docker Compose after changing the service to use the published image instead of `build`:
 
@@ -91,7 +94,7 @@ Or run it with Docker Compose after changing the service to use the published im
 docker compose up -d
 ```
 
-With the default setup, the app is available at `http://localhost`.
+With the default setup, the app is available at `http://localhost:8787`.
 
 ### Local development
 
@@ -129,10 +132,13 @@ docker run -d \
   --name carbonpanel \
   --network host \
   --restart unless-stopped \
+  -e APP_PORT=8787 \
   --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
   -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
   ghcr.io/leodenglovescode/carbonpanel:latest
 ```
+
+> Default app port: `8787`. Set `APP_PORT` to override it. This is especially useful with `network_mode: host`, where port publishing with `-p` does not apply.
 
 If you prefer Docker Compose, use an image-based service definition like this:
 
@@ -142,6 +148,8 @@ services:
     image: ghcr.io/leodenglovescode/carbonpanel:latest
     env_file:
       - ./backend/.env
+    environment:
+      APP_PORT: ${APP_PORT:-8787}
     volumes:
       - ./backend/carbonpanel.db:/app/carbonpanel.db
     restart: unless-stopped
@@ -156,7 +164,7 @@ docker compose up -d
 
 Default URL:
 
-- App: `http://localhost`
+- App: `http://localhost:8787`
 
 > Note: the container uses `network_mode: host` so system/network metrics can reflect the host more accurately.
 

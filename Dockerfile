@@ -8,7 +8,8 @@ RUN npm run build
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    APP_PORT=8787
 
 WORKDIR /app
 
@@ -23,10 +24,9 @@ COPY backend/alembic ./alembic
 RUN pip install --no-cache-dir -e .
 
 COPY --from=frontend-build /frontend/dist /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/start.sh /start.sh
 
 RUN chmod +x /start.sh
 
-EXPOSE 80
+EXPOSE 8787
 CMD ["/start.sh"]

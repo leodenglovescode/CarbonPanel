@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
+    environment:
+      APP_PORT: ${APP_PORT:-8787}
     volumes:
       - ./backend/carbonpanel.db:/app/carbonpanel.db
     restart: unless-stopped
