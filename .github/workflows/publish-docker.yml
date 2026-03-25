@@ -15,16 +15,6 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image_name: carbonpanel-backend
-            context: ./backend
-            file: ./backend/Dockerfile
-          - image_name: carbonpanel-frontend
-            context: ./frontend
-            file: ./frontend/Dockerfile
 
     steps:
       - name: Checkout repository
@@ -44,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}
+          images: ghcr.io/${{ github.repository_owner }}/carbonpanel
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -54,8 +44,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
+          context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
