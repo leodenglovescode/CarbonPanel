@@ -13,6 +13,9 @@
 
 CarbonPanel is a lightweight **self-hosted** server monitoring panel built with **FastAPI** and **Vue 3**. It provides a clean dashboard for live system metrics, basic site/service management, and account settings with optional TOTP-based 2FA.
 
+## Screenshots
+<img width="960" height="479" alt="image" src="https://github.com/user-attachments/assets/5b713832-5792-4972-8675-0403242c5f69" />
+
 ## Features
 
 - Live dashboard for **CPU, RAM, GPU, disk, network, process, and system** metrics
