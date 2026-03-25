@@ -1,9 +1,5 @@
 # CarbonPanel
 
-
-
-
-
 ![Project Status](https://img.shields.io/badge/status-active-00C853?style=for-the-badge)
 ![GitHub License](https://img.shields.io/github/license/leodenglovescode/CarbonPanel?style=for-the-badge)
 ![GitHub last commit](https://img.shields.io/github/last-commit/leodenglovescode/CarbonPanel?style=for-the-badge)
@@ -63,7 +59,7 @@ CarbonPanel is a lightweight **self-hosted** server monitoring panel built with 
 
 ### Docker / self-hosted deployment
 
-CarbonPanel is intended as a self-hosted app. The Docker setup builds a **single image** containing the Vue frontend, nginx, and the FastAPI backend.
+CarbonPanel is intended as a self-hosted app. The published GHCR package is a **single image** containing the Vue frontend, nginx, and the FastAPI backend.
 
 1. Copy the backend environment file:
 
@@ -71,10 +67,10 @@ CarbonPanel is intended as a self-hosted app. The Docker setup builds a **single
 cp /home/leodeng/Desktop/CarbonPanel/backend/.env.example /home/leodeng/Desktop/CarbonPanel/backend/.env
 ```
 
-2. Build the image:
+2. Pull the latest image from GHCR:
 
 ```bash
-docker build -t carbonpanel /home/leodeng/Desktop/CarbonPanel
+docker pull ghcr.io/leodenglovescode/carbonpanel:latest
 ```
 
 3. Run it directly with Docker:
@@ -86,13 +82,13 @@ docker run -d \
   --restart unless-stopped \
   --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
   -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
-  carbonpanel
+  ghcr.io/leodenglovescode/carbonpanel:latest
 ```
 
-Or run it with Docker Compose:
+Or run it with Docker Compose after changing the service to use the published image instead of `build`:
 
 ```bash
-docker compose up --build -d
+docker compose up -d
 ```
 
 With the default setup, the app is available at `http://localhost`.
@@ -125,10 +121,37 @@ make dev
 
 ## Docker
 
-Run the self-hosted app with Docker Compose:
+Pull and run the latest published image:
 
 ```bash
-docker compose up --build
+docker pull ghcr.io/leodenglovescode/carbonpanel:latest
+docker run -d \
+  --name carbonpanel \
+  --network host \
+  --restart unless-stopped \
+  --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
+  -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
+  ghcr.io/leodenglovescode/carbonpanel:latest
+```
+
+If you prefer Docker Compose, use an image-based service definition like this:
+
+```bash
+services:
+  carbonpanel:
+    image: ghcr.io/leodenglovescode/carbonpanel:latest
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/carbonpanel.db:/app/carbonpanel.db
+    restart: unless-stopped
+    network_mode: host
+```
+
+Then start it with:
+
+```bash
+docker compose up -d
 ```
 
 Default URL:
