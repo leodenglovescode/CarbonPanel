@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carbonpanel"
+version = "0.1.0"
+description = "Lightweight server monitoring panel"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "psutil>=6.0",
+    "python-jose[cryptography]>=3.3",
+    "bcrypt>=4.0",
+    "pyotp>=2.9",
+    "qrcode[pil]>=7.4",
+    "pydantic-settings>=2.0",
+    "python-multipart>=0.0.9",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.27", "pytest>=8", "pytest-asyncio>=0.24"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
