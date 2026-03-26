@@ -64,19 +64,13 @@ CarbonPanel is a lightweight **self-hosted** server monitoring panel built with 
 
 CarbonPanel is intended as a self-hosted app. The published GHCR package is a **single image** containing the Vue frontend, nginx, and the FastAPI backend.
 
-1. Copy the backend environment file:
-
-```bash
-cp /home/leodeng/Desktop/CarbonPanel/backend/.env.example /home/leodeng/Desktop/CarbonPanel/backend/.env
-```
-
-2. Pull the latest image from GHCR:
+1. Pull the latest image from GHCR:
 
 ```bash
 docker pull ghcr.io/leodenglovescode/carbonpanel:latest
 ```
 
-3. Run it directly with Docker:
+2. Run it directly with Docker:
 
 ```bash
 docker run -d \
@@ -84,8 +78,6 @@ docker run -d \
   --network host \
   --restart unless-stopped \
   -e APP_PORT=8787 \
-  --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
-  -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
   ghcr.io/leodenglovescode/carbonpanel:latest
 ```
 
@@ -104,8 +96,8 @@ With the default setup, the app is available at `http://localhost:8787`.
 1. Copy environment files:
 
 ```bash
-cp /home/leodeng/Desktop/CarbonPanel/backend/.env.example /home/leodeng/Desktop/CarbonPanel/backend/.env
-cp /home/leodeng/Desktop/CarbonPanel/frontend/.env.example /home/leodeng/Desktop/CarbonPanel/frontend/.env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
 2. Install and initialize everything:
@@ -136,8 +128,6 @@ docker run -d \
   --network host \
   --restart unless-stopped \
   -e APP_PORT=8787 \
-  --env-file /home/leodeng/Desktop/CarbonPanel/backend/.env \
-  -v /home/leodeng/Desktop/CarbonPanel/backend/carbonpanel.db:/app/carbonpanel.db \
   ghcr.io/leodenglovescode/carbonpanel:latest
 ```
 
@@ -149,12 +139,8 @@ If you prefer Docker Compose, use an image-based service definition like this:
 services:
   carbonpanel:
     image: ghcr.io/leodenglovescode/carbonpanel:latest
-    env_file:
-      - ./backend/.env
     environment:
       APP_PORT: ${APP_PORT:-8787}
-    volumes:
-      - ./backend/carbonpanel.db:/app/carbonpanel.db
     restart: unless-stopped
     network_mode: host
 ```
