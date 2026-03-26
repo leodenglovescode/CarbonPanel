@@ -29,7 +29,7 @@ class SiteUpdate(BaseModel):
 
 
 class SiteStatus(BaseModel):
-    status: str           # active | inactive | failed | unknown
+    status: str
     uptime: str | None = None
     pid: int | None = None
 
@@ -66,3 +66,32 @@ class ConfigReadResponse(BaseModel):
 
 class ConfigWriteRequest(BaseModel):
     content: str
+
+
+class SystemServiceActionRequest(BaseModel):
+    action: SiteAction
+
+
+class SystemServiceAutostartRequest(BaseModel):
+    enabled: bool
+
+
+class SystemServiceStarRequest(BaseModel):
+    starred: bool
+
+
+class SystemServiceReorderRequest(BaseModel):
+    service_names: list[str]
+
+
+class SystemServiceResponse(BaseModel):
+    service_name: str
+    description: str | None
+    load_state: str
+    active_state: str
+    sub_state: str
+    uptime: str | None = None
+    pid: int | None = None
+    unit_file_state: str
+    autostart_enabled: bool
+    starred: bool = False
