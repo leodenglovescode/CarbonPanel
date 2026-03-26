@@ -17,3 +17,4 @@ frontend/dist/
 .DS_Store
 *.log
 .aider*
+.claude/
