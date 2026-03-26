@@ -17,6 +17,7 @@
   --warning-dim: rgba(255, 170, 0, 0.1);
   --info: #4488ff;
   --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-size: 12px;
   --radius: 6px;
   --radius-sm: 4px;
   --gap: 12px;
@@ -77,7 +78,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-size);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   transition: background var(--transition-slow), color var(--transition-slow);
