@@ -9,19 +9,18 @@ export interface Toast {
 }
 
 export interface AlertThresholds {
-  cpu: number    // 0 = disabled
+  cpu: number
   ram: number
   disk: number
 }
 
 let nextId = 1
-// cooldown: don't repeat same alert within this many ms
 const COOLDOWN_MS = 30_000
 
 export const useAlertsStore = defineStore('alerts', () => {
   const thresholds = ref<AlertThresholds>({
-    cpu:  parseInt(localStorage.getItem('cp_alert_cpu')  ?? '0'),
-    ram:  parseInt(localStorage.getItem('cp_alert_ram')  ?? '0'),
+    cpu: parseInt(localStorage.getItem('cp_alert_cpu') ?? '0'),
+    ram: parseInt(localStorage.getItem('cp_alert_ram') ?? '0'),
     disk: parseInt(localStorage.getItem('cp_alert_disk') ?? '0'),
   })
 
@@ -43,7 +42,7 @@ export const useAlertsStore = defineStore('alerts', () => {
   }
 
   function dismiss(id: number) {
-    const idx = toasts.value.findIndex(t => t.id === id)
+    const idx = toasts.value.findIndex((t) => t.id === id)
     if (idx !== -1) toasts.value.splice(idx, 1)
   }
 
@@ -59,7 +58,11 @@ export const useAlertsStore = defineStore('alerts', () => {
     if (disk > 0) {
       for (const d of snap.disks) {
         if (d.usage_percent >= disk) {
-          fire(`disk_${d.mountpoint}`, `Disk ${d.mountpoint} at ${d.usage_percent.toFixed(0)}% ≥ ${disk}%`, disk >= 90 ? 'danger' : 'warning')
+          fire(
+            `disk_${d.mountpoint}`,
+            `Disk ${d.mountpoint} at ${d.usage_percent.toFixed(0)}% ≥ ${disk}%`,
+            disk >= 90 ? 'danger' : 'warning',
+          )
         }
       }
     }
