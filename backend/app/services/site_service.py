@@ -39,6 +39,11 @@ _ADMIN_CREATED_UNIT_DIRS = tuple(
     for path in _ADMIN_CREATED_UNIT_PATH_PREFIXES
 )
 
+_SUPPORTED_SYSTEMD_UNIT_SUFFIXES = (
+    ".service",
+    ".timer",
+)
+
 _STARRED_SYSTEM_SERVICES_TABLE_READY = False
 
 
@@ -71,9 +76,11 @@ def _normalize_service_name(service_name: str) -> str:
         raise ValueError("Service name is required")
     if "/" in unit or "\x00" in unit:
         raise ValueError("Invalid service name")
-    if not unit.endswith(".service"):
-        unit = f"{unit}.service"
-    return unit
+    if unit.endswith(_SUPPORTED_SYSTEMD_UNIT_SUFFIXES):
+        return unit
+    if "." in unit:
+        raise ValueError("Unsupported unit type")
+    return f"{unit}.service"
 
 
 def _parse_systemctl_show(output: str) -> dict[str, str]:
@@ -145,10 +152,11 @@ def _list_admin_created_service_names() -> list[str]:
         if not base_dir.exists():
             continue
 
-        for unit_file in base_dir.glob("*.service"):
-            if not unit_file.is_file() or unit_file.name.endswith("@.service"):
-                continue
-            service_names.add(unit_file.name)
+        for suffix in _SUPPORTED_SYSTEMD_UNIT_SUFFIXES:
+            for unit_file in base_dir.glob(f"*{suffix}"):
+                if not unit_file.is_file() or unit_file.stem.endswith("@"):
+                    continue
+                service_names.add(unit_file.name)
 
     return sorted(service_names)
 
@@ -159,6 +167,7 @@ async def _list_all_system_service_names() -> list[str]:
             "systemctl",
             "list-unit-files",
             "--type=service",
+            "--type=timer",
             "--no-legend",
             "--no-pager",
         ]
@@ -172,7 +181,10 @@ async def _list_all_system_service_names() -> list[str]:
         if not parts:
             continue
         service_name = parts[0]
-        if not service_name.endswith(".service") or service_name.endswith("@.service"):
+        if (
+            not service_name.endswith(_SUPPORTED_SYSTEMD_UNIT_SUFFIXES)
+            or service_name.rsplit(".", 1)[0].endswith("@")
+        ):
             continue
         service_names.add(service_name)
 

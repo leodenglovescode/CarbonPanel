@@ -24,7 +24,7 @@
               :disabled="loading || reorderBusy"
               @click="saveReorder"
             >
-              {{ reorderBusy ? 'saving…' : 'save order' }}
+              {{ reorderBusy ? 'saving...' : 'save order' }}
             </button>
             <button
               class="refresh-btn"
@@ -40,7 +40,7 @@
           :disabled="loading || reorderBusy || reorderMode"
           @click="loadServices()"
         >
-          {{ loading ? 'refreshing…' : 'refresh' }}
+          {{ loading ? 'refreshing...' : 'refresh' }}
         </button>
       </div>
     </div>
@@ -57,7 +57,7 @@
       </button>
     </div>
 
-    <div v-if="loading" class="state-msg">loading…</div>
+    <div v-if="loading" class="state-msg">loading...</div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <div v-else-if="services.length === 0" class="state-msg muted">
       {{ emptyStateMessage() }}
@@ -121,7 +121,7 @@
           </div>
           <div class="meta-item">
             <span class="meta-label">pid</span>
-            <span class="meta-value">{{ svc.pid ?? '—' }}</span>
+            <span class="meta-value">{{ svc.pid ?? '-' }}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">autostart</span>
@@ -132,7 +132,7 @@
         <div v-if="svc.uptime" class="uptime">since {{ svc.uptime }}</div>
 
         <div v-if="activeTab === 'starred' && reorderMode" class="reorder-row">
-          <span class="drag-indicator" aria-hidden="true">⋮⋮</span>
+          <span class="drag-indicator" aria-hidden="true">||</span>
           <span class="reorder-hint">drag card to reorder</span>
         </div>
 
@@ -150,7 +150,7 @@
             "
             @click="runAction(svc.service_name, act)"
           >
-            {{ busyKey === `${svc.service_name}:${act}` ? '…' : act }}
+            {{ busyKey === `${svc.service_name}:${act}` ? '...' : act }}
           </button>
         </div>
 
@@ -195,11 +195,12 @@ const AUTOSTART_READONLY_STATES = new Set([
   'transient',
 ])
 
-type ServiceTab = 'starred' | 'managed' | 'all'
+type ServiceTab = 'starred' | 'managed' | 'timers' | 'all'
 
 const tabs: { key: ServiceTab; label: string }[] = [
   { key: 'starred', label: 'Starred' },
   { key: 'managed', label: 'Admin / User Created' },
+  { key: 'timers', label: 'System Timers' },
   { key: 'all', label: 'All System Services' },
 ]
 
@@ -217,15 +218,27 @@ const dragOverServiceName = ref<string | null>(null)
 const messages = ref<Record<string, string>>({})
 const actions: SiteAction[] = ['start', 'stop', 'restart']
 
+function filterServicesForTab(items: SystemServiceResponse[], tab: ServiceTab) {
+  if (tab === 'timers') {
+    return items.filter((svc) => unitType(svc.service_name) === 'timer')
+  }
+
+  if (tab === 'managed' || tab === 'all') {
+    return items.filter((svc) => unitType(svc.service_name) !== 'timer')
+  }
+
+  return items
+}
+
 async function loadServices(tab: ServiceTab = activeTab.value) {
   loading.value = true
   error.value = ''
   try {
     const res = await sitesApi.listSystemServices(
-      tab === 'all' || tab === 'starred',
+      tab === 'all' || tab === 'starred' || tab === 'timers',
       tab === 'starred',
     )
-    services.value = res.data
+    services.value = filterServicesForTab(res.data, tab)
   } catch (e: any) {
     error.value = e.response?.data?.detail || 'Failed to load system services'
   } finally {
@@ -340,6 +353,10 @@ function emptyStateMessage() {
     return 'no starred services yet'
   }
 
+  if (activeTab.value === 'timers') {
+    return 'no systemd timers found'
+  }
+
   return activeTab.value === 'all'
     ? 'no systemd services found'
     : 'no admin/user-created systemd services found'
@@ -414,10 +431,10 @@ function unitType(serviceName: string) {
 function unitTypeLabel(serviceName: string) {
   const type = unitType(serviceName)
 
-  if (type === 'service') return '⚙ service'
-  if (type === 'timer') return '⏱ timer'
+  if (type === 'service') return 'service'
+  if (type === 'timer') return 'timer'
 
-  return `◦ ${type}`
+  return type
 }
 
 function unitTypeClass(serviceName: string) {
@@ -618,6 +635,7 @@ onMounted(() => {
   border: none;
   padding: 0;
   color: var(--fg-dim);
+  font-family: inherit;
   font-size: 15px;
   line-height: 1;
   cursor: pointer;

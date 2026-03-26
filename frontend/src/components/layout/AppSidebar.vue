@@ -14,7 +14,6 @@
         class="nav-item"
         :class="{ active: isActive(item.to) }"
       >
-        <span class="nav-icon">{{ item.icon }}</span>
         <span class="nav-label">{{ item.label }}</span>
       </router-link>
     </nav>
@@ -22,7 +21,7 @@
     <div class="sidebar-bottom">
       <div v-if="system" class="hostname">{{ system.hostname }}</div>
       <div class="status-row">
-        <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Live' : 'Reconnecting…'" />
+        <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Live' : 'Reconnecting...'" />
         <span class="ws-label">{{ connected ? 'live' : 'reconnecting' }}</span>
       </div>
       <button class="logout-btn" @click="handleLogout">logout</button>
@@ -42,10 +41,10 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const navItems = [
-  { to: '/',                icon: '#',  label: 'Stats'            },
-  { to: '/sites',           icon: '◈',  label: 'Sites'            },
-  { to: '/system-services', icon: '⛭',  label: 'System Services'  },
-  { to: '/settings',        icon: '⚙',  label: 'Settings'         },
+  { to: '/', label: 'Stats' },
+  { to: '/sites', label: 'Sites' },
+  { to: '/system-services', label: 'System Services' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 function isActive(to: string) {
@@ -92,7 +91,6 @@ function handleLogout() {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 9px;
   padding: 8px 14px;
   font-size: 12px;
   font-weight: 500;
@@ -108,7 +106,6 @@ function handleLogout() {
   border-left-color: var(--accent);
 }
 
-.nav-icon { font-size: 11px; width: 14px; text-align: center; flex-shrink: 0; }
 .nav-label { letter-spacing: 0.02em; }
 
 .sidebar-bottom {

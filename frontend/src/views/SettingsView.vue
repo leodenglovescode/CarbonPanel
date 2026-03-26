@@ -32,6 +32,94 @@
           </div>
         </div>
 
+        <!-- Stylistic Settings Section -->
+        <div class="section">
+          <div class="section-header stylistic-header">
+            <span class="section-title">Stylistic Settings</span>
+            <span :class="['badge', theme.hasStyleOverrides ? 'badge-green' : 'badge-gray']">
+              {{ theme.hasStyleOverrides ? 'customized' : 'defaults' }}
+            </span>
+          </div>
+          <p class="section-desc">
+            Adjust visual styling only. Theme mode stays unchanged, and resetting here restores
+            colors and typography without affecting any non-stylistic settings.
+          </p>
+
+          <div class="style-grid">
+            <label v-for="field in colorFields" :key="field.key" class="style-field">
+              <span class="style-lbl">{{ field.label }}</span>
+              <div class="color-control">
+                <input
+                  type="color"
+                  class="color-picker"
+                  :value="theme.resolvedStyleSettings[field.key]"
+                  @input="updateColorSetting(field.key, ($event.target as HTMLInputElement).value)"
+                />
+                <code class="color-value">{{ theme.resolvedStyleSettings[field.key] }}</code>
+              </div>
+            </label>
+          </div>
+
+          <div class="style-toggles">
+            <div class="toggle-setting-row">
+              <div>
+                <span class="style-lbl">High contrast mode</span>
+                <p class="style-toggle-desc">
+                  Brighter text and darker backgrounds for night viewing.
+                </p>
+              </div>
+              <button
+                type="button"
+                :class="['theme-btn', 'contrast-btn', { active: theme.resolvedStyleSettings.highContrast }]"
+                @click="updateHighContrast(!theme.resolvedStyleSettings.highContrast)"
+              >
+                {{ theme.resolvedStyleSettings.highContrast ? 'on' : 'off' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="typography-grid">
+            <label class="style-field style-field-wide">
+              <span class="style-lbl">Font</span>
+              <select
+                class="style-select"
+                :value="theme.resolvedStyleSettings.font"
+                @change="updateFont(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="option in fontOptions" :key="option.label" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="style-field style-field-wide">
+              <span class="style-lbl">Base font size</span>
+              <div class="font-size-control">
+                <input
+                  type="range"
+                  class="interval-slider"
+                  :value="theme.resolvedStyleSettings.fontSize"
+                  min="10"
+                  max="18"
+                  step="1"
+                  @input="updateFontSize(parseInt(($event.target as HTMLInputElement).value))"
+                />
+                <span class="font-size-value">{{ theme.resolvedStyleSettings.fontSize }}px</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="style-reset-row">
+            <BaseButton
+              variant="ghost"
+              :disabled="!theme.hasStyleOverrides"
+              @click="resetStyleSettings"
+            >
+              Return stylistic settings to defaults
+            </BaseButton>
+          </div>
+        </div>
+
         <!-- Update Frequency Section -->
         <div class="section">
           <div class="section-header">
@@ -71,6 +159,30 @@
             <span class="badge badge-gray">toast on exceed</span>
           </div>
           <p class="section-desc">Set a % threshold for CPU, RAM, or any disk. A toast notification fires when exceeded. Set to 0 to disable.</p>
+
+          <div class="disk-scope">
+            <span class="style-lbl">Disk alert source</span>
+            <div class="theme-toggle-row disk-scope-toggle">
+              <button
+                type="button"
+                :class="['theme-btn', { active: alerts.diskScope === 'physical' }]"
+                @click="alerts.setDiskScope('physical')"
+              >
+                Actual disks only
+              </button>
+              <button
+                type="button"
+                :class="['theme-btn', { active: alerts.diskScope === 'all' }]"
+                @click="alerts.setDiskScope('all')"
+              >
+                All mounts
+              </button>
+            </div>
+            <p class="disk-scope-note">
+              Default is actual storage devices only, so virtual mounts like /snap do not trigger
+              disk alerts unless you include all mounts.
+            </p>
+          </div>
 
           <div v-for="metric in alertMetrics" :key="metric.key" class="alert-row">
             <span class="alert-lbl">{{ metric.label }}</span>
@@ -249,6 +361,30 @@ const presets = [
   { label: '30s',  value: 30 },
 ]
 
+const colorFields = [
+  { key: 'bg', label: 'App background' },
+  { key: 'bgCard', label: 'Card background' },
+  { key: 'bgInput', label: 'Input background' },
+  { key: 'border', label: 'Border' },
+  { key: 'fg', label: 'Primary text' },
+  { key: 'fgMuted', label: 'Muted text' },
+  { key: 'fgDim', label: 'Dim text' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'warning', label: 'Warning' },
+  { key: 'danger', label: 'Danger' },
+  { key: 'info', label: 'Info' },
+] as const
+
+type StyleColorKey = typeof colorFields[number]['key']
+
+const fontOptions = [
+  { label: 'JetBrains Mono', value: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" },
+  { label: 'Fira Code', value: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace" },
+  { label: 'Cascadia Code', value: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace" },
+  { label: 'System Sans', value: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+  { label: 'System Serif', value: "Georgia, 'Times New Roman', serif" },
+]
+
 const intervalLabel = computed(() => {
   const v = metrics.updateInterval
   return v < 1 ? `${v.toFixed(1)}s` : `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}s`
@@ -263,6 +399,26 @@ function onSliderInput(e: Event) {
 function applyPreset(val: number) {
   metrics.setUpdateInterval(val)
   sendInterval(val)
+}
+
+function updateColorSetting(key: StyleColorKey, value: string) {
+  theme.setStyleSetting(key, value)
+}
+
+function updateHighContrast(value: boolean) {
+  theme.setStyleSetting('highContrast', value)
+}
+
+function updateFont(value: string) {
+  theme.setStyleSetting('font', value)
+}
+
+function updateFontSize(value: number) {
+  theme.setStyleSetting('fontSize', Math.min(18, Math.max(10, value)))
+}
+
+function resetStyleSettings() {
+  theme.resetStyleSettings()
 }
 
 const setupData = ref<{ secret: string; otpauth_uri: string } | null>(null)
@@ -386,6 +542,143 @@ async function handleChangeCreds() {
 .section-header { display: flex; align-items: center; gap: 10px; }
 .section-title { font-size: 12px; font-weight: 600; color: var(--fg); }
 .section-desc { font-size: 11px; color: var(--fg-muted); line-height: 1.6; }
+
+.stylistic-header {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.style-grid,
+.typography-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.style-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.style-field-wide {
+  grid-column: 1 / -1;
+}
+
+.style-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+}
+
+.color-control,
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-picker {
+  width: 42px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-value {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.style-select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.style-select:focus {
+  border-color: var(--accent);
+}
+
+.font-size-value {
+  min-width: 38px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.style-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toggle-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.style-toggle-desc {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.contrast-btn {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding-inline: 14px;
+}
+
+.style-reset-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.disk-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disk-scope-toggle {
+  width: 100%;
+}
+
+.disk-scope-note {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .style-grid,
+  .typography-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 
 /* Theme toggle */
 .theme-toggle-row { display: flex; gap: 8px; }
