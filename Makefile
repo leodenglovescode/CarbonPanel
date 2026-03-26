@@ -6,17 +6,32 @@ PIP     := backend/.venv/bin/pip
 PYTHON  := backend/.venv/bin/python
 ALEMBIC := backend/.venv/bin/alembic
 RUFF    := backend/.venv/bin/ruff
+BACKEND_PORT := 8000
 
 # Run both services in parallel
 dev:
-	@trap 'kill 0' INT; \
-	(cd backend && ../$(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload) & \
+	@if ss -ltn '( sport = :$(BACKEND_PORT) )' | grep -q ':$(BACKEND_PORT)'; then \
+		echo "Port $(BACKEND_PORT) is already in use. Stop the existing backend process before running 'make dev'."; \
+		exit 1; \
+	fi
+	@trap 'kill 0' EXIT INT TERM; \
+	(cd backend && ../$(UVICORN) app.main:app --host 0.0.0.0 --port $(BACKEND_PORT) --reload) & \
+	backend_pid=$$!; \
 	(cd frontend && npm run dev) & \
-	wait
+	frontend_pid=$$!; \
+	wait -n $$backend_pid $$frontend_pid; \
+	status=$$?; \
+	kill $$backend_pid $$frontend_pid 2>/dev/null || true; \
+	wait $$backend_pid $$frontend_pid 2>/dev/null || true; \
+	exit $$status
 
 # Backend only
 backend:
-	cd backend && ../$(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
+	@if ss -ltn '( sport = :$(BACKEND_PORT) )' | grep -q ':$(BACKEND_PORT)'; then \
+		echo "Port $(BACKEND_PORT) is already in use. Stop the existing backend process before running 'make backend'."; \
+		exit 1; \
+	fi
+	cd backend && ../$(UVICORN) app.main:app --host 0.0.0.0 --port $(BACKEND_PORT) --reload
 
 # Frontend only
 frontend:
