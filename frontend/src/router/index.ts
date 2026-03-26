@@ -30,6 +30,11 @@ const router = createRouter({
       name: 'site-detail',
       component: () => import('@/views/SiteDetailView.vue'),
     },
+    {
+      path: '/system-services',
+      name: 'system-services',
+      component: () => import('@/views/SystemServicesView.vue'),
+    },
   ],
 })
 

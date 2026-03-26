@@ -1,5 +1,14 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import type {
+  SiteCreate,
+  SiteUpdate,
+  SiteResponse,
+  SiteActionResponse,
+  ConfigReadResponse,
+  SystemServiceResponse,
+  SiteAction,
+} from '@/types/sites'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
@@ -26,7 +35,6 @@ api.interceptors.response.use(
 
 export default api
 
-// Typed wrappers
 export interface LoginResponse {
   access_token?: string
   token_type?: string
@@ -63,17 +71,41 @@ export const settingsApi = {
     api.put('/settings/profile', { current_password, new_username, new_password }),
 }
 
-import type { SiteCreate, SiteUpdate, SiteResponse, SiteActionResponse, ConfigReadResponse } from '@/types/sites'
-
 export const sitesApi = {
   list: () => api.get<SiteResponse[]>('/sites'),
   get: (id: string) => api.get<SiteResponse>(`/sites/${id}`),
   create: (data: SiteCreate) => api.post<SiteResponse>('/sites', data),
   update: (id: string, data: SiteUpdate) => api.put<SiteResponse>(`/sites/${id}`, data),
   delete: (id: string) => api.delete(`/sites/${id}`),
-  action: (id: string, action: string) =>
+  action: (id: string, action: SiteAction) =>
     api.post<SiteActionResponse>(`/sites/${id}/action`, { action }),
   getConfig: (id: string) => api.get<ConfigReadResponse>(`/sites/${id}/config`),
   saveConfig: (id: string, content: string) =>
     api.put(`/sites/${id}/config`, { content }),
+  listSystemServices: (includeAll = false, starredOnly = false) =>
+    api.get<SystemServiceResponse[]>('/sites/system-services', {
+      params: {
+        include_all: includeAll,
+        starred_only: starredOnly,
+      },
+    }),
+  systemServiceAction: (serviceName: string, action: SiteAction) =>
+    api.post<SiteActionResponse>(
+      `/sites/system-services/${encodeURIComponent(serviceName)}/action`,
+      { action },
+    ),
+  setSystemServiceAutostart: (serviceName: string, enabled: boolean) =>
+    api.post<SiteActionResponse>(
+      `/sites/system-services/${encodeURIComponent(serviceName)}/autostart`,
+      { enabled },
+    ),
+  setSystemServiceStar: (serviceName: string, starred: boolean) =>
+    api.post<SiteActionResponse>(
+      `/sites/system-services/${encodeURIComponent(serviceName)}/star`,
+      { starred },
+    ),
+  reorderStarredSystemServices: (serviceNames: string[]) =>
+    api.post<SiteActionResponse>('/sites/system-services/starred/reorder', {
+      service_names: serviceNames,
+    }),
 }

@@ -42,9 +42,10 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const navItems = [
-  { to: '/',        icon: '#',  label: 'Stats'    },
-  { to: '/sites',   icon: '◈',  label: 'Sites'    },
-  { to: '/settings',icon: '⚙', label: 'Settings' },
+  { to: '/',                icon: '#',  label: 'Stats'            },
+  { to: '/sites',           icon: '◈',  label: 'Sites'            },
+  { to: '/system-services', icon: '⛭',  label: 'System Services'  },
+  { to: '/settings',        icon: '⚙',  label: 'Settings'         },
 ]
 
 function isActive(to: string) {

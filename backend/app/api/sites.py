@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
@@ -15,6 +16,11 @@ from app.schemas.sites import (
     SiteCreate,
     SiteResponse,
     SiteUpdate,
+    SystemServiceActionRequest,
+    SystemServiceAutostartRequest,
+    SystemServiceReorderRequest,
+    SystemServiceResponse,
+    SystemServiceStarRequest,
 )
 from app.services import site_service
 
@@ -28,17 +34,24 @@ def _404(site_id: str) -> HTTPException:
     )
 
 
+def _system_service_404(service_name: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"System service '{service_name}' not found",
+    )
+
+
 @router.get("", response_model=list[SiteResponse])
 async def list_sites(
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     sites = await site_service.list_sites(db)
-    results = []
-    for site in sites:
-        st = await site_service.get_status(site)
-        results.append(site_service.site_to_response(site, st))
-    return results
+    statuses = await asyncio.gather(*(site_service.get_status(site) for site in sites))
+    return [
+        site_service.site_to_response(site, site_status)
+        for site, site_status in zip(sites, statuses, strict=False)
+    ]
 
 
 @router.post("", response_model=SiteResponse, status_code=status.HTTP_201_CREATED)
@@ -49,6 +62,96 @@ async def create_site(
 ):
     site = await site_service.create_site(db, data)
     return site_service.site_to_response(site)
+
+
+@router.get("/system-services", response_model=list[SystemServiceResponse])
+async def list_system_services(
+    include_all: bool = False,
+    starred_only: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await site_service.list_system_services(
+        db,
+        current_user.id,
+        include_all=include_all,
+        starred_only=starred_only,
+    )
+
+
+@router.post("/system-services/{service_name}/action", response_model=SiteActionResponse)
+async def system_service_action(
+    service_name: str,
+    body: SystemServiceActionRequest,
+    _: User = Depends(get_current_user),
+):
+    service = await site_service.get_system_service(service_name)
+    if not service:
+        raise _system_service_404(service_name)
+    try:
+        success, output = await site_service.run_system_service_action(
+            service.service_name,
+            body.action,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return SiteActionResponse(success=success, output=output)
+
+
+@router.post("/system-services/{service_name}/autostart", response_model=SiteActionResponse)
+async def set_system_service_autostart(
+    service_name: str,
+    body: SystemServiceAutostartRequest,
+    _: User = Depends(get_current_user),
+):
+    service = await site_service.get_system_service(service_name)
+    if not service:
+        raise _system_service_404(service_name)
+    try:
+        success, output = await site_service.set_system_service_autostart(
+            service.service_name,
+            body.enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return SiteActionResponse(success=success, output=output)
+
+
+@router.post("/system-services/{service_name}/star", response_model=SiteActionResponse)
+async def set_system_service_star(
+    service_name: str,
+    body: SystemServiceStarRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = await site_service.get_system_service(service_name)
+    if not service:
+        raise _system_service_404(service_name)
+
+    await site_service.set_system_service_star(
+        db,
+        current_user.id,
+        service.service_name,
+        body.starred,
+    )
+    return SiteActionResponse(
+        success=True,
+        output="starred" if body.starred else "unstarred",
+    )
+
+
+@router.post("/system-services/starred/reorder", response_model=SiteActionResponse)
+async def reorder_starred_system_services(
+    body: SystemServiceReorderRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await site_service.reorder_starred_system_services(
+        db,
+        current_user.id,
+        body.service_names,
+    )
+    return SiteActionResponse(success=True, output="reordered")
 
 
 @router.get("/{site_id}", response_model=SiteResponse)

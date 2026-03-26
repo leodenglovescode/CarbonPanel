@@ -3,7 +3,7 @@ export type ServiceManager = 'systemd' | 'pm2'
 export type SiteAction = 'start' | 'stop' | 'restart'
 
 export interface SiteStatus {
-  status: string   // active | inactive | failed | unknown
+  status: string
   uptime: string | null
   pid: number | null
 }
@@ -42,4 +42,17 @@ export interface SiteActionResponse {
 export interface ConfigReadResponse {
   content: string
   path: string
+}
+
+export interface SystemServiceResponse {
+  service_name: string
+  description: string | null
+  load_state: string
+  active_state: string
+  sub_state: string
+  uptime: string | null
+  pid: number | null
+  unit_file_state: string
+  autostart_enabled: boolean
+  starred: boolean
 }
