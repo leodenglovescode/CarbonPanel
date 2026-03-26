@@ -5,20 +5,21 @@ import uuid
 
 from sqlalchemy import select
 
+import app.models.user  # noqa: F401
 from app.config import settings
 from app.core.security import hash_password
-from app.database import AsyncSessionLocal, engine
+from app.database import AsyncSessionLocal, Base, engine
 from app.models.user import User
 
 
 async def seed() -> None:
     async with engine.begin() as conn:
-        from app.database import Base
-        import app.models.user  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.username == settings.admin_username))
+        result = await db.execute(
+            select(User).where(User.username == settings.admin_username)
+        )
         existing = result.scalar_one_or_none()
         if existing:
             print(f"User '{settings.admin_username}' already exists — skipping.")

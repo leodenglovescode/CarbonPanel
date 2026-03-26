@@ -7,8 +7,8 @@ from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     SuccessResponse,
-    TOTPLoginRequest,
     TokenResponse,
+    TOTPLoginRequest,
     TOTPRequiredResponse,
     UserInfo,
 )
@@ -22,15 +22,25 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     try:
         return await auth_service.login(request, db)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        )
 
 
 @router.post("/login/totp", response_model=TokenResponse)
 async def login_totp(request: TOTPLoginRequest, db: AsyncSession = Depends(get_db)):
     try:
-        return await auth_service.login_totp(request.session_token, request.totp_code, db)
+        return await auth_service.login_totp(
+            request.session_token,
+            request.totp_code,
+            db,
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        )
 
 
 @router.get("/me", response_model=UserInfo)

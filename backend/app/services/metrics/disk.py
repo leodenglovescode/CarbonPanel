@@ -35,7 +35,10 @@ async def collect() -> list[DiskMetrics]:
         # Derive the base device name for matching io_counters keys
         dev = p.device.replace("/dev/", "")
         # Strip partition number to get disk name (e.g. sda1 -> sda)
-        io_key = next((k for k in (io_counters or {}) if dev.startswith(k) or k.startswith(dev)), dev)
+        io_key = next(
+            (k for k in (io_counters or {}) if dev.startswith(k) or k.startswith(dev)),
+            dev,
+        )
         io = (io_counters or {}).get(io_key)
 
         read_rate = 0.0
@@ -48,15 +51,17 @@ async def collect() -> list[DiskMetrics]:
         if io:
             _prev_counters[io_key] = io
 
-        results.append(DiskMetrics(
-            device=p.device,
-            mountpoint=p.mountpoint,
-            usage_percent=usage.percent,
-            used_gb=usage.used / _GB,
-            total_gb=usage.total / _GB,
-            read_mb_s=read_rate,
-            write_mb_s=write_rate,
-        ))
+        results.append(
+            DiskMetrics(
+                device=p.device,
+                mountpoint=p.mountpoint,
+                usage_percent=usage.percent,
+                used_gb=usage.used / _GB,
+                total_gb=usage.total / _GB,
+                read_mb_s=read_rate,
+                write_mb_s=write_rate,
+            )
+        )
 
     _prev_time = now
     return results

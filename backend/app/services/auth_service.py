@@ -17,9 +17,9 @@ from app.models.user import User
 from app.schemas.auth import (
     ChangeProfileRequest,
     LoginRequest,
-    TOTPSetupResponse,
     TokenResponse,
     TOTPRequiredResponse,
+    TOTPSetupResponse,
 )
 
 
