@@ -18,14 +18,17 @@
           <p class="section-desc">Switch between dark and light mode.</p>
           <div class="theme-toggle-row">
             <button
+              type="button"
               :class="['theme-btn', { active: theme.theme === 'dark' }]"
               @click="theme.setTheme('dark')"
             >◑ Dark</button>
             <button
+              type="button"
               :class="['theme-btn', { active: theme.theme === 'light' }]"
               @click="theme.setTheme('light')"
             >○ Light</button>
             <button
+              type="button"
               :class="['theme-btn', { active: theme.theme === 'auto' }]"
               @click="theme.setTheme('auto')"
             >⟳ Auto</button>
@@ -70,11 +73,43 @@
               </div>
               <button
                 type="button"
-                :class="['theme-btn', 'contrast-btn', { active: theme.resolvedStyleSettings.highContrast }]"
-                @click="updateHighContrast(!theme.resolvedStyleSettings.highContrast)"
+                :class="['theme-btn', 'contrast-btn', { active: isHighContrast }]"
+                @click="updateHighContrast(!isHighContrast)"
               >
-                {{ theme.resolvedStyleSettings.highContrast ? 'on' : 'off' }}
+                {{ isHighContrast ? 'on' : 'off' }}
               </button>
+            </div>
+
+            <div class="toggle-setting-row">
+              <div>
+                <span class="style-lbl">Animation level</span>
+                <p class="style-toggle-desc">
+                  Control how much motion is used for buttons, hovers, and page switches.
+                </p>
+              </div>
+              <div class="theme-toggle-row animation-toggle-row">
+                <button
+                  type="button"
+                  :class="['theme-btn', { active: selectedAnimationLevel === 'all' }]"
+                  @click="updateAnimationLevel('all')"
+                >
+                  All Animations
+                </button>
+                <button
+                  type="button"
+                  :class="['theme-btn', { active: selectedAnimationLevel === 'reduced' }]"
+                  @click="updateAnimationLevel('reduced')"
+                >
+                  Reduced Animations
+                </button>
+                <button
+                  type="button"
+                  :class="['theme-btn', { active: selectedAnimationLevel === 'none' }]"
+                  @click="updateAnimationLevel('none')"
+                >
+                  No Animations
+                </button>
+              </div>
             </div>
           </div>
 
@@ -146,6 +181,7 @@
             <button
               v-for="p in presets"
               :key="p.value"
+              type="button"
               :class="['preset-btn', { active: metrics.updateInterval === p.value }]"
               @click="applyPreset(p.value)"
             >{{ p.label }}</button>
@@ -286,7 +322,7 @@
           </div>
 
           <div class="change-creds-toggle">
-            <button class="toggle-link" @click="showChangeCreds = !showChangeCreds">
+            <button type="button" class="toggle-link" @click="showChangeCreds = !showChangeCreds">
               {{ showChangeCreds ? '▲ hide' : '▼ change username / password' }}
             </button>
           </div>
@@ -334,7 +370,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMetricsStore } from '@/stores/metrics'
-import { useThemeStore } from '@/stores/theme'
+import { useThemeStore, type AnimationLevel } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { settingsApi } from '@/api'
@@ -390,6 +426,11 @@ const intervalLabel = computed(() => {
   return v < 1 ? `${v.toFixed(1)}s` : `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}s`
 })
 
+const isHighContrast = computed(() => theme.resolvedStyleSettings.highContrast)
+const selectedAnimationLevel = computed<AnimationLevel>(
+  () => theme.resolvedStyleSettings.animationLevel,
+)
+
 function onSliderInput(e: Event) {
   const val = parseFloat((e.target as HTMLInputElement).value)
   metrics.setUpdateInterval(val)
@@ -407,6 +448,10 @@ function updateColorSetting(key: StyleColorKey, value: string) {
 
 function updateHighContrast(value: boolean) {
   theme.setStyleSetting('highContrast', value)
+}
+
+function updateAnimationLevel(value: 'all' | 'reduced' | 'none') {
+  theme.setStyleSetting('animationLevel', value)
 }
 
 function updateFont(value: string) {
@@ -645,6 +690,10 @@ async function handleChangeCreds() {
   flex: 0 0 auto;
   min-width: 72px;
   padding-inline: 14px;
+}
+
+.animation-toggle-row {
+  width: 100%;
 }
 
 .style-reset-row {

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 export type Theme = 'dark' | 'light' | 'auto'
 type ResolvedTheme = 'dark' | 'light'
+export type AnimationLevel = 'all' | 'reduced' | 'none'
 
 export interface StyleSettings {
   bg: string | null
@@ -19,6 +20,7 @@ export interface StyleSettings {
   font: string | null
   fontSize: number | null
   highContrast: boolean | null
+  animationLevel: AnimationLevel | null
 }
 
 export interface ResolvedStyleSettings {
@@ -36,6 +38,7 @@ export interface ResolvedStyleSettings {
   font: string
   fontSize: number
   highContrast: boolean
+  animationLevel: AnimationLevel
 }
 
 const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -58,6 +61,7 @@ const DEFAULT_STYLE_SETTINGS: StyleSettings = {
   font: null,
   fontSize: null,
   highContrast: null,
+  animationLevel: null,
 }
 
 const THEME_STYLE_DEFAULTS: Record<ResolvedTheme, ResolvedStyleSettings> = {
@@ -76,6 +80,7 @@ const THEME_STYLE_DEFAULTS: Record<ResolvedTheme, ResolvedStyleSettings> = {
     font: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: 12,
     highContrast: false,
+    animationLevel: 'reduced',
   },
   light: {
     bg: '#f0f0f0',
@@ -92,6 +97,7 @@ const THEME_STYLE_DEFAULTS: Record<ResolvedTheme, ResolvedStyleSettings> = {
     font: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: 12,
     highContrast: false,
+    animationLevel: 'reduced',
   },
 }
 
@@ -174,6 +180,10 @@ function sanitizeStyleSettings(value: unknown): StyleSettings {
         ? Math.min(18, Math.max(10, Math.round(raw.fontSize)))
         : null,
     highContrast: typeof raw.highContrast === 'boolean' ? raw.highContrast : null,
+    animationLevel:
+      raw.animationLevel === 'all' || raw.animationLevel === 'reduced' || raw.animationLevel === 'none'
+        ? raw.animationLevel
+        : null,
   }
 }
 
@@ -198,6 +208,7 @@ function getResolvedStyleSettings(
     font: styleSettings.font ?? defaults.font,
     fontSize: styleSettings.fontSize ?? defaults.fontSize,
     highContrast: styleSettings.highContrast ?? defaults.highContrast,
+    animationLevel: styleSettings.animationLevel ?? defaults.animationLevel,
   }
 }
 
@@ -224,6 +235,42 @@ function getAppliedStyleSettings(t: Theme, styleSettings: StyleSettings): Resolv
   }
 }
 
+function getMotionSettings(animationLevel: AnimationLevel) {
+  if (animationLevel === 'all') {
+    return {
+      transition: '260ms cubic-bezier(0.22, 1, 0.36, 1)',
+      transitionSlow: '520ms cubic-bezier(0.22, 1, 0.36, 1)',
+      barTransition: '720ms cubic-bezier(0.22, 1, 0.36, 1)',
+      motionTranslateY: '-2px',
+      motionPressScale: '0.985',
+      routeEnterY: '10px',
+      routeLeaveScale: '0.992',
+    }
+  }
+
+  if (animationLevel === 'none') {
+    return {
+      transition: '1ms linear',
+      transitionSlow: '1ms linear',
+      barTransition: '1ms linear',
+      motionTranslateY: '0px',
+      motionPressScale: '1',
+      routeEnterY: '0px',
+      routeLeaveScale: '1',
+    }
+  }
+
+  return {
+    transition: '180ms cubic-bezier(0.4, 0, 0.2, 1)',
+    transitionSlow: '350ms cubic-bezier(0.4, 0, 0.2, 1)',
+    barTransition: '500ms cubic-bezier(0.4, 0, 0.2, 1)',
+    motionTranslateY: '-1px',
+    motionPressScale: '0.992',
+    routeEnterY: '6px',
+    routeLeaveScale: '0.996',
+  }
+}
+
 function applyTheme(t: Theme) {
   document.documentElement.setAttribute('data-theme', resolvedTheme(t))
 }
@@ -232,7 +279,18 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   const themeKind = resolvedTheme(t)
   const resolved = getAppliedStyleSettings(t, styleSettings)
   const effectiveDark = themeKind === 'dark' || resolved.highContrast
-  const rootStyle = document.documentElement.style
+  const motion = getMotionSettings(resolved.animationLevel)
+  const root = document.documentElement
+  const rootStyle = root.style
+
+  root.setAttribute('data-motion', resolved.animationLevel)
+  rootStyle.setProperty('--transition', motion.transition)
+  rootStyle.setProperty('--transition-slow', motion.transitionSlow)
+  rootStyle.setProperty('--bar-transition', motion.barTransition)
+  rootStyle.setProperty('--motion-translate-y', motion.motionTranslateY)
+  rootStyle.setProperty('--motion-press-scale', motion.motionPressScale)
+  rootStyle.setProperty('--route-enter-y', motion.routeEnterY)
+  rootStyle.setProperty('--route-leave-scale', motion.routeLeaveScale)
 
   rootStyle.setProperty('--bg', resolved.bg)
   rootStyle.setProperty('--bg-card', resolved.bgCard)
