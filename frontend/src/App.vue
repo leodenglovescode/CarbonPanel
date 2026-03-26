@@ -1,8 +1,16 @@
 <template>
-  <AuthLayout v-if="!isPublicRoute">
-    <router-view />
-  </AuthLayout>
-  <router-view v-else />
+  <router-view v-if="!isPublicRoute" v-slot="{ Component }">
+    <AuthLayout>
+      <Transition name="route-fade" mode="out-in">
+        <component :is="Component" :key="route.fullPath" />
+      </Transition>
+    </AuthLayout>
+  </router-view>
+  <router-view v-else v-slot="{ Component }">
+    <Transition name="route-fade" mode="out-in">
+      <component :is="Component" :key="route.fullPath" />
+    </Transition>
+  </router-view>
   <ToastContainer />
 </template>
 

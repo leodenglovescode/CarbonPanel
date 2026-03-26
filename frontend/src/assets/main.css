@@ -33,6 +33,10 @@
   --border-row: rgba(255,255,255,0.03);
   --bg-badge:   rgba(255,255,255,0.05);
   --accent-hover: #33ffaa;
+  --motion-translate-y: -1px;
+  --motion-press-scale: 0.992;
+  --route-enter-y: 6px;
+  --route-leave-scale: 0.996;
 }
 
 [data-theme="light"] {
@@ -70,8 +74,13 @@
   padding: 0;
 }
 
-html, body {
+html {
   height: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100%;
 }
 
 body {
@@ -86,6 +95,82 @@ body {
 
 #app {
   height: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+summary {
+  transition:
+    color var(--transition),
+    background-color var(--transition),
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition),
+    opacity var(--transition),
+    filter var(--transition);
+}
+
+.route-fade-enter-active,
+.route-fade-leave-active {
+  transition:
+    opacity var(--transition-slow),
+    transform var(--transition-slow),
+    filter var(--transition-slow);
+}
+
+.route-fade-enter-from {
+  opacity: 0;
+  transform: translateY(var(--route-enter-y));
+  filter: blur(6px);
+}
+
+.route-fade-leave-to {
+  opacity: 0;
+  transform: scale(var(--route-leave-scale));
+  filter: blur(4px);
+}
+
+[data-motion="all"] button:hover:not(:disabled),
+[data-motion="all"] a:hover,
+[data-motion="all"] summary:hover {
+  transform: translateY(var(--motion-translate-y));
+}
+
+[data-motion="all"] button:active:not(:disabled),
+[data-motion="all"] a:active,
+[data-motion="all"] summary:active {
+  transform: translateY(0) scale(var(--motion-press-scale));
+}
+
+[data-motion="reduced"] button:hover:not(:disabled),
+[data-motion="reduced"] a:hover,
+[data-motion="reduced"] summary:hover {
+  transform: translateY(var(--motion-translate-y));
+}
+
+[data-motion="reduced"] button:active:not(:disabled),
+[data-motion="reduced"] a:active,
+[data-motion="reduced"] summary:active {
+  transform: scale(var(--motion-press-scale));
+}
+
+[data-motion="none"] *,
+[data-motion="none"] *::before,
+[data-motion="none"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+[data-motion="none"] .route-fade-enter-from,
+[data-motion="none"] .route-fade-leave-to {
+  opacity: 1;
+  transform: none;
+  filter: none;
 }
 
 /* Scrollbars */
