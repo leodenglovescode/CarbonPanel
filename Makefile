@@ -5,6 +5,7 @@ UVICORN := backend/.venv/bin/uvicorn
 PIP     := backend/.venv/bin/pip
 PYTHON  := backend/.venv/bin/python
 ALEMBIC := backend/.venv/bin/alembic
+RUFF    := backend/.venv/bin/ruff
 
 # Run both services in parallel
 dev:
@@ -38,7 +39,7 @@ install: setup
 lint: lint-backend lint-frontend
 
 lint-backend:
-	cd backend && ../backend/.venv/bin/ruff check app
+	cd backend && ../$(RUFF) check app
 
 lint-frontend:
 	cd frontend && npm run lint
