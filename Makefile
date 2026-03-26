@@ -38,7 +38,7 @@ install: setup
 lint: lint-backend lint-frontend
 
 lint-backend:
-	cd backend && ../$(PYTHON) -m ruff check app
+	cd backend && ../backend/.venv/bin/ruff check app
 
 lint-frontend:
 	cd frontend && npm run lint
