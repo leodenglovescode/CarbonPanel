@@ -3,6 +3,25 @@ import { ref } from 'vue'
 import { sitesApi } from '@/api'
 import type { SiteResponse, SiteCreate, SiteUpdate } from '@/types/sites'
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    'data' in error.response &&
+    typeof error.response.data === 'object' &&
+    error.response.data !== null &&
+    'detail' in error.response &&
+    typeof error.response.detail === 'string'
+  ) {
+    return error.response.detail
+  }
+
+  return fallback
+}
+
 export const useSitesStore = defineStore('sites', () => {
   const sites = ref<SiteResponse[]>([])
   const loading = ref(false)
@@ -14,8 +33,8 @@ export const useSitesStore = defineStore('sites', () => {
     try {
       const res = await sitesApi.list()
       sites.value = res.data
-    } catch (e: any) {
-      error.value = e.response?.data?.detail || 'Failed to load sites'
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, 'Failed to load sites')
     } finally {
       loading.value = false
     }
@@ -26,8 +45,8 @@ export const useSitesStore = defineStore('sites', () => {
       const res = await sitesApi.create(data)
       await fetchSites()
       return res.data
-    } catch (e: any) {
-      error.value = e.response?.data?.detail || 'Failed to create site'
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, 'Failed to create site')
       return null
     }
   }
@@ -37,8 +56,8 @@ export const useSitesStore = defineStore('sites', () => {
       await sitesApi.update(id, data)
       await fetchSites()
       return true
-    } catch (e: any) {
-      error.value = e.response?.data?.detail || 'Failed to update site'
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, 'Failed to update site')
       return false
     }
   }
@@ -46,10 +65,10 @@ export const useSitesStore = defineStore('sites', () => {
   async function deleteSite(id: string): Promise<boolean> {
     try {
       await sitesApi.delete(id)
-      sites.value = sites.value.filter(s => s.id !== id)
+      sites.value = sites.value.filter((s) => s.id !== id)
       return true
-    } catch (e: any) {
-      error.value = e.response?.data?.detail || 'Failed to delete site'
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, 'Failed to delete site')
       return false
     }
   }
@@ -57,13 +76,12 @@ export const useSitesStore = defineStore('sites', () => {
   async function runAction(id: string, action: string): Promise<{ success: boolean; output: string }> {
     try {
       const res = await sitesApi.action(id, action)
-      // Refresh status after action
       const updated = await sitesApi.get(id)
-      const idx = sites.value.findIndex(s => s.id === id)
+      const idx = sites.value.findIndex((s) => s.id === id)
       if (idx !== -1) sites.value[idx] = updated.data
       return res.data
-    } catch (e: any) {
-      return { success: false, output: e.response?.data?.detail || 'Action failed' }
+    } catch (e: unknown) {
+      return { success: false, output: getErrorMessage(e, 'Action failed') }
     }
   }
 
