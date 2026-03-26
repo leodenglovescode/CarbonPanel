@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: dev backend frontend setup install
+.PHONY: dev backend frontend setup install lint lint-backend lint-frontend
 
 UVICORN := backend/.venv/bin/uvicorn
 PIP     := backend/.venv/bin/pip
@@ -34,3 +34,11 @@ setup:
 	@echo "Setup complete. Run 'make dev' to start."
 
 install: setup
+
+lint: lint-backend lint-frontend
+
+lint-backend:
+	cd backend && ../$(PYTHON) -m ruff check app
+
+lint-frontend:
+	cd frontend && npm run lint
