@@ -4,14 +4,14 @@ import shutil
 from pathlib import Path
 from typing import AsyncIterator
 
+from app.models.site import Site
+from app.schemas.sites import SiteCreate, SiteStatus, SiteUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.site import Site
-from app.schemas.sites import SiteCreate, SiteStatus, SiteUpdate
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _encode_log_paths(paths: list[str]) -> str:
     return json.dumps(paths)
@@ -38,11 +38,12 @@ async def _run(cmd: list[str]) -> tuple[int, str]:
 
 # ── Status ────────────────────────────────────────────────────────────────────
 
+
 async def get_status(site: Site) -> SiteStatus:
     try:
         if site.service_manager == "systemd":
             return await _systemd_status(site.service_name)
-        elif site.service_manager == "pm2":
+        if site.service_manager == "pm2":
             return await _pm2_status(site.service_name)
     except Exception:
         pass
@@ -56,7 +57,9 @@ async def _systemd_status(unit: str) -> SiteStatus:
     uptime: str | None = None
 
     if status == "active":
-        _, show = await _run(["systemctl", "show", unit, "--property=ActiveEnterTimestamp,MainPID"])
+        _, show = await _run(
+            ["systemctl", "show", unit, "--property=ActiveEnterTimestamp,MainPID"]
+        )
         for line in show.splitlines():
             if line.startswith("MainPID="):
                 try:
@@ -98,6 +101,7 @@ async def _pm2_status(app_name: str) -> SiteStatus:
 
 # ── Actions ───────────────────────────────────────────────────────────────────
 
+
 async def run_action(site: Site, action: str) -> tuple[bool, str]:
     if action not in ("start", "stop", "restart"):
         raise ValueError(f"Unknown action: {action}")
@@ -115,6 +119,7 @@ async def run_action(site: Site, action: str) -> tuple[bool, str]:
 
 # ── Config file ───────────────────────────────────────────────────────────────
 
+
 def read_config(path: str) -> str:
     return Path(path).read_text(errors="replace")
 
@@ -128,9 +133,14 @@ def write_config(path: str, content: str) -> None:
 
 # ── Log tailing ───────────────────────────────────────────────────────────────
 
+
 async def tail_log(path: str) -> AsyncIterator[str]:
     proc = await asyncio.create_subprocess_exec(
-        "tail", "-n", "100", "-f", path,
+        "tail",
+        "-n",
+        "100",
+        "-f",
+        path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
@@ -150,6 +160,7 @@ async def tail_log(path: str) -> AsyncIterator[str]:
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
+
 
 async def list_sites(db: AsyncSession) -> list[Site]:
     result = await db.execute(select(Site).order_by(Site.created_at))
@@ -204,6 +215,7 @@ async def delete_site(db: AsyncSession, site: Site) -> None:
 
 def site_to_response(site: Site, status: SiteStatus | None = None):
     from app.schemas.sites import SiteResponse
+
     return SiteResponse(
         id=site.id,
         name=site.name,

@@ -22,7 +22,10 @@ router = APIRouter(prefix="/sites", tags=["sites"])
 
 
 def _404(site_id: str) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Site '{site_id}' not found")
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Site '{site_id}' not found",
+    )
 
 
 @router.get("", response_model=list[SiteResponse])
@@ -114,7 +117,10 @@ async def read_config(
     if not site:
         raise _404(site_id)
     if not site.config_file_path:
-        raise HTTPException(status_code=400, detail="No config file path set for this site")
+        raise HTTPException(
+            status_code=400,
+            detail="No config file path set for this site",
+        )
     try:
         content = site_service.read_config(site.config_file_path)
     except (FileNotFoundError, PermissionError) as exc:
@@ -133,7 +139,10 @@ async def write_config(
     if not site:
         raise _404(site_id)
     if not site.config_file_path:
-        raise HTTPException(status_code=400, detail="No config file path set for this site")
+        raise HTTPException(
+            status_code=400,
+            detail="No config file path set for this site",
+        )
     try:
         site_service.write_config(site.config_file_path, body.content)
     except (FileNotFoundError, PermissionError) as exc:
@@ -152,6 +161,7 @@ async def stream_logs(site_id: str, ws: WebSocket, token: str = ""):
         return
 
     from app.database import AsyncSessionLocal
+
     async with AsyncSessionLocal() as db:
         site = await site_service.get_site(db, site_id)
 
