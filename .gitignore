@@ -16,3 +16,4 @@ frontend/dist/
 # Misc
 .DS_Store
 *.log
+.aider*
