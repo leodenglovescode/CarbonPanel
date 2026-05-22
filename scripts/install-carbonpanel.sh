@@ -947,7 +947,9 @@ uninstall_carbonpanel() {
     fi
   fi
 
-  log "Stopping and removing services..."
+  # Only CarbonPanel's own systemd units are removed.
+  # nginx, npm, nodejs, and any other system services are left untouched.
+  log "Stopping CarbonPanel services..."
   for svc in "$UPDATE_CHECK_TIMER" "$UPDATE_CHECK_SERVICE" "$UPDATE_SERVICE" "$BACKEND_SERVICE"; do
     systemctl stop "$svc" 2>/dev/null || true
     systemctl disable "$svc" 2>/dev/null || true
@@ -955,7 +957,8 @@ uninstall_carbonpanel() {
   done
   systemctl daemon-reload
 
-  log "Removing nginx configuration..."
+  # Remove only CarbonPanel's nginx site config — nginx itself is not stopped or removed.
+  log "Removing CarbonPanel nginx site config..."
   rm -f "$NGINX_SITE" "$NGINX_SITE_LINK"
   nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
 
