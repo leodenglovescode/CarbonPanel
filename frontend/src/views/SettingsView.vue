@@ -1,14 +1,20 @@
 <template>
   <div class="settings-page">
-    <main class="settings-main">
+    <main ref="mainEl" class="settings-main">
       <div class="settings-container">
         <div class="page-title">
           <router-link to="/" class="back-link">← dashboard</router-link>
           <h1>Settings</h1>
         </div>
 
+        <nav class="settings-nav">
+          <button v-for="s in navSections" :key="s.id" class="nav-pill" @click="scrollTo(s.id)">
+            {{ s.label }}
+          </button>
+        </nav>
+
         <!-- Theme Section -->
-        <div class="section">
+        <div id="section-appearance" class="section">
           <div class="section-header">
             <span class="section-title">Appearance</span>
             <span :class="['badge', theme.theme === 'dark' ? 'badge-gray' : 'badge-green']">
@@ -36,7 +42,7 @@
         </div>
 
         <!-- Stylistic Settings Section -->
-        <div class="section">
+        <div id="section-style" class="section">
           <div class="section-header stylistic-header">
             <span class="section-title">Stylistic Settings</span>
             <span :class="['badge', theme.hasStyleOverrides ? 'badge-green' : 'badge-gray']">
@@ -156,7 +162,7 @@
         </div>
 
         <!-- Background Section -->
-        <div class="section">
+        <div id="section-backgrounds" class="section">
           <div class="section-header">
             <span class="section-title">Backgrounds</span>
             <span :class="['badge', bg.hasCustomBg ? 'badge-green' : 'badge-gray']">
@@ -303,8 +309,79 @@
           </div>
         </div>
 
+        <!-- Display Preferences Section -->
+        <div id="section-display" class="section">
+          <div class="section-header">
+            <span class="section-title">Display Preferences</span>
+            <span class="badge badge-gray">units</span>
+          </div>
+          <p class="section-desc">Choose how memory and network speed are displayed across the dashboard.</p>
+
+          <div class="display-pref-row">
+            <div>
+              <span class="style-lbl">RAM unit</span>
+              <p class="style-toggle-desc">Show memory values in gigabytes or megabytes.</p>
+            </div>
+            <div class="theme-toggle-row">
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.ramUnit === 'gb' }]"
+                @click="displayPrefs.setRamUnit('gb')"
+              >GB</button>
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.ramUnit === 'mb' }]"
+                @click="displayPrefs.setRamUnit('mb')"
+              >MB</button>
+            </div>
+          </div>
+
+          <div class="display-pref-row">
+            <div>
+              <span class="style-lbl">Network speed unit</span>
+              <p class="style-toggle-desc">MB/s = megabytes per second. Mbps = megabits per second (8× larger value).</p>
+            </div>
+            <div class="theme-toggle-row">
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.networkUnit === 'mb_s' }]"
+                @click="displayPrefs.setNetworkUnit('mb_s')"
+              >MB/s</button>
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.networkUnit === 'mbps' }]"
+                @click="displayPrefs.setNetworkUnit('mbps')"
+              >Mbps</button>
+            </div>
+          </div>
+
+          <div class="display-pref-row">
+            <div>
+              <span class="style-lbl">Storage unit</span>
+              <p class="style-toggle-desc">GB always shows gigabytes. TB auto switches to terabytes when a disk reaches 1 TB. Always TB forces terabytes everywhere.</p>
+            </div>
+            <div class="theme-toggle-row">
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.storageUnit === 'gb' }]"
+                @click="displayPrefs.setStorageUnit('gb')"
+              >GB</button>
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.storageUnit === 'auto_tb' }]"
+                @click="displayPrefs.setStorageUnit('auto_tb')"
+              >TB auto</button>
+              <button
+                type="button"
+                :class="['theme-btn', { active: displayPrefs.storageUnit === 'tb' }]"
+                @click="displayPrefs.setStorageUnit('tb')"
+              >Always TB</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Update Frequency Section -->
-        <div class="section">
+        <div id="section-frequency" class="section">
           <div class="section-header">
             <span class="section-title">Update Frequency</span>
             <span class="badge badge-green">{{ intervalLabel }}</span>
@@ -337,7 +414,7 @@
         </div>
 
         <!-- Alerts Section -->
-        <div class="section">
+        <div id="section-alerts" class="section">
           <div class="section-header">
             <span class="section-title">Alert Thresholds</span>
             <span class="badge badge-gray">toast on exceed</span>
@@ -385,7 +462,7 @@
           </div>
         </div>
 
-        <div class="section">
+        <div id="section-version" class="section">
           <div class="section-header">
             <span class="section-title">Version & Updates</span>
             <span
@@ -482,7 +559,7 @@
         </div>
 
         <!-- 2FA Section -->
-        <div class="section">
+        <div id="section-2fa" class="section">
           <div class="section-header">
             <span class="section-title">Two-Factor Authentication</span>
             <span :class="['badge', auth.user?.totp_enabled ? 'badge-green' : 'badge-gray']">
@@ -550,7 +627,7 @@
         </div>
 
         <!-- Account info + change credentials -->
-        <div class="section">
+        <div id="section-account" class="section">
           <div class="section-header">
             <span class="section-title">Account</span>
           </div>
@@ -617,6 +694,7 @@ import { useMetricsStore } from '@/stores/metrics'
 import { useThemeStore, type AnimationLevel } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
 import { useBackgroundStore } from '@/stores/background'
+import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { settingsApi, systemApi, type SystemVersionResponse } from '@/api'
 import QRCode from 'qrcode'
@@ -626,7 +704,30 @@ const metrics = useMetricsStore()
 const theme = useThemeStore()
 const alerts = useAlertsStore()
 const bg = useBackgroundStore()
+const displayPrefs = useDisplayPrefsStore()
 const { sendInterval } = useWebSocket()
+
+const mainEl = ref<HTMLElement | null>(null)
+
+const navSections = [
+  { id: 'section-appearance', label: 'Appearance' },
+  { id: 'section-style',      label: 'Stylistic' },
+  { id: 'section-backgrounds',label: 'Backgrounds' },
+  { id: 'section-display',    label: 'Display' },
+  { id: 'section-frequency',  label: 'Frequency' },
+  { id: 'section-alerts',     label: 'Alerts' },
+  { id: 'section-version',    label: 'Version' },
+  { id: 'section-2fa',        label: '2FA' },
+  { id: 'section-account',    label: 'Account' },
+]
+
+function scrollTo(id: string) {
+  const target = document.getElementById(id)
+  const container = mainEl.value
+  if (!target || !container) return
+  const delta = target.getBoundingClientRect().top - container.getBoundingClientRect().top
+  container.scrollBy({ top: delta - 16, behavior: 'smooth' })
+}
 
 const bgTypes = [
   { key: 'color' as const, label: 'Color' },
@@ -926,6 +1027,33 @@ onMounted(() => {
 .settings-container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; }
 
 .page-title { display: flex; align-items: center; gap: 14px; }
+
+.settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.nav-pill {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg-dim);
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.nav-pill:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .page-title h1 { font-size: 16px; font-weight: 700; }
 .back-link { font-size: 11px; color: var(--fg-muted); text-decoration: none; transition: color var(--transition); }
 .back-link:hover { color: var(--accent); }
@@ -1108,6 +1236,17 @@ onMounted(() => {
   transition: all var(--transition);
 }
 .copy-btn:hover { background: var(--accent-dim); }
+
+.display-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
 
 .disk-scope {
   display: flex;

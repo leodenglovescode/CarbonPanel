@@ -26,7 +26,7 @@
             <div class="bar-track">
               <div class="bar-fill vram" :style="{ width: (dev.memory_used_mb / dev.memory_total_mb * 100) + '%' }" />
             </div>
-            <span class="stat-val">{{ fmt(dev.memory_used_mb) }} / {{ fmt(dev.memory_total_mb) }} MB</span>
+            <span class="stat-val">{{ fmt(dev.memory_used_mb) }} / {{ fmt(dev.memory_total_mb) }}</span>
           </div>
           <div class="stat-row">
             <span class="stat-lbl">pwr</span>
@@ -55,7 +55,7 @@ function tempBadge(t: number) {
   if (t < 85) return 'badge badge-yellow'
   return 'badge badge-red'
 }
-function fmt(mb: number) { return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb.toFixed(0) + ' MB' }
+function fmt(mb: number) { return (mb / 1024).toFixed(1) + ' GB' }
 </script>
 
 <style scoped>

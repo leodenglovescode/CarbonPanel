@@ -51,8 +51,8 @@
           <div class="disk-right">
             <div class="disk-usage-row">
               <span class="usage-numbers">
-                <span class="used-val">{{ disk.used_gb.toFixed(1) }}</span>
-                <span class="sep"> / {{ disk.total_gb.toFixed(1) }} GB</span>
+                <span class="used-val">{{ display.fmtStorage(disk.used_gb) }}</span>
+                <span class="sep"> / {{ display.fmtStorage(disk.total_gb) }}</span>
               </span>
               <span :class="['pct-badge', pctClass(disk.usage_percent)]">
                 {{ disk.usage_percent.toFixed(1) }}%
@@ -139,9 +139,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { disksApi } from '@/api/index'
 import { useMetricsStore } from '@/stores/metrics'
+import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import type { DiskInfo } from '@/api/index'
 
 const metricsStore = useMetricsStore()
+const display = useDisplayPrefsStore()
 
 const disks = ref<DiskInfo[]>([])
 const loading = ref(false)

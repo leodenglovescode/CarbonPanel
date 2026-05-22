@@ -8,9 +8,9 @@
     <div class="disk-summary">
       <div class="summary-top">
         <div class="space-numbers">
-          <span class="used-val">{{ total.used.toFixed(1) }}</span>
+          <span class="used-val">{{ display.fmtStorage(total.used) }}</span>
           <span class="sep"> / </span>
-          <span class="total-val">{{ total.total.toFixed(1) }} GB</span>
+          <span class="total-val">{{ display.fmtStorage(total.total) }}</span>
         </div>
         <span :class="['badge', pctBadge(total.pct)]">{{ total.pct.toFixed(1) }}%</span>
       </div>
@@ -39,6 +39,9 @@
 import { computed } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import type { DiskMetrics } from '@/types/metrics'
+import { useDisplayPrefsStore } from '@/stores/displayPrefs'
+
+const display = useDisplayPrefsStore()
 
 const props = defineProps<{ disks: DiskMetrics[] }>()
 

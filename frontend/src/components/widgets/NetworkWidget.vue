@@ -14,12 +14,12 @@
           <span class="rate rx">
             <span class="arrow">↓</span>
             <span class="rate-val">{{ fmtRate(iface.rx_mb_s) }}</span>
-            <span class="rate-unit">MB/s</span>
+            <span class="rate-unit">{{ rateUnit }}</span>
           </span>
           <span class="rate tx">
             <span class="arrow">↑</span>
             <span class="rate-val">{{ fmtRate(iface.tx_mb_s) }}</span>
-            <span class="rate-unit">MB/s</span>
+            <span class="rate-unit">{{ rateUnit }}</span>
           </span>
         </div>
 
@@ -42,6 +42,7 @@ import { computed } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import type { NetworkMetrics } from '@/types/metrics'
+import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 
 const props = defineProps<{
   network: NetworkMetrics[]
@@ -49,9 +50,14 @@ const props = defineProps<{
   txHistory: Record<string, number[]>
 }>()
 
+const display = useDisplayPrefsStore()
 const visibleNetwork = computed(() => props.network.slice(0, 2))
+const rateUnit = computed(() => display.networkUnit === 'mbps' ? 'Mbps' : 'MB/s')
 
-function fmtRate(mb: number) { return mb.toFixed(2) }
+function fmtRate(mb: number) {
+  const val = display.networkUnit === 'mbps' ? mb * 8 : mb
+  return val.toFixed(2)
+}
 function fmtTotal(mb: number) {
   if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB'
   return mb.toFixed(0) + ' MB'

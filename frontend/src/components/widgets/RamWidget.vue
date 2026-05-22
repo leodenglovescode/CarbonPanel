@@ -9,7 +9,7 @@
       <span class="mem-val">{{ fmt(mem.used_mb) }}</span>
       <span class="mem-sep"> / </span>
       <span class="mem-total">{{ fmt(mem.total_mb) }}</span>
-      <span class="mem-unit">MB</span>
+      <span class="mem-unit">{{ unitLabel }}</span>
     </div>
 
     <div class="bar-track big">
@@ -19,15 +19,15 @@
     <div class="mem-stats">
       <div class="stat">
         <span class="stat-lbl">used</span>
-        <span class="stat-val text-accent">{{ fmt(mem.used_mb) }} MB</span>
+        <span class="stat-val text-accent">{{ fmt(mem.used_mb) }} {{ unitLabel }}</span>
       </div>
       <div class="stat">
         <span class="stat-lbl">free</span>
-        <span class="stat-val">{{ fmt(mem.free_mb) }} MB</span>
+        <span class="stat-val">{{ fmt(mem.free_mb) }} {{ unitLabel }}</span>
       </div>
       <div class="stat">
         <span class="stat-lbl">total</span>
-        <span class="stat-val">{{ fmt(mem.total_mb) }} MB</span>
+        <span class="stat-val">{{ fmt(mem.total_mb) }} {{ unitLabel }}</span>
       </div>
     </div>
 
@@ -36,7 +36,7 @@
       <div class="bar-track swap">
         <div class="bar-fill swap-fill" :style="{ width: swapPct + '%' }" />
       </div>
-      <span class="swap-val">{{ fmt(mem.swap_used_mb) }} / {{ fmt(mem.swap_total_mb) }} MB</span>
+      <span class="swap-val">{{ fmt(mem.swap_used_mb) }} / {{ fmt(mem.swap_total_mb) }} {{ unitLabel }}</span>
     </div>
 
     <div class="sparkline-row">
@@ -50,8 +50,10 @@ import { computed } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import type { MemoryMetrics } from '@/types/metrics'
+import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 
 const props = defineProps<{ mem: MemoryMetrics; history: number[] }>()
+const display = useDisplayPrefsStore()
 
 const swapPct = computed(() =>
   props.mem.swap_total_mb > 0
@@ -59,7 +61,11 @@ const swapPct = computed(() =>
     : 0,
 )
 
-function fmt(mb: number) { return mb.toFixed(0) }
+const unitLabel = computed(() => display.ramUnit === 'gb' ? 'GB' : 'MB')
+
+function fmt(mb: number) {
+  return display.ramUnit === 'gb' ? (mb / 1024).toFixed(1) : mb.toFixed(0)
+}
 function pctBadge(pct: number) {
   if (pct < 70) return 'badge badge-green'
   if (pct < 85) return 'badge badge-yellow'
