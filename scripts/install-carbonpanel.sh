@@ -297,7 +297,9 @@ install_os_prerequisites() {
   command_exists apt-get || die "Only apt-based systems are supported by this installer right now."
 
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
+  # Broken third-party repos (Docker, NVIDIA, Chrome, etc.) cause apt-get update
+  # to return exit code 100. Treat that as a warning — the cached lists are enough.
+  apt-get update -y 2>&1 || log "Warning: some package sources failed to update — continuing with cached package lists."
   # Core utilities — safe to install unconditionally on any apt system.
   apt-get install -y \
     ca-certificates \
@@ -769,17 +771,26 @@ install_or_update() {
   local install_mode="$1"
   local source_type ref release_url release_id release_dir commit installed_at
 
+  log "Checking port availability..."
   ensure_port_available
+  log "Installing system dependencies..."
   install_os_prerequisites
+  log "Creating service account..."
   ensure_service_account
+  log "Initialising directory layout..."
   ensure_layout
+  log "Writing backend configuration..."
   ensure_backend_env
 
+  log "Resolving latest version from GitHub..."
   mapfile -t resolved < <(resolve_requested_reference)
   source_type="${resolved[0]}"
-  ref="${resolved[1]}"
-  release_url="${resolved[2]}"
+  ref="${resolved[1]:-}"
+  release_url="${resolved[2]:-}"
 
+  [[ -n "$ref" ]] || die "Could not resolve a version to install. Check your internet connection and that $REPO_URL is accessible."
+
+  log "Cloning $REPO_URL at $ref..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"
   release_dir="$(clone_release "$ref" "$release_id")"
   commit="$(git -C "$release_dir" rev-parse HEAD)"
