@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 
-from app.api import apps, auth, cron, disks, docker_api, metrics_history, processes, sessions, settings, sites, webhooks, ws, ws_logs
+from app.api import (
+    apps, auth, cron, disks, docker_api, metrics_history,
+    processes, sessions, settings, sites, webhooks, ws, ws_logs,
+)
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
