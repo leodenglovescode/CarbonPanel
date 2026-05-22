@@ -959,6 +959,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# When invoked via pipe (curl | sudo bash) stdin is the pipe, not the terminal.
+# Reopen stdin from /dev/tty so interactive prompts work.
+exec </dev/tty 2>/dev/null || true
+
 [[ -z "$COMMAND" ]] && show_menu
 
 case "$COMMAND" in
