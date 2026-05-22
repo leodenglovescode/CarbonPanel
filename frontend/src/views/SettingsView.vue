@@ -183,11 +183,11 @@
 
             <div class="bg-type-row">
               <button
-                v-for="t in bgTypes"
-                :key="t.key"
-                :class="['type-btn', { active: bg.appBg.type === t.key }]"
-                @click="bg.setAppBg({ type: t.key })"
-              >{{ t.label }}</button>
+                v-for="bgType in bgTypes"
+                :key="bgType.key"
+                :class="['type-btn', { active: bg.appBg.type === bgType.key }]"
+                @click="bg.setAppBg({ type: bgType.key })"
+              >{{ bgType.label }}</button>
             </div>
 
             <template v-if="bg.appBg.type === 'gradient'">
@@ -251,11 +251,11 @@
 
             <div class="bg-type-row">
               <button
-                v-for="t in bgTypes"
-                :key="t.key"
-                :class="['type-btn', { active: bg.loginBg.type === t.key }]"
-                @click="bg.setLoginBg({ type: t.key })"
-              >{{ t.label }}</button>
+                v-for="bgType in bgTypes"
+                :key="bgType.key"
+                :class="['type-btn', { active: bg.loginBg.type === bgType.key }]"
+                @click="bg.setLoginBg({ type: bgType.key })"
+              >{{ bgType.label }}</button>
             </div>
 
             <template v-if="bg.loginBg.type === 'gradient'">
@@ -728,12 +728,24 @@
           </div>
 
           <div class="webhook-add-form">
-            <BaseInput v-model="newWebhookUrl" :label="t('settings.webhookUrl')" id="wh-url" placeholder="https://discord.com/api/webhooks/..." />
-            <BaseInput v-model="newWebhookLabel" :label="t('settings.webhookLabel')" id="wh-label" placeholder="My webhook" />
+            <BaseInput
+              v-model="newWebhookUrl"
+              :label="t('settings.webhookUrl')"
+              id="wh-url"
+              placeholder="https://discord.com/api/webhooks/..."
+            />
+            <BaseInput
+              v-model="newWebhookLabel"
+              :label="t('settings.webhookLabel')"
+              id="wh-label"
+              placeholder="My webhook"
+            />
             <div class="wh-events">
               <span class="style-lbl">{{ t('settings.webhookEvents') }}</span>
               <div class="theme-toggle-row">
-                <button v-for="ev in webhookEventOptions" :key="ev.value"
+                <button
+                  v-for="ev in webhookEventOptions"
+                  :key="ev.value"
                   :class="['theme-btn', { active: newWebhookEvents.includes(ev.value) }]"
                   @click="toggleEvent(ev.value)"
                 >{{ ev.label }}</button>
