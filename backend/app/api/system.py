@@ -41,11 +41,9 @@ async def check_updates(_: dict = Depends(require_authenticated_token)):
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(None, trigger_update_check)
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+    except RuntimeError:
+        # Service not installed or not permitted — version endpoint serves live/cached data
+        pass
 
     return {"success": True, "message": "Update check started."}
 
