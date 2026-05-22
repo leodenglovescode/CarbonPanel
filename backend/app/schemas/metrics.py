@@ -1,11 +1,20 @@
 from pydantic import BaseModel
 
 
+class CpuTemp(BaseModel):
+    sensor: str
+    label: str
+    temp_c: float
+    high_c: float | None = None
+    critical_c: float | None = None
+
+
 class CpuMetrics(BaseModel):
     aggregate: float
     per_core: list[float]
     load_avg: list[float]
     frequency_mhz: float
+    temps: list[CpuTemp] = []
 
 
 class MemoryMetrics(BaseModel):
@@ -63,6 +72,13 @@ class SystemMetrics(BaseModel):
     hostname: str
     uptime_seconds: float
     boot_time_ts: float
+
+
+class HistoryPoint(BaseModel):
+    ts: float
+    cpu: float
+    mem: float
+    gpu: float | None = None
 
 
 class MetricsSnapshot(BaseModel):

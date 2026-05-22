@@ -147,6 +147,62 @@ export const appsApi = {
     api.post<ApiActionResponse>(`/apps/${port}/kill`),
 }
 
+export interface ContainerInfo {
+  id: string
+  name: string
+  image: string
+  status: string
+  state: string
+  ports: string
+  created: string
+  cpu_percent: number
+  mem_usage_mb: number
+  mem_limit_mb: number
+  mem_percent: number
+}
+
+export interface WebhookResponse {
+  id: string
+  label: string
+  url: string
+  enabled: boolean
+  events: string[]
+}
+
+export interface WebhookCreate {
+  label?: string
+  url: string
+  enabled?: boolean
+  events?: string[]
+}
+
+export type HistoryPoint = import('@/types/metrics').HistoryPoint
+
+export const dockerApi = {
+  list: () => api.get<ContainerInfo[]>('/docker/containers'),
+  start: (id: string) => api.post<ApiActionResponse>(`/docker/containers/${id}/start`),
+  stop: (id: string) => api.post<ApiActionResponse>(`/docker/containers/${id}/stop`),
+  restart: (id: string) => api.post<ApiActionResponse>(`/docker/containers/${id}/restart`),
+}
+
+export const processesApi = {
+  kill: (pid: number, force = false) =>
+    api.post<{ success: boolean; message: string }>(`/processes/${pid}/kill`, { force }),
+}
+
+export const webhooksApi = {
+  list: () => api.get<WebhookResponse[]>('/webhooks'),
+  create: (data: WebhookCreate) => api.post<WebhookResponse>('/webhooks', data),
+  update: (id: string, data: Partial<WebhookCreate>) => api.put<WebhookResponse>(`/webhooks/${id}`, data),
+  delete: (id: string) => api.delete(`/webhooks/${id}`),
+  trigger: (event: string, metric: string, value: number, threshold: number) =>
+    api.post('/webhooks/trigger', { event, metric, value, threshold }),
+}
+
+export const metricsApi = {
+  history: () => api.get<HistoryPoint[]>('/metrics/history'),
+}
+
 export const sitesApi = {
   list: () => api.get<SiteResponse[]>('/sites'),
   get: (id: string) => api.get<SiteResponse>(`/sites/${id}`),

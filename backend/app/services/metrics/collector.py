@@ -1,9 +1,12 @@
 import asyncio
 import time
+from collections import deque
 
 from app.core.broadcast import connection_manager
-from app.schemas.metrics import MetricsSnapshot
+from app.schemas.metrics import HistoryPoint, MetricsSnapshot
 from app.services.metrics import cpu, disk, gpu, memory, network, processes, system
+
+_HISTORY_MAX = 300  # keep up to 5 minutes at 1s interval
 
 
 class MetricsCollector:
@@ -12,6 +15,7 @@ class MetricsCollector:
         self._sort_by: str = "cpu"
         self._limit: int = 25
         self._interval: float = 2.0
+        self.history: deque[HistoryPoint] = deque(maxlen=_HISTORY_MAX)
 
     def set_prefs(self, sort_by: str, limit: int) -> None:
         self._sort_by = sort_by
@@ -56,8 +60,9 @@ class MetricsCollector:
             system.collect(),
         )
 
+        now = time.time()
         snapshot = MetricsSnapshot(
-            ts=time.time(),
+            ts=now,
             cpu=cpu_data,
             memory=mem_data,
             gpu=gpu_data,
@@ -66,6 +71,14 @@ class MetricsCollector:
             processes=proc_data,
             system=sys_data,
         )
+
+        gpu_util = gpu_data.devices[0].utilization_percent if gpu_data.available and gpu_data.devices else None
+        self.history.append(HistoryPoint(
+            ts=now,
+            cpu=cpu_data.aggregate,
+            mem=mem_data.percent,
+            gpu=gpu_util,
+        ))
 
         await connection_manager.broadcast(snapshot.model_dump_json())
 

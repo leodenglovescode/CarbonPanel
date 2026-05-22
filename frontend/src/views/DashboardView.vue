@@ -32,6 +32,17 @@
         />
       </div>
 
+      <div v-if="metrics.latest.cpu.temps.length" class="grid-item span-6">
+        <CpuTempWidget :temps="metrics.latest.cpu.temps" />
+      </div>
+      <div :class="['grid-item', metrics.latest.cpu.temps.length ? 'span-6' : 'span-12']">
+        <BandwidthWidget :network="metrics.latest.network" />
+      </div>
+
+      <div class="grid-item span-12">
+        <HistoryWidget :points="historyPoints" />
+      </div>
+
       <div class="grid-item span-12">
         <ProcessListWidget
           :processes="metrics.latest.processes"
@@ -43,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import CpuWidget from '@/components/widgets/CpuWidget.vue'
 import RamWidget from '@/components/widgets/RamWidget.vue'
 import GpuWidget from '@/components/widgets/GpuWidget.vue'
@@ -51,13 +62,38 @@ import DiskWidget from '@/components/widgets/DiskWidget.vue'
 import NetworkWidget from '@/components/widgets/NetworkWidget.vue'
 import ProcessListWidget from '@/components/widgets/ProcessListWidget.vue'
 import SystemWidget from '@/components/widgets/SystemWidget.vue'
+import CpuTempWidget from '@/components/widgets/CpuTempWidget.vue'
+import HistoryWidget from '@/components/widgets/HistoryWidget.vue'
+import BandwidthWidget from '@/components/widgets/BandwidthWidget.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { metricsApi, type HistoryPoint } from '@/api/index'
 
 const metrics = useMetricsStore()
 const { connect, sendPrefs } = useWebSocket()
+const historyPoints = ref<HistoryPoint[]>([])
 
-onMounted(() => connect())
+onMounted(async () => {
+  connect()
+  try {
+    const { data } = await metricsApi.history()
+    historyPoints.value = data
+  } catch { /* ignore */ }
+})
+
+// Keep history up to date with live metrics
+metrics.$subscribe(() => {
+  if (!metrics.latest) return
+  historyPoints.value.push({
+    ts: metrics.latest.ts,
+    cpu: metrics.latest.cpu.aggregate,
+    mem: metrics.latest.memory.percent,
+    gpu: metrics.latest.gpu.available && metrics.latest.gpu.devices.length
+      ? metrics.latest.gpu.devices[0].utilization_percent
+      : null,
+  })
+  if (historyPoints.value.length > 300) historyPoints.value.splice(0, 50)
+})
 
 function onSortChange(sort: 'cpu' | 'memory') {
   sendPrefs(sort, metrics.processLimit)
