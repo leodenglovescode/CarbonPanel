@@ -93,8 +93,8 @@ export interface SystemVersionResponse {
 }
 
 export const systemApi = {
-  version: () => api.get<SystemVersionResponse>('/system/version'),
-  checkUpdates: () => api.post<{ success: boolean; message: string }>('/system/check-updates'),
+  version: () => api.get<SystemVersionResponse>('/system/version', { timeout: 10_000 }),
+  checkUpdates: () => api.post<{ success: boolean; message: string }>('/system/check-updates', null, { timeout: 10_000 }),
   installUpdate: () => api.post<{ success: boolean; message: string }>('/system/install-update'),
 }
 

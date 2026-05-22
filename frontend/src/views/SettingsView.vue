@@ -954,6 +954,9 @@ async function loadVersionInfo() {
   try {
     const res = await systemApi.version()
     versionInfo.value = res.data
+    if (res.data.error) {
+      versionError.value = res.data.error
+    }
   } catch (e: any) {
     versionError.value = e.response?.data?.detail || 'Failed to load version status'
   }
