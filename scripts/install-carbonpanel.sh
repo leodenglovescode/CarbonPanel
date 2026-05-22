@@ -574,13 +574,11 @@ run_database_tasks() {
     ./.venv/bin/alembic upgrade head >/dev/null
   )
 
-  if [[ "$first_install" == "true" ]]; then
-    (
-      load_backend_env
-      cd "$release_dir/backend"
-      ./.venv/bin/python -m app.scripts.seed_admin >/dev/null
-    )
-  fi
+  (
+    load_backend_env
+    cd "$release_dir/backend"
+    ./.venv/bin/python -m app.scripts.seed_admin >/dev/null
+  )
 }
 
 switch_symlink() {
