@@ -3,7 +3,7 @@ import sqlalchemy as sa
 
 
 revision = "0003_starred_system_services"
-down_revision = "0002_sites"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 

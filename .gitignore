@@ -16,5 +16,10 @@ frontend/dist/
 # Misc
 .DS_Store
 *.log
-.aider*
+
+
+
+#AI-Related
 .claude/
+.aider*
+CLAUDE.md

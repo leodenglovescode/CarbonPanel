@@ -35,6 +35,16 @@ const router = createRouter({
       name: 'system-services',
       component: () => import('@/views/SystemServicesView.vue'),
     },
+    {
+      path: '/disks',
+      name: 'disks',
+      component: () => import('@/views/DisksView.vue'),
+    },
+    {
+      path: '/apps',
+      name: 'apps',
+      component: () => import('@/views/AppsView.vue'),
+    },
   ],
 })
 

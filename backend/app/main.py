@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router, ws_router
+from app.api.system import router as system_router
 from app.config import settings
 from app.services.metrics.collector import metrics_collector
 
@@ -30,4 +31,5 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(system_router)
 app.include_router(ws_router)

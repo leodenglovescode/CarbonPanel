@@ -71,6 +71,78 @@ export const settingsApi = {
     api.put('/settings/profile', { current_password, new_username, new_password }),
 }
 
+export interface SystemVersionResponse {
+  configured: boolean
+  repo_url: string
+  current_version: string | null
+  current_commit: string | null
+  current_source_type: string | null
+  installed_at: string | null
+  latest_version: string | null
+  latest_commit: string | null
+  latest_source_type: string | null
+  checked_at: string | null
+  update_available: boolean
+  update_in_progress: boolean
+  status: string
+  error: string | null
+  release_url: string | null
+  notes_url: string | null
+}
+
+export const systemApi = {
+  version: () => api.get<SystemVersionResponse>('/system/version'),
+  checkUpdates: () => api.post<{ success: boolean; message: string }>('/system/check-updates'),
+  installUpdate: () => api.post<{ success: boolean; message: string }>('/system/install-update'),
+}
+
+export interface DiskInfo {
+  device: string
+  mountpoint: string
+  fstype: string
+  opts: string
+  total_gb: number
+  used_gb: number
+  free_gb: number
+  usage_percent: number
+  read_mb_s: number
+  write_mb_s: number
+  is_removable: boolean
+  is_virtual: boolean
+}
+
+export interface AppInfo {
+  port: number
+  protocol: string
+  pid: number | null
+  process_name: string
+  user: string
+  cmdline: string
+  auto_label: string
+  custom_label: string | null
+}
+
+export interface ApiActionResponse {
+  success: boolean
+  output: string
+}
+
+export const disksApi = {
+  list: () => api.get<DiskInfo[]>('/disks'),
+  unmount: (mountpoint: string) => api.post<ApiActionResponse>('/disks/unmount', { mountpoint }),
+  check: (mountpoint: string) => api.post<ApiActionResponse>('/disks/check', { mountpoint }),
+}
+
+export const appsApi = {
+  list: () => api.get<AppInfo[]>('/apps'),
+  setLabel: (port: number, label: string) =>
+    api.put<ApiActionResponse>(`/apps/${port}/label`, { label }),
+  deleteLabel: (port: number) =>
+    api.delete<ApiActionResponse>(`/apps/${port}/label`),
+  kill: (port: number) =>
+    api.post<ApiActionResponse>(`/apps/${port}/kill`),
+}
+
 export const sitesApi = {
   list: () => api.get<SiteResponse[]>('/sites'),
   get: (id: string) => api.get<SiteResponse>(`/sites/${id}`),

@@ -44,6 +44,8 @@ const navItems = [
   { to: '/', label: 'Stats' },
   { to: '/sites', label: 'Sites' },
   { to: '/system-services', label: 'System Services' },
+  { to: '/disks', label: 'Disks' },
+  { to: '/apps', label: 'Apps' },
   { to: '/settings', label: 'Settings' },
 ]
 
