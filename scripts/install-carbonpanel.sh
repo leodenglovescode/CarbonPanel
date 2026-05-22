@@ -109,7 +109,7 @@ now_iso() {
 }
 
 safe_name() {
-  printf '%s' "$1" | tr '/:@ ' '----' | tr -cd '[:alnum:]._-\n'
+  printf '%s' "$1" | tr '/:@ ' '----' | tr -cd '[:alnum:]._\n-'
 }
 
 generate_secret() {
