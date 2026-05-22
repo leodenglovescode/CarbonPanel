@@ -882,18 +882,55 @@ rollback_release() {
 }
 
 print_current_version() {
-  local current_version current_commit latest_version checked_at status_value
+  local current_version current_commit installed_at slug api_base
+  local release_json release_tag latest_version status_label short_commit
+
+  # Read what's currently installed from the release metadata file
   current_version="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)"
   current_commit="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" commit)"
-  latest_version="$(read_json_file_field "$STATUS_FILE" latest_version)"
-  checked_at="$(read_json_file_field "$STATUS_FILE" checked_at)"
-  status_value="$(read_json_file_field "$STATUS_FILE" status)"
+  installed_at="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" installed_at)"
 
-  printf 'current_version=%s\n' "${current_version:-unknown}"
-  printf 'current_commit=%s\n' "${current_commit:-unknown}"
-  printf 'latest_version=%s\n' "${latest_version:-unknown}"
-  printf 'last_checked=%s\n' "${checked_at:-never}"
-  printf 'status=%s\n' "${status_value:-unknown}"
+  # Live GitHub check — don't rely on cached STATUS_FILE which may be stale/missing
+  slug="$(repo_slug)"
+  api_base="https://api.github.com/repos/$slug"
+  note "pinging github for the latest..."
+  release_json="$(github_api_get "$api_base/releases/latest" 2>/dev/null || true)"
+  release_tag="$(printf '%s' "$release_json" | json_query tag_name 2>/dev/null || true)"
+  if [[ -z "$release_tag" || "$release_tag" == "null" ]]; then
+    local tags_json
+    tags_json="$(github_api_get "$api_base/tags?per_page=1" 2>/dev/null || true)"
+    release_tag="$(printf '%s' "$tags_json" | json_query 0.name 2>/dev/null || true)"
+  fi
+  [[ -z "$release_tag" || "$release_tag" == "null" ]] && release_tag=""
+  latest_version="${release_tag:-unknown}"
+
+  # Determine status
+  if [[ -z "$current_version" ]]; then
+    if [[ -L "$CURRENT_LINK" ]]; then
+      status_label="${YELLOW}installed (pre-dates version tracking)${NC}"
+    else
+      status_label="${DIM}not installed${NC}"
+    fi
+  elif [[ "$latest_version" == "unknown" ]]; then
+    status_label="${DIM}installed — could not reach github${NC}"
+  elif [[ "$current_version" == "$latest_version" ]]; then
+    status_label="${GREEN}${BOLD}✓ up to date${NC}"
+  else
+    status_label="${YELLOW}${BOLD}⬆ update available${NC}"
+  fi
+
+  short_commit="${current_commit:0:12}"
+
+  printf "\n"
+  printf "  ${CYAN}${BOLD}version info${NC}\n"
+  printf "  ${DIM}────────────────────────────────────────${NC}\n"
+  printf "  installed   ${BOLD}%s${NC}\n" "${current_version:-unknown}"
+  [[ -n "$short_commit" ]] && printf "  commit      ${DIM}%s${NC}\n" "$short_commit"
+  [[ -n "$installed_at" ]] && printf "  since       ${DIM}%s${NC}\n" "$installed_at"
+  printf "  latest      ${BOLD}%s${NC}\n" "$latest_version"
+  printf "  status      "
+  printf "${status_label}\n"
+  printf "\n"
 }
 
 show_menu() {
