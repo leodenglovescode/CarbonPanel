@@ -298,6 +298,7 @@ install_os_prerequisites() {
 
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
+  # Core utilities — safe to install unconditionally on any apt system.
   apt-get install -y \
     ca-certificates \
     curl \
@@ -306,14 +307,31 @@ install_os_prerequisites() {
     python3-pip \
     python3-venv \
     build-essential \
-    nginx \
-    nodejs \
-    npm \
     sudo
+
+  # nginx — skip if already present (nginx.org repo, BunkerWeb, OpenResty, etc. all conflict
+  # with Ubuntu's nginx package but provide a compatible binary).
+  if ! command_exists nginx; then
+    apt-get install -y nginx 2>/dev/null || true
+  fi
+
+  # nodejs — skip if already present (NodeSource, nvm, volta, fnm all conflict
+  # with Ubuntu's nodejs package but provide a compatible binary).
+  if ! command_exists node && ! command_exists nodejs; then
+    apt-get install -y nodejs 2>/dev/null || true
+  fi
+
+  # npm is bundled with NodeSource nodejs. Only fall back to the apt package
+  # on systems where nodejs was installed without npm (older Ubuntu apt nodejs).
+  if ! command_exists npm; then
+    apt-get install -y npm 2>/dev/null || true
+  fi
 
   command_exists python3 || die "python3 is required."
   command_exists git || die "git is required."
-  command_exists npm || die "npm is required."
+  command_exists nginx || die "nginx is required — install nginx and try again."
+  command_exists node || command_exists nodejs || die "Node.js is required — install Node.js and try again."
+  command_exists npm || die "npm is required — install Node.js with npm included and try again."
 }
 
 ensure_service_account() {
