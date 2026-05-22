@@ -431,23 +431,41 @@
             <BaseButton variant="ghost" :disabled="versionActionLoading" @click="checkForUpdates">
               {{ versionActionLoading ? 'Working…' : 'Check for Updates' }}
             </BaseButton>
-            <BaseButton
-              variant="primary"
-              :disabled="
-                versionActionLoading ||
-                !versionInfo?.update_available ||
-                !!versionInfo?.update_in_progress
-              "
-              @click="installUpdate"
-            >
-              {{
-                versionInfo?.update_in_progress
-                  ? 'Installing…'
-                  : versionActionLoading
-                    ? 'Working…'
-                    : 'Install Update'
-              }}
-            </BaseButton>
+
+            <!-- Docker mode: show pull command instead of install button -->
+            <template v-if="versionInfo?.deployment_type === 'docker'">
+              <div v-if="versionInfo?.update_available" class="docker-update-block">
+                <span class="docker-update-label">Pull the latest image to update:</span>
+                <div class="docker-pull-row">
+                  <code class="docker-pull-cmd">{{ versionInfo.docker_pull_cmd }}</code>
+                  <button class="copy-btn" @click="copyPullCmd(versionInfo.docker_pull_cmd!)">
+                    {{ copied ? 'copied!' : 'copy' }}
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <!-- Self-hosted mode: show install button -->
+            <template v-else>
+              <BaseButton
+                variant="primary"
+                :disabled="
+                  versionActionLoading ||
+                  !versionInfo?.update_available ||
+                  !!versionInfo?.update_in_progress
+                "
+                @click="installUpdate"
+              >
+                {{
+                  versionInfo?.update_in_progress
+                    ? 'Installing…'
+                    : versionActionLoading
+                      ? 'Working…'
+                      : 'Install Update'
+                }}
+              </BaseButton>
+            </template>
+
             <a
               v-if="versionInfo?.notes_url || versionInfo?.release_url"
               class="version-link"
@@ -737,6 +755,14 @@ const versionInfo = ref<SystemVersionResponse | null>(null)
 const versionActionLoading = ref(false)
 const versionError = ref('')
 const versionSuccess = ref('')
+const copied = ref(false)
+
+function copyPullCmd(cmd: string) {
+  navigator.clipboard.writeText(cmd).then(() => {
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  })
+}
 
 async function loadVersionInfo() {
   versionError.value = ''
@@ -1055,6 +1081,33 @@ onMounted(() => {
 .version-link:hover {
   color: var(--fg);
 }
+
+.docker-update-block {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+}
+
+.docker-update-label { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+
+.docker-pull-row { display: flex; align-items: center; gap: 8px; }
+
+.docker-pull-cmd {
+  flex: 1; font-family: var(--font); font-size: 11px; color: var(--fg);
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 5px 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.copy-btn {
+  flex-shrink: 0; background: none; border: 1px solid var(--accent-border);
+  color: var(--accent); font-family: var(--font); font-size: 10px;
+  padding: 4px 10px; border-radius: 3px; cursor: pointer;
+  transition: all var(--transition);
+}
+.copy-btn:hover { background: var(--accent-dim); }
 
 .disk-scope {
   display: flex;

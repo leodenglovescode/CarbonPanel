@@ -59,7 +59,10 @@ def _is_virtual(device: str, fstype: str) -> bool:
 
 
 def _get_bus_type(device: str) -> str:
-    """Determine connection bus via sysfs. Returns 'usb', 'nvme', 'sata', 'mmc', 'virtual', or 'unknown'."""
+    """Determine connection bus via sysfs.
+
+    Returns 'usb', 'nvme', 'sata', 'mmc', 'virtual', or 'unknown'.
+    """
     dev = device.replace("/dev/", "")
     if dev.startswith("nvme"):
         return "nvme"
@@ -94,17 +97,16 @@ def _is_removable(device: str, mountpoint: str) -> bool:
         return True
     removable_devices = ("sd", "hd", "nvme", "mmcblk")
     dev = device.replace("/dev/", "")
-    return not any(dev.startswith(p) for p in removable_devices) and mountpoint not in ("/", "/boot", "/home")
+    not_standard = not any(dev.startswith(p) for p in removable_devices)
+    not_system_mount = mountpoint not in ("/", "/boot", "/home")
+    return not_standard and not_system_mount
 
 
 @router.get("", response_model=list[DiskInfo])
 async def list_disks(_: User = Depends(get_current_user)):
     loop = asyncio.get_event_loop()
 
-    partitions, io_counters = await asyncio.gather(
-        loop.run_in_executor(None, lambda: psutil.disk_partitions(all=False)),
-        loop.run_in_executor(None, lambda: psutil.disk_io_counters(perdisk=True)),
-    )
+    partitions = await loop.run_in_executor(None, lambda: psutil.disk_partitions(all=False))
 
     results: list[DiskInfo] = []
     for p in partitions:
@@ -112,13 +114,6 @@ async def list_disks(_: User = Depends(get_current_user)):
             usage = await loop.run_in_executor(None, lambda mp=p.mountpoint: psutil.disk_usage(mp))
         except PermissionError:
             continue
-
-        dev = p.device.replace("/dev/", "")
-        io_key = next(
-            (k for k in (io_counters or {}) if dev.startswith(k) or k.startswith(dev)),
-            dev,
-        )
-        io = (io_counters or {}).get(io_key)
 
         fstype = p.fstype or "unknown"
         results.append(DiskInfo(
