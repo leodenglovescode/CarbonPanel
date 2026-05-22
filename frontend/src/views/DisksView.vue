@@ -42,6 +42,7 @@
             <div class="disk-device">{{ disk.device }}</div>
             <div class="disk-meta">
               <span class="meta-badge">{{ disk.fstype }}</span>
+              <span :class="['meta-badge', `badge-bus-${disk.bus_type}`]">{{ disk.bus_type }}</span>
               <span v-if="disk.is_removable" class="meta-badge badge-removable">removable</span>
               <span class="disk-mount">→ {{ disk.mountpoint }}</span>
             </div>
@@ -83,13 +84,17 @@
             <div class="actions-header">Actions</div>
             <div class="action-row">
               <button
+                v-if="disk.can_unmount"
                 class="action-btn"
-                :disabled="actionBusy === diskKey(disk) || disk.mountpoint === '/'"
-                :title="disk.mountpoint === '/' ? 'Cannot unmount root' : 'Unmount this partition'"
+                :disabled="actionBusy === diskKey(disk)"
+                title="Unmount this drive"
                 @click="confirmUnmount(disk)"
               >
                 unmount
               </button>
+              <span v-else class="action-locked" :title="`${disk.bus_type.toUpperCase()} drives cannot be unmounted`">
+                unmount unavailable
+              </span>
               <button
                 class="action-btn"
                 :disabled="actionBusy === diskKey(disk)"
@@ -321,6 +326,19 @@ onMounted(load)
   padding: 1px 6px; border-radius: 3px;
 }
 .badge-removable { color: var(--warning); border-color: rgba(255,170,0,0.3); background: var(--warning-dim); }
+
+.badge-bus-usb  { color: var(--accent);  border-color: var(--accent-border); background: var(--accent-dim); }
+.badge-bus-mmc  { color: var(--accent);  border-color: var(--accent-border); background: var(--accent-dim); }
+.badge-bus-nvme { color: var(--info);    border-color: rgba(68,136,255,0.25); background: rgba(68,136,255,0.08); }
+.badge-bus-sata { color: var(--fg-muted); border-color: var(--border); background: var(--bg-badge); }
+.badge-bus-virtual { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
+.badge-bus-unknown { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
+
+.action-locked {
+  font-size: 11px; color: var(--fg-dim); padding: 5px 12px;
+  border: 1px dashed var(--border); border-radius: 3px;
+  cursor: not-allowed; user-select: none;
+}
 .disk-mount { font-size: 10px; color: var(--fg-dim); }
 
 .disk-right { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }

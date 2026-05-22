@@ -109,6 +109,8 @@ export interface DiskInfo {
   write_mb_s: number
   is_removable: boolean
   is_virtual: boolean
+  can_unmount: boolean
+  bus_type: string
 }
 
 export interface AppInfo {
