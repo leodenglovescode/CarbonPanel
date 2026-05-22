@@ -1,8 +1,24 @@
+export interface CpuTemp {
+  sensor: string
+  label: string
+  temp_c: number
+  high_c: number | null
+  critical_c: number | null
+}
+
 export interface CpuMetrics {
   aggregate: number
   per_core: number[]
   load_avg: number[]
   frequency_mhz: number
+  temps: CpuTemp[]
+}
+
+export interface HistoryPoint {
+  ts: number
+  cpu: number
+  mem: number
+  gpu?: number | null
 }
 
 export interface MemoryMetrics {

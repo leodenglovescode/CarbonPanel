@@ -45,6 +45,26 @@ const router = createRouter({
       name: 'apps',
       component: () => import('@/views/AppsView.vue'),
     },
+    {
+      path: '/docker',
+      name: 'docker',
+      component: () => import('@/views/DockerView.vue'),
+    },
+    {
+      path: '/logs',
+      name: 'logs',
+      component: () => import('@/views/LogsView.vue'),
+    },
+    {
+      path: '/cron',
+      name: 'cron',
+      component: () => import('@/views/CronView.vue'),
+    },
+    {
+      path: '/sessions',
+      name: 'sessions',
+      component: () => import('@/views/SessionsView.vue'),
+    },
   ],
 })
 

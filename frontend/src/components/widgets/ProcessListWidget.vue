@@ -54,9 +54,13 @@
               <span :class="['status-dot', statusClass(p.status)]" />
               <span class="status-txt">{{ p.status }}</span>
             </td>
+            <td class="kill-cell">
+              <button class="kill-btn" title="Terminate (SIGTERM)" @click="promptKill(p, false)">✕</button>
+              <button class="kill-btn kill-force" title="Force kill (SIGKILL)" @click="promptKill(p, true)">✕✕</button>
+            </td>
           </tr>
           <tr v-if="visibleProcesses.length === 0">
-            <td colspan="6" class="no-results">no matching processes</td>
+            <td colspan="7" class="no-results">no matching processes</td>
           </tr>
         </tbody>
       </table>
@@ -69,6 +73,7 @@ import { computed, ref } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import type { ProcessMetrics } from '@/types/metrics'
 import { useMetricsStore } from '@/stores/metrics'
+import { processesApi } from '@/api/index'
 
 const props = defineProps<{ processes: ProcessMetrics[] }>()
 const emit = defineEmits<{ sortChange: [sort: 'cpu' | 'memory'] }>()
@@ -93,6 +98,18 @@ const displayCount = computed(() => visibleProcesses.value.length)
 function setSort(s: 'cpu' | 'memory') {
   store.processSort = s
   emit('sortChange', s)
+}
+
+async function promptKill(p: ProcessMetrics, force: boolean) {
+  const msg = force
+    ? `Force kill (SIGKILL) ${p.name} (PID ${p.pid})? Data loss possible.`
+    : `Terminate ${p.name} (PID ${p.pid})?`
+  if (!window.confirm(msg)) return
+  try {
+    await processesApi.kill(p.pid, force)
+  } catch (e: any) {
+    window.alert(e.response?.data?.detail || 'Failed to kill process')
+  }
 }
 
 function cpuColor(pct: number) {
@@ -212,4 +229,14 @@ tbody td {
 .dot-gray { background: var(--fg-dim); }
 .dot-yellow { background: var(--warning); }
 .status-txt { font-size: 10px; color: var(--fg-muted); vertical-align: middle; }
+
+.kill-cell { text-align: right; white-space: nowrap; }
+.kill-btn {
+  background: none; border: none; color: var(--fg-dim); font-family: var(--font);
+  font-size: 9px; padding: 2px 5px; border-radius: 3px; cursor: pointer;
+  transition: all var(--transition);
+}
+.kill-btn:hover { color: var(--danger); background: var(--danger-dim); }
+.kill-force { color: transparent; }
+.kill-force:hover { color: var(--danger); }
 </style>

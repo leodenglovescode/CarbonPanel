@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { MetricsSnapshot } from '@/types/metrics'
+import { webhooksApi } from '@/api/index'
 
 export interface Toast {
   id: number
@@ -67,13 +68,16 @@ export const useAlertsStore = defineStore('alerts', () => {
     localStorage.setItem(DISK_ALERT_SCOPE_STORAGE_KEY, value)
   }
 
-  function fire(key: string, message: string, level: Toast['level']) {
+  function fire(key: string, message: string, level: Toast['level'], webhookEvent?: { event: string; metric: string; value: number; threshold: number }) {
     const now = Date.now()
     if (lastFired.value[key] && now - lastFired.value[key] < COOLDOWN_MS) return
     lastFired.value[key] = now
     const id = nextId++
     toasts.value.push({ id, message, level })
     setTimeout(() => dismiss(id), 5000)
+    if (webhookEvent) {
+      webhooksApi.trigger(webhookEvent.event, webhookEvent.metric, webhookEvent.value, webhookEvent.threshold).catch(() => {})
+    }
   }
 
   function dismiss(id: number) {
@@ -85,10 +89,12 @@ export const useAlertsStore = defineStore('alerts', () => {
     const { cpu, ram, disk } = thresholds.value
 
     if (cpu > 0 && snap.cpu.aggregate >= cpu) {
-      fire('cpu', `CPU usage ${snap.cpu.aggregate.toFixed(0)}% ≥ ${cpu}%`, cpu >= 90 ? 'danger' : 'warning')
+      fire('cpu', `CPU usage ${snap.cpu.aggregate.toFixed(0)}% ≥ ${cpu}%`, cpu >= 90 ? 'danger' : 'warning',
+        { event: 'alert.cpu', metric: 'cpu', value: snap.cpu.aggregate, threshold: cpu })
     }
     if (ram > 0 && snap.memory.percent >= ram) {
-      fire('ram', `RAM usage ${snap.memory.percent.toFixed(0)}% ≥ ${ram}%`, ram >= 90 ? 'danger' : 'warning')
+      fire('ram', `RAM usage ${snap.memory.percent.toFixed(0)}% ≥ ${ram}%`, ram >= 90 ? 'danger' : 'warning',
+        { event: 'alert.ram', metric: 'ram', value: snap.memory.percent, threshold: ram })
     }
     if (disk > 0) {
       const disksToCheck =
@@ -102,6 +108,7 @@ export const useAlertsStore = defineStore('alerts', () => {
             `disk_${d.mountpoint}`,
             `Disk ${d.mountpoint} at ${d.usage_percent.toFixed(0)}% ≥ ${disk}%`,
             disk >= 90 ? 'danger' : 'warning',
+            { event: 'alert.disk', metric: `disk:${d.mountpoint}`, value: d.usage_percent, threshold: disk },
           )
         }
       }

@@ -22,16 +22,18 @@
       <div v-if="system" class="hostname">{{ system.hostname }}</div>
       <div class="status-row">
         <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Live' : 'Reconnecting...'" />
-        <span class="ws-label">{{ connected ? 'live' : 'reconnecting' }}</span>
+        <span class="ws-label">{{ connected ? t('common.live') : t('common.reconnecting') }}</span>
       </div>
-      <button class="logout-btn" @click="handleLogout">logout</button>
+      <button class="logout-btn" @click="handleLogout">{{ t('common.logout') }}</button>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useLocaleStore } from '@/stores/locale'
 import type { SystemMetrics } from '@/types/metrics'
 
 defineProps<{ system?: SystemMetrics; connected?: boolean }>()
@@ -39,15 +41,20 @@ defineProps<{ system?: SystemMetrics; connected?: boolean }>()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useLocaleStore()
 
-const navItems = [
-  { to: '/', label: 'Stats' },
-  { to: '/sites', label: 'Sites' },
-  { to: '/system-services', label: 'System Services' },
-  { to: '/disks', label: 'Disks' },
-  { to: '/apps', label: 'Apps' },
-  { to: '/settings', label: 'Settings' },
-]
+const navItems = computed(() => [
+  { to: '/', label: t('nav.stats') },
+  { to: '/sites', label: t('nav.sites') },
+  { to: '/system-services', label: t('nav.systemServices') },
+  { to: '/disks', label: t('nav.disks') },
+  { to: '/apps', label: t('nav.apps') },
+  { to: '/docker', label: t('nav.docker') },
+  { to: '/logs', label: t('nav.logs') },
+  { to: '/cron', label: t('nav.cron') },
+  { to: '/sessions', label: t('nav.sessions') },
+  { to: '/settings', label: t('nav.settings') },
+])
 
 function isActive(to: string) {
   if (to === '/') return route.path === '/'

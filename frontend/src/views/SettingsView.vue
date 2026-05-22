@@ -680,6 +680,72 @@
             </BaseButton>
           </form>
         </div>
+
+        <!-- Language Section -->
+        <div id="section-language" class="section">
+          <div class="section-header">
+            <span class="section-title">{{ t('settings.language') }}</span>
+            <span class="badge badge-gray">{{ locale.locale.toUpperCase() }}</span>
+          </div>
+          <p class="section-desc">{{ t('settings.languageDesc') }}</p>
+          <div class="theme-toggle-row">
+            <button
+              type="button"
+              :class="['theme-btn', { active: locale.locale === 'en' }]"
+              @click="locale.setLocale('en')"
+            >English</button>
+            <button
+              type="button"
+              :class="['theme-btn', { active: locale.locale === 'zh' }]"
+              @click="locale.setLocale('zh')"
+            >中文</button>
+          </div>
+        </div>
+
+        <!-- Webhooks Section -->
+        <div id="section-webhooks" class="section">
+          <div class="section-header">
+            <span class="section-title">{{ t('settings.webhooks') }}</span>
+            <span class="badge badge-gray">{{ webhooks.length }} configured</span>
+          </div>
+          <p class="section-desc">{{ t('settings.webhooksDesc') }}</p>
+
+          <div v-if="!webhooks.length" class="section-desc">{{ t('settings.noWebhooks') }}</div>
+
+          <div v-for="wh in webhooks" :key="wh.id" class="webhook-row">
+            <div class="webhook-info">
+              <span class="webhook-label">{{ wh.label || 'Webhook' }}</span>
+              <span class="webhook-url">{{ wh.url }}</span>
+            </div>
+            <div class="webhook-actions">
+              <button
+                :class="['theme-btn', 'wh-toggle', { active: wh.enabled }]"
+                @click="toggleWebhook(wh)"
+              >{{ wh.enabled ? t('common.enabled') : t('common.disabled') }}</button>
+              <button class="theme-btn wh-test" @click="testWebhook(wh)">{{ t('settings.testWebhook') }}</button>
+              <button class="theme-btn wh-del" @click="deleteWebhook(wh.id)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+
+          <div class="webhook-add-form">
+            <BaseInput v-model="newWebhookUrl" :label="t('settings.webhookUrl')" id="wh-url" placeholder="https://discord.com/api/webhooks/..." />
+            <BaseInput v-model="newWebhookLabel" :label="t('settings.webhookLabel')" id="wh-label" placeholder="My webhook" />
+            <div class="wh-events">
+              <span class="style-lbl">{{ t('settings.webhookEvents') }}</span>
+              <div class="theme-toggle-row">
+                <button v-for="ev in webhookEventOptions" :key="ev.value"
+                  :class="['theme-btn', { active: newWebhookEvents.includes(ev.value) }]"
+                  @click="toggleEvent(ev.value)"
+                >{{ ev.label }}</button>
+              </div>
+            </div>
+            <p v-if="webhookError" class="error-msg">{{ webhookError }}</p>
+            <p v-if="webhookSuccess" class="success-msg">{{ webhookSuccess }}</p>
+            <BaseButton variant="ghost" :disabled="!newWebhookUrl || webhookLoading" @click="addWebhook">
+              {{ webhookLoading ? 'Saving…' : t('settings.addWebhook') }}
+            </BaseButton>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -695,8 +761,9 @@ import { useThemeStore, type AnimationLevel } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
 import { useBackgroundStore } from '@/stores/background'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
+import { useLocaleStore } from '@/stores/locale'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, type SystemVersionResponse } from '@/api'
+import { settingsApi, systemApi, webhooksApi, type SystemVersionResponse, type WebhookResponse } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -705,6 +772,8 @@ const theme = useThemeStore()
 const alerts = useAlertsStore()
 const bg = useBackgroundStore()
 const displayPrefs = useDisplayPrefsStore()
+const locale = useLocaleStore()
+const { t } = locale
 const { sendInterval } = useWebSocket()
 
 const mainEl = ref<HTMLElement | null>(null)
@@ -719,6 +788,8 @@ const navSections = [
   { id: 'section-version',    label: 'Version' },
   { id: 'section-2fa',        label: '2FA' },
   { id: 'section-account',    label: 'Account' },
+  { id: 'section-language',   label: t('settings.language') },
+  { id: 'section-webhooks',   label: t('settings.webhooks') },
 ]
 
 function scrollTo(id: string) {
@@ -1016,8 +1087,75 @@ async function handleChangeCreds() {
   }
 }
 
+// Webhooks
+const webhooks = ref<WebhookResponse[]>([])
+const newWebhookUrl = ref('')
+const newWebhookLabel = ref('')
+const newWebhookEvents = ref<string[]>(['alert.cpu', 'alert.ram', 'alert.disk'])
+const webhookLoading = ref(false)
+const webhookError = ref('')
+const webhookSuccess = ref('')
+
+const webhookEventOptions = [
+  { value: 'alert.cpu', label: 'CPU' },
+  { value: 'alert.ram', label: 'RAM' },
+  { value: 'alert.disk', label: 'Disk' },
+]
+
+function toggleEvent(ev: string) {
+  const idx = newWebhookEvents.value.indexOf(ev)
+  if (idx === -1) newWebhookEvents.value.push(ev)
+  else newWebhookEvents.value.splice(idx, 1)
+}
+
+async function loadWebhooks() {
+  try {
+    const { data } = await webhooksApi.list()
+    webhooks.value = data
+  } catch { /* ignore */ }
+}
+
+async function addWebhook() {
+  webhookError.value = ''
+  webhookSuccess.value = ''
+  if (!newWebhookUrl.value) return
+  webhookLoading.value = true
+  try {
+    await webhooksApi.create({ url: newWebhookUrl.value, label: newWebhookLabel.value, events: newWebhookEvents.value })
+    newWebhookUrl.value = ''
+    newWebhookLabel.value = ''
+    webhookSuccess.value = 'Webhook added.'
+    await loadWebhooks()
+  } catch (e: any) {
+    webhookError.value = e.response?.data?.detail || 'Failed to save webhook'
+  } finally {
+    webhookLoading.value = false
+  }
+}
+
+async function toggleWebhook(wh: WebhookResponse) {
+  await webhooksApi.update(wh.id, { enabled: !wh.enabled })
+  await loadWebhooks()
+}
+
+async function deleteWebhook(id: string) {
+  if (!window.confirm('Delete this webhook?')) return
+  await webhooksApi.delete(id)
+  await loadWebhooks()
+}
+
+async function testWebhook(wh: WebhookResponse) {
+  try {
+    await webhooksApi.trigger('test', 'manual', 0, 0)
+    webhookSuccess.value = `Test sent to ${wh.url}`
+  } catch (e: any) {
+    webhookError.value = e.response?.data?.detail || 'Test failed'
+  }
+}
+
 onMounted(() => {
   void loadVersionInfo()
+  void loadWebhooks()
 })
 </script>
 
@@ -1236,6 +1374,27 @@ onMounted(() => {
   transition: all var(--transition);
 }
 .copy-btn:hover { background: var(--accent-dim); }
+
+.webhook-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+.webhook-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.webhook-label { font-size: 11px; font-weight: 500; color: var(--fg); }
+.webhook-url { font-size: 10px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.webhook-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.wh-toggle.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+.wh-del:hover { border-color: rgba(255,68,68,0.4); color: var(--danger); }
+.wh-test:hover { border-color: rgba(100,180,255,0.4); color: #60a5fa; }
+.webhook-add-form { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--border-subtle); }
+.wh-events { display: flex; flex-direction: column; gap: 6px; }
 
 .display-pref-row {
   display: flex;
