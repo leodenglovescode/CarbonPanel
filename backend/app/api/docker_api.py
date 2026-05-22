@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,8 +10,13 @@ from app.models.user import User
 
 router = APIRouter(prefix="/docker", tags=["docker"])
 
+_PERMISSION_HINT = (
+    "Permission denied accessing Docker socket. "
+    "Run: sudo usermod -aG docker $USER  then log out and back in."
+)
 
-async def _run(cmd: list[str]) -> tuple[int, str]:
+
+async def _exec(cmd: list[str]) -> tuple[int, str]:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -18,6 +24,19 @@ async def _run(cmd: list[str]) -> tuple[int, str]:
     )
     stdout, _ = await proc.communicate()
     return proc.returncode, stdout.decode(errors="replace").strip()
+
+
+async def _run(cmd: list[str]) -> tuple[int, str]:
+    rc, out = await _exec(cmd)
+    # Retry with sudo if the socket is inaccessible and we're not already root
+    if rc != 0 and "permission denied" in out.lower() and os.geteuid() != 0:
+        sudo_cmd = ["/usr/bin/sudo", "-n", *cmd]
+        rc2, out2 = await _exec(sudo_cmd)
+        if rc2 == 0:
+            return rc2, out2
+        # Both failed — return a helpful message instead of the raw kernel error
+        return rc, _PERMISSION_HINT
+    return rc, out
 
 
 def _safe_id(s: str) -> bool:
