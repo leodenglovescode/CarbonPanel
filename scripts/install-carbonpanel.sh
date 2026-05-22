@@ -244,7 +244,7 @@ PY
 }
 
 github_api_get() {
-  curl -fsSL -H "Accept: application/vnd.github+json" "$1"
+  curl -fsSL --connect-timeout 10 --max-time 30 -H "Accept: application/vnd.github+json" "$1"
 }
 
 resolve_latest_reference() {
@@ -395,8 +395,9 @@ clone_release() {
   local ref="$1"
   local destination="$RELEASES_DIR/$2"
 
-  git clone --depth 1 --branch "$ref" "$REPO_URL" "$destination" >/dev/null 2>&1 || \
-    die "Failed to clone $REPO_URL at ref $ref."
+  # Keep stderr visible so network/firewall errors are shown to the user.
+  git clone --depth 1 --branch "$ref" "$REPO_URL" "$destination" 1>/dev/null || \
+    die "Failed to clone $REPO_URL at ref $ref. If you are behind a firewall, set your proxy first: export https_proxy=http://host:port"
 
   printf '%s\n' "$destination"
 }
@@ -990,7 +991,8 @@ done
 
 # When invoked via pipe (curl | sudo bash) stdin is the pipe, not the terminal.
 # Reopen stdin from /dev/tty so interactive prompts work.
-exec </dev/tty 2>/dev/null || true
+# Note: do NOT add 2>/dev/null here — it would permanently suppress all stderr.
+exec </dev/tty || true
 
 [[ -z "$COMMAND" ]] && show_menu
 
