@@ -1,4 +1,6 @@
 import asyncio
+import os
+import re
 import shutil
 
 import psutil
@@ -36,6 +38,8 @@ class DiskInfo(BaseModel):
     write_mb_s: float
     is_removable: bool
     is_virtual: bool
+    can_unmount: bool
+    bus_type: str
 
 
 class UnmountRequest(BaseModel):
@@ -52,6 +56,36 @@ def _is_virtual(device: str, fstype: str) -> bool:
         return True
     dev = device.replace("/dev/", "")
     return dev.startswith("loop")
+
+
+def _get_bus_type(device: str) -> str:
+    """Determine connection bus via sysfs. Returns 'usb', 'nvme', 'sata', 'mmc', 'virtual', or 'unknown'."""
+    dev = device.replace("/dev/", "")
+    if dev.startswith("nvme"):
+        return "nvme"
+    if dev.startswith("mmcblk"):
+        return "mmc"
+    if dev.startswith("loop"):
+        return "virtual"
+    # Strip partition suffix: sda1 → sda, sdb2 → sdb
+    base = re.sub(r"\d+$", "", dev)
+    sys_path = f"/sys/block/{base}"
+    if not os.path.exists(sys_path):
+        return "unknown"
+    try:
+        real_path = os.path.realpath(sys_path)
+        if "/usb" in real_path:
+            return "usb"
+    except OSError:
+        pass
+    return "sata"
+
+
+def _can_unmount(device: str, mountpoint: str) -> bool:
+    if mountpoint == "/":
+        return False
+    bus = _get_bus_type(device)
+    return bus in ("usb", "mmc")
 
 
 def _is_removable(device: str, mountpoint: str) -> bool:
@@ -100,6 +134,8 @@ async def list_disks(_: User = Depends(get_current_user)):
             write_mb_s=0.0,
             is_removable=_is_removable(p.device, p.mountpoint),
             is_virtual=_is_virtual(p.device, fstype),
+            can_unmount=_can_unmount(p.device, p.mountpoint),
+            bus_type=_get_bus_type(p.device),
         ))
 
     return results
@@ -109,6 +145,16 @@ async def list_disks(_: User = Depends(get_current_user)):
 async def unmount_disk(body: UnmountRequest, _: User = Depends(get_current_user)):
     if not body.mountpoint or body.mountpoint == "/":
         raise HTTPException(status_code=400, detail="Cannot unmount root filesystem")
+
+    partitions = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: psutil.disk_partitions(all=False)
+    )
+    part = next((p for p in partitions if p.mountpoint == body.mountpoint), None)
+    if part and not _can_unmount(part.device, part.mountpoint):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot unmount {part.device} — only USB and removable drives may be unmounted",
+        )
 
     if not shutil.which("umount"):
         raise HTTPException(status_code=503, detail="umount not available on this system")
