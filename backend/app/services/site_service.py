@@ -298,7 +298,9 @@ async def get_autostart_enabled(site: Site) -> bool:
 
 async def set_autostart(site: Site, enabled: bool) -> tuple[bool, str]:
     if site.service_manager != "systemd":
-        raise ValueError(f"Autostart is only supported for systemd services, got: {site.service_manager}")
+        raise ValueError(
+            f"Autostart is only supported for systemd services, got: {site.service_manager}"
+        )
     cmd = ["systemctl", "enable" if enabled else "disable", site.service_name]
     rc, out = await _run(cmd)
     return rc == 0, out
@@ -552,7 +554,8 @@ async def list_system_services(
 
         is_starred = service_name in starred_service_names
 
-        if not starred_only and not include_all and not _is_admin_created_system_service(properties):
+        is_admin_service = _is_admin_created_system_service(properties)
+        if not starred_only and not include_all and not is_admin_service:
             continue
 
         services.append(
