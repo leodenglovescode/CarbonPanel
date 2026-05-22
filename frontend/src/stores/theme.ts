@@ -83,17 +83,17 @@ const THEME_STYLE_DEFAULTS: Record<ResolvedTheme, ResolvedStyleSettings> = {
     animationLevel: 'reduced',
   },
   light: {
-    bg: '#f0f0f0',
+    bg: '#f5f7fa',
     bgCard: '#ffffff',
-    bgInput: '#ebebeb',
-    border: '#d8d8d8',
-    fg: '#111111',
-    fgMuted: '#555555',
-    fgDim: '#999999',
-    accent: '#00aa55',
-    danger: '#dd2222',
-    warning: '#cc8800',
-    info: '#2266dd',
+    bgInput: '#eef0f4',
+    border: '#d1d5db',
+    fg: '#111827',
+    fgMuted: '#4b5563',
+    fgDim: '#6b7280',
+    accent: '#00954a',
+    danger: '#cc2020',
+    warning: '#b45309',
+    info: '#1d56cc',
     font: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: 12,
     highContrast: false,
@@ -219,19 +219,37 @@ function getAppliedStyleSettings(t: Theme, styleSettings: StyleSettings): Resolv
     return resolved
   }
 
+  if (resolvedTheme(t) === 'dark') {
+    return {
+      ...resolved,
+      bg: darkenColor(resolved.bg, 0.7),
+      bgCard: darkenColor(resolved.bgCard, 0.6),
+      bgInput: darkenColor(resolved.bgInput, 0.5),
+      border: lightenColor(resolved.border, 0.2),
+      fg: lightenColor(resolved.fg, 0.45),
+      fgMuted: lightenColor(resolved.fgMuted, 0.55),
+      fgDim: lightenColor(resolved.fgDim, 0.6),
+      accent: lightenColor(resolved.accent, 0.15),
+      danger: lightenColor(resolved.danger, 0.15),
+      warning: lightenColor(resolved.warning, 0.15),
+      info: lightenColor(resolved.info, 0.15),
+    }
+  }
+
+  // Light mode high contrast: push towards white bg, near-black text
   return {
     ...resolved,
-    bg: darkenColor(resolved.bg, 0.7),
-    bgCard: darkenColor(resolved.bgCard, 0.6),
-    bgInput: darkenColor(resolved.bgInput, 0.5),
-    border: lightenColor(resolved.border, 0.2),
-    fg: lightenColor(resolved.fg, 0.45),
-    fgMuted: lightenColor(resolved.fgMuted, 0.55),
-    fgDim: lightenColor(resolved.fgDim, 0.6),
-    accent: lightenColor(resolved.accent, 0.15),
-    danger: lightenColor(resolved.danger, 0.15),
-    warning: lightenColor(resolved.warning, 0.15),
-    info: lightenColor(resolved.info, 0.15),
+    bg: lightenColor(resolved.bg, 0.7),
+    bgCard: lightenColor(resolved.bgCard, 0.5),
+    bgInput: darkenColor(resolved.bgInput, 0.08),
+    border: darkenColor(resolved.border, 0.25),
+    fg: darkenColor(resolved.fg, 0.5),
+    fgMuted: darkenColor(resolved.fgMuted, 0.4),
+    fgDim: darkenColor(resolved.fgDim, 0.3),
+    accent: darkenColor(resolved.accent, 0.2),
+    danger: darkenColor(resolved.danger, 0.2),
+    warning: darkenColor(resolved.warning, 0.2),
+    info: darkenColor(resolved.info, 0.2),
   }
 }
 
@@ -278,7 +296,7 @@ function applyTheme(t: Theme) {
 function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   const themeKind = resolvedTheme(t)
   const resolved = getAppliedStyleSettings(t, styleSettings)
-  const effectiveDark = themeKind === 'dark' || resolved.highContrast
+  const effectiveDark = themeKind === 'dark'
   const motion = getMotionSettings(resolved.animationLevel)
   const root = document.documentElement
   const rootStyle = root.style

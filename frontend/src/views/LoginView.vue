@@ -1,5 +1,6 @@
 <template>
-  <div class="login-page">
+  <div class="login-page" :style="loginPageStyle">
+    <div v-if="bg.loginBgLayerVisible" class="login-bg-layer" :style="bg.loginBgLayerStyle" />
     <div class="login-box">
       <div class="login-logo">
         <span class="bracket">[</span>carbon<span class="accent">panel</span><span class="bracket">]</span>
@@ -59,15 +60,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useBackgroundStore } from '@/stores/background'
 import { authApi } from '@/api'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const bg = useBackgroundStore()
+
+const loginPageStyle = computed(() => ({
+  background: bg.loginBgLayerVisible ? 'transparent' : undefined,
+}))
 
 const step = ref<1 | 2>(1)
 const username = ref('')
@@ -126,6 +133,21 @@ async function handleTotp() {
   justify-content: center;
   background: var(--bg);
   padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-bg-layer {
+  position: absolute;
+  inset: -30px;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.login-box {
+  position: relative;
+  z-index: 1;
 }
 
 .login-box {

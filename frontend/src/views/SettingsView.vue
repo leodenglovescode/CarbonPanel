@@ -155,6 +155,154 @@
           </div>
         </div>
 
+        <!-- Background Section -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Backgrounds</span>
+            <span :class="['badge', bg.hasCustomBg ? 'badge-green' : 'badge-gray']">
+              {{ bg.hasCustomBg ? 'customized' : 'defaults' }}
+            </span>
+          </div>
+          <p class="section-desc">
+            Set a gradient, image, or solid color behind the app and login screen. Blur creates a
+            frosted-glass depth effect.
+          </p>
+
+          <!-- App background -->
+          <div class="bg-block">
+            <div class="bg-block-head">
+              <span class="style-lbl">App Background</span>
+              <button v-if="bg.isCustom(bg.appBg) || bg.appBgImage" class="reset-sm" @click="bg.resetAppBg()">reset</button>
+            </div>
+
+            <div class="bg-type-row">
+              <button
+                v-for="t in bgTypes"
+                :key="t.key"
+                :class="['type-btn', { active: bg.appBg.type === t.key }]"
+                @click="bg.setAppBg({ type: t.key })"
+              >{{ t.label }}</button>
+            </div>
+
+            <template v-if="bg.appBg.type === 'gradient'">
+              <div class="gradient-preview" :style="{ background: bg.gradientPreview(bg.appBg) }" />
+              <div class="style-grid">
+                <label class="style-field">
+                  <span class="style-lbl">From</span>
+                  <div class="color-control">
+                    <input type="color" class="color-picker" :value="bg.appBg.gradientStart"
+                      @input="bg.setAppBg({ gradientStart: ($event.target as HTMLInputElement).value })" />
+                    <code class="color-value">{{ bg.appBg.gradientStart }}</code>
+                  </div>
+                </label>
+                <label class="style-field">
+                  <span class="style-lbl">To</span>
+                  <div class="color-control">
+                    <input type="color" class="color-picker" :value="bg.appBg.gradientEnd"
+                      @input="bg.setAppBg({ gradientEnd: ($event.target as HTMLInputElement).value })" />
+                    <code class="color-value">{{ bg.appBg.gradientEnd }}</code>
+                  </div>
+                </label>
+              </div>
+              <label class="style-field">
+                <span class="style-lbl">Angle — {{ bg.appBg.gradientAngle }}°</span>
+                <input type="range" class="interval-slider" min="0" max="360" step="5"
+                  :value="bg.appBg.gradientAngle"
+                  @input="bg.setAppBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })" />
+              </label>
+            </template>
+
+            <template v-if="bg.appBg.type === 'image'">
+              <div v-if="bg.appBgImage" class="img-preview-row">
+                <img :src="bg.appBgImage" class="img-thumb" alt="App background" />
+                <button class="reset-sm danger-sm" @click="bg.setAppBgImage(null)">remove</button>
+              </div>
+              <div v-else class="upload-drop" @click="triggerUpload('app')">
+                <span>click to upload image</span>
+                <span class="upload-hint">JPG, PNG, WEBP · max 3 MB</span>
+              </div>
+              <input ref="appFileInput" type="file" accept="image/*" class="file-hidden"
+                @change="handleUpload('app', $event)" />
+              <p v-if="uploadError === 'app'" class="upload-error">Image too large — max 3 MB</p>
+            </template>
+
+            <label v-if="bg.appBg.type !== 'color'" class="style-field">
+              <span class="style-lbl">Background blur — {{ bg.appBg.blur }}px</span>
+              <input type="range" class="interval-slider" min="0" max="20" step="1"
+                :value="bg.appBg.blur"
+                @input="bg.setAppBg({ blur: parseInt(($event.target as HTMLInputElement).value) })" />
+            </label>
+          </div>
+
+          <div class="bg-divider" />
+
+          <!-- Login background -->
+          <div class="bg-block">
+            <div class="bg-block-head">
+              <span class="style-lbl">Login Screen Background</span>
+              <button v-if="bg.isCustom(bg.loginBg) || bg.loginBgImage" class="reset-sm" @click="bg.resetLoginBg()">reset</button>
+            </div>
+
+            <div class="bg-type-row">
+              <button
+                v-for="t in bgTypes"
+                :key="t.key"
+                :class="['type-btn', { active: bg.loginBg.type === t.key }]"
+                @click="bg.setLoginBg({ type: t.key })"
+              >{{ t.label }}</button>
+            </div>
+
+            <template v-if="bg.loginBg.type === 'gradient'">
+              <div class="gradient-preview" :style="{ background: bg.gradientPreview(bg.loginBg) }" />
+              <div class="style-grid">
+                <label class="style-field">
+                  <span class="style-lbl">From</span>
+                  <div class="color-control">
+                    <input type="color" class="color-picker" :value="bg.loginBg.gradientStart"
+                      @input="bg.setLoginBg({ gradientStart: ($event.target as HTMLInputElement).value })" />
+                    <code class="color-value">{{ bg.loginBg.gradientStart }}</code>
+                  </div>
+                </label>
+                <label class="style-field">
+                  <span class="style-lbl">To</span>
+                  <div class="color-control">
+                    <input type="color" class="color-picker" :value="bg.loginBg.gradientEnd"
+                      @input="bg.setLoginBg({ gradientEnd: ($event.target as HTMLInputElement).value })" />
+                    <code class="color-value">{{ bg.loginBg.gradientEnd }}</code>
+                  </div>
+                </label>
+              </div>
+              <label class="style-field">
+                <span class="style-lbl">Angle — {{ bg.loginBg.gradientAngle }}°</span>
+                <input type="range" class="interval-slider" min="0" max="360" step="5"
+                  :value="bg.loginBg.gradientAngle"
+                  @input="bg.setLoginBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })" />
+              </label>
+            </template>
+
+            <template v-if="bg.loginBg.type === 'image'">
+              <div v-if="bg.loginBgImage" class="img-preview-row">
+                <img :src="bg.loginBgImage" class="img-thumb" alt="Login background" />
+                <button class="reset-sm danger-sm" @click="bg.setLoginBgImage(null)">remove</button>
+              </div>
+              <div v-else class="upload-drop" @click="triggerUpload('login')">
+                <span>click to upload image</span>
+                <span class="upload-hint">JPG, PNG, WEBP · max 3 MB</span>
+              </div>
+              <input ref="loginFileInput" type="file" accept="image/*" class="file-hidden"
+                @change="handleUpload('login', $event)" />
+              <p v-if="uploadError === 'login'" class="upload-error">Image too large — max 3 MB</p>
+            </template>
+
+            <label v-if="bg.loginBg.type !== 'color'" class="style-field">
+              <span class="style-lbl">Background blur — {{ bg.loginBg.blur }}px</span>
+              <input type="range" class="interval-slider" min="0" max="20" step="1"
+                :value="bg.loginBg.blur"
+                @input="bg.setLoginBg({ blur: parseInt(($event.target as HTMLInputElement).value) })" />
+            </label>
+          </div>
+        </div>
+
         <!-- Update Frequency Section -->
         <div class="section">
           <div class="section-header">
@@ -235,6 +383,84 @@
               {{ alerts.thresholds[metric.key] === 0 ? 'off' : alerts.thresholds[metric.key] + '%' }}
             </span>
           </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Version & Updates</span>
+            <span
+              :class="[
+                'badge',
+                versionInfo?.update_available ? 'badge-green' : 'badge-gray',
+              ]"
+            >
+              {{
+                versionInfo?.update_in_progress
+                  ? 'installing'
+                  : versionInfo?.update_available
+                    ? 'update available'
+                    : 'up to date'
+              }}
+            </span>
+          </div>
+          <p class="section-desc">
+            CarbonPanel checks GitHub for new releases every day. You can also check manually and
+            start an interactive update from here.
+          </p>
+
+          <div class="version-grid">
+            <div class="info-row">
+              <span class="info-lbl">Current</span>
+              <span class="info-val">{{ versionInfo?.current_version ?? 'unknown' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-lbl">Latest</span>
+              <span class="info-val">{{ versionInfo?.latest_version ?? 'not checked yet' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-lbl">Checked</span>
+              <span class="info-val text-muted">{{ versionInfo?.checked_at ?? 'never' }}</span>
+            </div>
+            <div v-if="versionInfo?.error" class="info-row">
+              <span class="info-lbl">Status</span>
+              <span class="info-val text-muted">{{ versionInfo.error }}</span>
+            </div>
+          </div>
+
+          <div class="version-actions">
+            <BaseButton variant="ghost" :disabled="versionActionLoading" @click="checkForUpdates">
+              {{ versionActionLoading ? 'Working…' : 'Check for Updates' }}
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              :disabled="
+                versionActionLoading ||
+                !versionInfo?.update_available ||
+                !!versionInfo?.update_in_progress
+              "
+              @click="installUpdate"
+            >
+              {{
+                versionInfo?.update_in_progress
+                  ? 'Installing…'
+                  : versionActionLoading
+                    ? 'Working…'
+                    : 'Install Update'
+              }}
+            </BaseButton>
+            <a
+              v-if="versionInfo?.notes_url || versionInfo?.release_url"
+              class="version-link"
+              :href="versionInfo?.notes_url || versionInfo?.release_url || '#'"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View Release Notes
+            </a>
+          </div>
+
+          <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
+          <p v-if="versionError" class="error-msg">{{ versionError }}</p>
         </div>
 
         <!-- 2FA Section -->
@@ -365,22 +591,59 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMetricsStore } from '@/stores/metrics'
 import { useThemeStore, type AnimationLevel } from '@/stores/theme'
 import { useAlertsStore } from '@/stores/alerts'
+import { useBackgroundStore } from '@/stores/background'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi } from '@/api'
+import { settingsApi, systemApi, type SystemVersionResponse } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
 const metrics = useMetricsStore()
 const theme = useThemeStore()
 const alerts = useAlertsStore()
+const bg = useBackgroundStore()
 const { sendInterval } = useWebSocket()
+
+const bgTypes = [
+  { key: 'color' as const, label: 'Color' },
+  { key: 'gradient' as const, label: 'Gradient' },
+  { key: 'image' as const, label: 'Image' },
+]
+
+const appFileInput = ref<HTMLInputElement | null>(null)
+const loginFileInput = ref<HTMLInputElement | null>(null)
+const uploadError = ref<'app' | 'login' | null>(null)
+
+function triggerUpload(target: 'app' | 'login') {
+  uploadError.value = null
+  if (target === 'app') appFileInput.value?.click()
+  else loginFileInput.value?.click()
+}
+
+function handleUpload(target: 'app' | 'login', event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (file.size > 3 * 1024 * 1024) {
+    uploadError.value = target
+    ;(event.target as HTMLInputElement).value = ''
+    return
+  }
+  uploadError.value = null
+  const reader = new FileReader()
+  reader.onload = () => {
+    const dataUrl = reader.result as string
+    if (target === 'app') bg.setAppBgImage(dataUrl)
+    else bg.setLoginBgImage(dataUrl)
+  }
+  reader.readAsDataURL(file)
+  ;(event.target as HTMLInputElement).value = ''
+}
 
 const alertMetrics = [
   { key: 'cpu'  as const, label: 'CPU' },
@@ -464,6 +727,70 @@ function updateFontSize(value: number) {
 
 function resetStyleSettings() {
   theme.resetStyleSettings()
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+const versionInfo = ref<SystemVersionResponse | null>(null)
+const versionActionLoading = ref(false)
+const versionError = ref('')
+const versionSuccess = ref('')
+
+async function loadVersionInfo() {
+  versionError.value = ''
+
+  try {
+    const res = await systemApi.version()
+    versionInfo.value = res.data
+  } catch (e: any) {
+    versionError.value = e.response?.data?.detail || 'Failed to load version status'
+  }
+}
+
+async function checkForUpdates() {
+  versionActionLoading.value = true
+  versionError.value = ''
+  versionSuccess.value = ''
+
+  try {
+    await systemApi.checkUpdates()
+    versionSuccess.value = 'Update check started. Refreshing status...'
+    await wait(1200)
+    await loadVersionInfo()
+  } catch (e: any) {
+    versionError.value = e.response?.data?.detail || 'Failed to start update check'
+  } finally {
+    versionActionLoading.value = false
+  }
+}
+
+async function installUpdate() {
+  if (!versionInfo.value?.update_available || versionInfo.value.update_in_progress) return
+
+  const targetVersion = versionInfo.value.latest_version ?? 'the latest version'
+  const confirmed = window.confirm(
+    `Install CarbonPanel ${targetVersion} now? The app will restart automatically during the update.`,
+  )
+
+  if (!confirmed) return
+
+  versionActionLoading.value = true
+  versionError.value = ''
+  versionSuccess.value = ''
+
+  try {
+    await systemApi.installUpdate()
+    versionSuccess.value =
+      'Update installation started. CarbonPanel will restart automatically. Refresh this page in about a minute.'
+    await wait(1200)
+    await loadVersionInfo()
+  } catch (e: any) {
+    versionError.value = e.response?.data?.detail || 'Failed to start update installation'
+  } finally {
+    versionActionLoading.value = false
+  }
 }
 
 const setupData = ref<{ secret: string; otpauth_uri: string } | null>(null)
@@ -561,6 +888,10 @@ async function handleChangeCreds() {
     credsLoading.value = false
   }
 }
+
+onMounted(() => {
+  void loadVersionInfo()
+})
 </script>
 
 <style scoped>
@@ -699,6 +1030,30 @@ async function handleChangeCreds() {
 .style-reset-row {
   display: flex;
   justify-content: flex-start;
+}
+
+.version-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.version-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 11px;
+  transition: color var(--transition);
+}
+
+.version-link:hover {
+  color: var(--fg);
 }
 
 .disk-scope {
@@ -870,4 +1225,50 @@ async function handleChangeCreds() {
 .alert-row { display: flex; align-items: center; gap: 10px; }
 .alert-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); width: 34px; flex-shrink: 0; }
 .alert-val { font-size: 11px; color: var(--fg-muted); width: 28px; text-align: right; flex-shrink: 0; }
+
+/* Background settings */
+.bg-block { display: flex; flex-direction: column; gap: 10px; }
+.bg-block-head { display: flex; align-items: center; justify-content: space-between; }
+.bg-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+
+.bg-type-row { display: flex; gap: 6px; }
+.type-btn {
+  flex: 1; background: none; border: 1px solid var(--border); color: var(--fg-dim);
+  font-family: var(--font); font-size: 11px; padding: 6px 0; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all var(--transition); text-align: center;
+}
+.type-btn:hover:not(.active) { border-color: var(--fg-dim); color: var(--fg-muted); }
+.type-btn.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+
+.gradient-preview {
+  height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.upload-drop {
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  cursor: pointer; transition: all var(--transition); color: var(--fg-muted); font-size: 11px;
+}
+.upload-drop:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+.upload-hint { font-size: 10px; color: var(--fg-dim); }
+
+.img-preview-row { display: flex; align-items: center; gap: 10px; }
+.img-thumb {
+  width: 80px; height: 48px; object-fit: cover; border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.file-hidden { display: none; }
+
+.reset-sm {
+  background: none; border: 1px solid var(--border); color: var(--fg-dim);
+  font-family: var(--font); font-size: 10px; padding: 3px 8px; border-radius: 3px;
+  cursor: pointer; transition: all var(--transition);
+}
+.reset-sm:hover { border-color: var(--fg-dim); color: var(--fg); }
+.danger-sm { border-color: rgba(255,68,68,0.3); color: var(--danger); }
+.danger-sm:hover { background: var(--danger-dim); border-color: rgba(255,68,68,0.5); }
+
+.upload-error { font-size: 11px; color: var(--danger); }
 </style>
