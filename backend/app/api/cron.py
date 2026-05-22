@@ -1,5 +1,4 @@
 import asyncio
-import os
 import re
 from pathlib import Path
 
@@ -11,7 +10,10 @@ from app.models.user import User
 
 router = APIRouter(prefix="/cron", tags=["cron"])
 
-_CRON_D_DIRS = ["/etc/cron.d", "/etc/cron.daily", "/etc/cron.hourly", "/etc/cron.weekly", "/etc/cron.monthly"]
+_CRON_D_DIRS = [
+    "/etc/cron.d", "/etc/cron.daily", "/etc/cron.hourly",
+    "/etc/cron.weekly", "/etc/cron.monthly",
+]
 _SKIP_LINE = re.compile(r"^\s*(#|$|SHELL|PATH|MAILTO|HOME|LOGNAME|CRON_TZ)")
 _ENTRY = re.compile(
     r"^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.+)$"
@@ -44,7 +46,10 @@ def _parse_crontab(text: str, source: str, default_user: str) -> list[CronEntry]
         else:
             user = default_user
             command = f"{user_or_cmd} {rest}"
-        entries.append(CronEntry(source=source, user=user, schedule=schedule, command=command.strip(), raw=line))
+        entries.append(CronEntry(
+            source=source, user=user, schedule=schedule,
+            command=command.strip(), raw=line,
+        ))
     return entries
 
 

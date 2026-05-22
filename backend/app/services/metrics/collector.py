@@ -72,7 +72,11 @@ class MetricsCollector:
             system=sys_data,
         )
 
-        gpu_util = gpu_data.devices[0].utilization_percent if gpu_data.available and gpu_data.devices else None
+        gpu_util = (
+            gpu_data.devices[0].utilization_percent
+            if gpu_data.available and gpu_data.devices
+            else None
+        )
         self.history.append(HistoryPoint(
             ts=now,
             cpu=cpu_data.aggregate,

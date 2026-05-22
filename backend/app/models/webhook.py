@@ -18,4 +18,6 @@ class Webhook(Base):
     url: Mapped[str] = mapped_column(String, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Comma-separated event names: alert.cpu, alert.ram, alert.disk
-    events: Mapped[str] = mapped_column(String, nullable=False, default="alert.cpu,alert.ram,alert.disk")
+    events: Mapped[str] = mapped_column(
+        String, nullable=False, default="alert.cpu,alert.ram,alert.disk"
+    )
