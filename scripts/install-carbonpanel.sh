@@ -25,10 +25,16 @@ UPDATE_CHECK_TIMER="carbonpanel-update-check.timer"
 UPDATE_SERVICE="carbonpanel-update.service"
 SUDOERS_FILE="/etc/sudoers.d/carbonpanel-updater"
 
-COMMAND="${1:-install}"
+COMMAND="${1:-}"
 shift || true
 
 REQUESTED_REF=""
+
+if [[ "${EUID}" -ne 0 ]]; then
+  printf '[carbonpanel] ERROR: This script must be run as root.\n' >&2
+  printf '[carbonpanel]        Try: curl -fsSL <url> | sudo bash\n' >&2
+  exit 1
+fi
 
 log() {
   printf '[carbonpanel] %s\n' "$*"
@@ -844,6 +850,103 @@ print_current_version() {
   printf 'status=%s\n' "${status_value:-unknown}"
 }
 
+show_menu() {
+  local installed_version=""
+  if [[ -f "$CURRENT_LINK/.carbonpanel-release.json" ]]; then
+    installed_version="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)"
+  fi
+
+  printf '\n'
+  printf '[carbonpanel] ==========================================\n'
+  if [[ -n "$installed_version" ]]; then
+    printf '[carbonpanel]  Installed version: %s\n' "$installed_version"
+  else
+    printf '[carbonpanel]  CarbonPanel is not currently installed.\n'
+  fi
+  printf '[carbonpanel] ==========================================\n'
+  printf '\n'
+  printf '[carbonpanel]   1) Install\n'
+  printf '[carbonpanel]   2) Update\n'
+  printf '[carbonpanel]   3) Rollback to previous version\n'
+  printf '[carbonpanel]   4) Uninstall\n'
+  printf '[carbonpanel]   5) Show current version\n'
+  printf '\n'
+  printf 'Select [1-5]: '
+  read -r choice
+  printf '\n'
+  case "$choice" in
+    1) COMMAND="install" ;;
+    2) COMMAND="update" ;;
+    3) COMMAND="rollback" ;;
+    4) COMMAND="uninstall" ;;
+    5) COMMAND="current-version" ;;
+    *) die "Invalid selection: $choice" ;;
+  esac
+}
+
+uninstall_carbonpanel() {
+  require_root
+
+  if [[ ! -d "$INSTALL_ROOT" ]]; then
+    die "CarbonPanel does not appear to be installed (${INSTALL_ROOT} not found)."
+  fi
+
+  local installed_version db_path db_backup
+  installed_version="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version 2>/dev/null || true)"
+
+  printf '\n'
+  [[ -n "$installed_version" ]] && log "Installed version: $installed_version"
+  log "This will permanently remove CarbonPanel, its services, and all data."
+  printf '\n'
+  printf '[carbonpanel] Continue with uninstall? [y/N] '
+  read -r confirm
+  [[ "${confirm,,}" == "y" ]] || { log "Aborted."; exit 0; }
+
+  db_path=""
+  if [[ -f "$BACKEND_ENV_FILE" ]]; then
+    db_path="$(sqlite_db_path 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$db_path" && -f "$db_path" ]]; then
+    printf '[carbonpanel] Back up database before removing? [Y/n] '
+    read -r do_backup
+    if [[ "${do_backup,,}" != "n" ]]; then
+      db_backup="/tmp/carbonpanel-db-$(date -u +%Y%m%d%H%M%S).sqlite3"
+      cp "$db_path" "$db_backup"
+      log "Database backed up to $db_backup"
+    fi
+  fi
+
+  log "Stopping and removing services..."
+  for svc in "$UPDATE_CHECK_TIMER" "$UPDATE_CHECK_SERVICE" "$UPDATE_SERVICE" "$BACKEND_SERVICE"; do
+    systemctl stop "$svc" 2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+    rm -f "/etc/systemd/system/$svc"
+  done
+  systemctl daemon-reload
+
+  log "Removing nginx configuration..."
+  rm -f "$NGINX_SITE" "$NGINX_SITE_LINK"
+  nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+
+  log "Removing sudoers entry..."
+  rm -f "$SUDOERS_FILE"
+
+  log "Removing installation files (${INSTALL_ROOT})..."
+  rm -rf "$INSTALL_ROOT"
+
+  printf '[carbonpanel] Remove service user "%s"? [y/N] ' "$SERVICE_USER"
+  read -r remove_user
+  if [[ "${remove_user,,}" == "y" ]]; then
+    userdel "$SERVICE_USER" 2>/dev/null || true
+    log "Service user removed."
+  fi
+
+  printf '\n'
+  log "CarbonPanel has been uninstalled."
+  [[ -n "${db_backup:-}" ]] && log "Database backup saved to: $db_backup"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ref)
@@ -855,6 +958,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+[[ -z "$COMMAND" ]] && show_menu
 
 case "$COMMAND" in
   install)
@@ -872,6 +977,9 @@ case "$COMMAND" in
     ;;
   rollback)
     rollback_release
+    ;;
+  uninstall)
+    uninstall_carbonpanel
     ;;
   current-version)
     print_current_version
