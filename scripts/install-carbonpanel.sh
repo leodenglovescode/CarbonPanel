@@ -30,25 +30,35 @@ shift || true
 
 REQUESTED_REF=""
 
+# ── Colors (disabled when not a tty) ─────────────────────────────────────────
+if [[ -t 1 ]]; then
+  RED=$'\e[1;31m'; GREEN=$'\e[1;32m'; YELLOW=$'\e[1;33m'
+  CYAN=$'\e[1;36m'; MAGENTA=$'\e[0;35m'; WHITE=$'\e[1;37m'
+  BOLD=$'\e[1m'; DIM=$'\e[2m'; NC=$'\e[0m'
+else
+  RED=''; GREEN=''; YELLOW=''; CYAN=''; MAGENTA=''; WHITE=''
+  BOLD=''; DIM=''; NC=''
+fi
+
 if [[ "${EUID}" -ne 0 ]]; then
-  printf '[carbonpanel] ERROR: This script must be run as root.\n' >&2
-  printf '[carbonpanel]        Try: curl -fsSL <url> | sudo bash\n' >&2
+  printf "\n  ${RED}${BOLD}✗  hold up — this needs root.${NC}\n" >&2
+  printf "  ${DIM}  try: curl -fsSL <url> | sudo bash${NC}\n\n" >&2
   exit 1
 fi
 
-log() {
-  printf '[carbonpanel] %s\n' "$*"
-}
+# ── Output helpers ────────────────────────────────────────────────────────────
+log()  { printf "  ${CYAN}›${NC}  %s\n" "$*"; }
+ok()   { printf "  ${GREEN}✓${NC}  ${BOLD}%s${NC}\n" "$*"; }
+warn() { printf "\n  ${YELLOW}⚠${NC}  ${YELLOW}%s${NC}\n\n" "$*" >&2; }
+note() { printf "    ${DIM}%s${NC}\n" "$*"; }
 
 die() {
-  printf '[carbonpanel] ERROR: %s\n' "$*" >&2
+  printf "\n  ${RED}${BOLD}✗  oh no —${NC} %s\n\n" "$*" >&2
   exit 1
 }
 
 require_root() {
-  if [[ "${EUID}" -ne 0 ]]; then
-    die "This command must be run as root."
-  fi
+  [[ "${EUID}" -eq 0 ]] || die "this needs root. sudo up."
 }
 
 command_exists() {
@@ -299,7 +309,7 @@ install_os_prerequisites() {
   export DEBIAN_FRONTEND=noninteractive
   # Broken third-party repos (Docker, NVIDIA, Chrome, etc.) cause apt-get update
   # to return exit code 100. Treat that as a warning — the cached lists are enough.
-  apt-get update -y 2>&1 || log "Warning: some package sources failed to update — continuing with cached package lists."
+  apt-get update -y 2>&1 || warn "some apt sources threw a tantrum — rolling with cached package lists, should be fine"
   # Core utilities — safe to install unconditionally on any apt system.
   apt-get install -y \
     ca-certificates \
@@ -405,12 +415,14 @@ clone_release() {
 build_release() {
   local release_dir="$1"
 
-  log "Building backend in $release_dir"
+  log "teaching python what's what..."
+  note "spinning up a venv and pip installing — grab a coffee ☕"
   python3 -m venv "$release_dir/backend/.venv"
   "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel >/dev/null
   "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend" >/dev/null
 
-  log "Building frontend in $release_dir"
+  log "bundling the frontend heat..."
+  note "npm doing npm things — this one takes a sec 🌀"
   (
     cd "$release_dir/frontend"
     npm ci >/dev/null
@@ -683,7 +695,7 @@ deploy_release() {
   switch_symlink "$CURRENT_LINK" "$release_dir"
 
   if ! run_database_tasks "$release_dir" "$first_install"; then
-    log "Database step failed; attempting rollback."
+    warn "database step choked — rolling back, don't panic"
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
     [[ -n "$previous_target" ]] && switch_symlink "$PREVIOUS_LINK" "$previous_target"
@@ -698,7 +710,7 @@ deploy_release() {
   systemctl restart nginx
 
   if ! wait_for_http "http://127.0.0.1:$BACKEND_PORT/docs"; then
-    log "Health check failed; rolling back."
+    warn "health check came back dead — rolling back to the last good version"
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
     systemctl daemon-reload
@@ -762,9 +774,9 @@ check_for_updates() {
   chmod 644 "$STATUS_FILE"
 
   if [[ "$update_available" == "true" ]]; then
-    log "Update available: $ref"
+    ok "new drop available: ${BOLD}${ref}${NC} — hit update to grab it 🆕"
   else
-    log "CarbonPanel is up to date."
+    ok "you're on the latest — no updates needed ✨"
   fi
 }
 
@@ -772,26 +784,26 @@ install_or_update() {
   local install_mode="$1"
   local source_type ref release_url release_id release_dir commit installed_at
 
-  log "Checking port availability..."
+  log "sniffing for port squatters on :${APP_PORT}..."
   ensure_port_available
-  log "Installing system dependencies..."
+  log "grabbing system dependencies from apt..."
   install_os_prerequisites
-  log "Creating service account..."
+  log "conjuring the carbonpanel service account..."
   ensure_service_account
-  log "Initialising directory layout..."
+  log "staking out territory on disk..."
   ensure_layout
-  log "Writing backend configuration..."
+  log "locking in your secrets and config..."
   ensure_backend_env
 
-  log "Resolving latest version from GitHub..."
+  log "asking github what's poppin..."
   mapfile -t resolved < <(resolve_requested_reference)
   source_type="${resolved[0]}"
   ref="${resolved[1]:-}"
   release_url="${resolved[2]:-}"
 
-  [[ -n "$ref" ]] || die "Could not resolve a version to install. Check your internet connection and that $REPO_URL is accessible."
+  [[ -n "$ref" ]] || die "couldn't figure out what version to install — check your internet connection and that ${REPO_URL} is reachable"
 
-  log "Cloning $REPO_URL at $ref..."
+  log "yanking the code down (${BOLD}${ref}${NC})..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"
   release_dir="$(clone_release "$ref" "$release_id")"
   commit="$(git -C "$release_dir" rev-parse HEAD)"
@@ -837,9 +849,13 @@ install_or_update() {
   systemd_reload_enable
   check_for_updates
 
-  log "Installed CarbonPanel $ref ($commit)"
+  ok "carbonpanel ${ref} is live! (${commit:0:8})"
   if [[ -f "$SHARED_DIR/first-install.txt" && "$install_mode" == "install" ]]; then
-    log "Initial credentials were written to $SHARED_DIR/first-install.txt"
+    printf "\n"
+    printf "  ${GREEN}${BOLD}🎉  you're in!${NC}\n"
+    note "credentials → ${BOLD}${SHARED_DIR}/first-install.txt${NC}"
+    note "panel       → ${BOLD}http://your-server-ip:${APP_PORT}${NC}"
+    printf "\n"
   fi
 }
 
@@ -862,7 +878,7 @@ rollback_release() {
   systemctl restart nginx
   check_for_updates
 
-  log "Rollback complete: $(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)"
+  ok "rolled back to $(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version) — crisis averted 😅"
 }
 
 print_current_version() {
@@ -886,22 +902,24 @@ show_menu() {
     installed_version="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)"
   fi
 
-  printf '\n'
-  printf '[carbonpanel] ==========================================\n'
+  printf "\n"
+  printf "  ${CYAN}${BOLD}⚡  carbonpanel${NC}  ${DIM}— server monitoring${NC}\n"
+  printf "\n"
+  printf "  ${DIM}────────────────────────────────────────${NC}\n"
   if [[ -n "$installed_version" ]]; then
-    printf '[carbonpanel]  Installed version: %s\n' "$installed_version"
+    printf "  ${GREEN}✓${NC}  running ${BOLD}%s${NC}\n" "$installed_version"
   else
-    printf '[carbonpanel]  CarbonPanel is not currently installed.\n'
+    printf "  ${YELLOW}not installed yet${NC}  ${DIM}— fresh slate 🧼${NC}\n"
   fi
-  printf '[carbonpanel] ==========================================\n'
-  printf '\n'
-  printf '[carbonpanel]   1) Install\n'
-  printf '[carbonpanel]   2) Update\n'
-  printf '[carbonpanel]   3) Rollback to previous version\n'
-  printf '[carbonpanel]   4) Uninstall\n'
-  printf '[carbonpanel]   5) Show current version\n'
-  printf '\n'
-  printf 'Select [1-5]: '
+  printf "  ${DIM}────────────────────────────────────────${NC}\n"
+  printf "\n"
+  printf "  ${CYAN}${BOLD}1${NC}  install        ${DIM}cook a fresh one${NC}\n"
+  printf "  ${CYAN}${BOLD}2${NC}  update         ${DIM}grab the latest heat${NC}\n"
+  printf "  ${CYAN}${BOLD}3${NC}  rollback       ${DIM}hit the oops button${NC}\n"
+  printf "  ${CYAN}${BOLD}4${NC}  uninstall      ${DIM}scorched earth 🔥${NC}\n"
+  printf "  ${CYAN}${BOLD}5${NC}  version info   ${DIM}see what's poppin${NC}\n"
+  printf "\n"
+  printf "  ${BOLD}pick one [1-5]:${NC} "
   read -r choice
   printf '\n'
   case "$choice" in
@@ -910,7 +928,7 @@ show_menu() {
     3) COMMAND="rollback" ;;
     4) COMMAND="uninstall" ;;
     5) COMMAND="current-version" ;;
-    *) die "Invalid selection: $choice" ;;
+    *) die "that's not a valid option bud — pick a number between 1 and 5" ;;
   esac
 }
 
@@ -924,13 +942,16 @@ uninstall_carbonpanel() {
   local installed_version db_path db_backup
   installed_version="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version 2>/dev/null || true)"
 
-  printf '\n'
-  [[ -n "$installed_version" ]] && log "Installed version: $installed_version"
-  log "This will permanently remove CarbonPanel, its services, and all data."
-  printf '\n'
-  printf '[carbonpanel] Continue with uninstall? [y/N] '
+  printf "\n"
+  printf "  ${RED}${BOLD}☠   SCORCHED EARTH MODE  ☠${NC}\n"
+  [[ -n "$installed_version" ]] && printf "  ${DIM}  currently running: %s${NC}\n" "$installed_version"
+  printf "\n"
+  printf "  ${YELLOW}this will permanently delete carbonpanel,\n"
+  printf "  its services, and all data. no undo button.${NC}\n"
+  printf "\n"
+  printf "  ${BOLD}are you sure? [y/N]:${NC} "
   read -r confirm
-  [[ "${confirm,,}" == "y" ]] || { log "Aborted."; exit 0; }
+  [[ "${confirm,,}" == "y" ]] || { printf "\n  ${GREEN}✓${NC}  smart move — nothing was touched\n\n"; exit 0; }
 
   db_path=""
   if [[ -f "$BACKEND_ENV_FILE" ]]; then
@@ -938,18 +959,18 @@ uninstall_carbonpanel() {
   fi
 
   if [[ -n "$db_path" && -f "$db_path" ]]; then
-    printf '[carbonpanel] Back up database before removing? [Y/n] '
+    printf "  ${BOLD}back up the database first? [Y/n]:${NC} "
     read -r do_backup
     if [[ "${do_backup,,}" != "n" ]]; then
       db_backup="/tmp/carbonpanel-db-$(date -u +%Y%m%d%H%M%S).sqlite3"
       cp "$db_path" "$db_backup"
-      log "Database backed up to $db_backup"
+      ok "database saved to ${BOLD}${db_backup}${NC} — just in case 🛟"
     fi
   fi
 
   # Only CarbonPanel's own systemd units are removed.
   # nginx, npm, nodejs, and any other system services are left untouched.
-  log "Stopping CarbonPanel services..."
+  log "yeeting carbonpanel services into the void..."
   for svc in "$UPDATE_CHECK_TIMER" "$UPDATE_CHECK_SERVICE" "$UPDATE_SERVICE" "$BACKEND_SERVICE"; do
     systemctl stop "$svc" 2>/dev/null || true
     systemctl disable "$svc" 2>/dev/null || true
@@ -958,26 +979,27 @@ uninstall_carbonpanel() {
   systemctl daemon-reload
 
   # Remove only CarbonPanel's nginx site config — nginx itself is not stopped or removed.
-  log "Removing CarbonPanel nginx site config..."
+  log "scrubbing our nginx footprint (nginx itself stays up) ..."
   rm -f "$NGINX_SITE" "$NGINX_SITE_LINK"
   nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
 
-  log "Removing sudoers entry..."
+  log "revoking the sudo backstage pass..."
   rm -f "$SUDOERS_FILE"
 
-  log "Removing installation files (${INSTALL_ROOT})..."
+  log "carpet bombing ${INSTALL_ROOT}..."
   rm -rf "$INSTALL_ROOT"
 
-  printf '[carbonpanel] Remove service user "%s"? [y/N] ' "$SERVICE_USER"
+  printf "  ${BOLD}remove the '%s' system user too? [y/N]:${NC} " "$SERVICE_USER"
   read -r remove_user
   if [[ "${remove_user,,}" == "y" ]]; then
     userdel "$SERVICE_USER" 2>/dev/null || true
-    log "Service user removed."
+    ok "service user gone"
   fi
 
-  printf '\n'
-  log "CarbonPanel has been uninstalled."
-  [[ -n "${db_backup:-}" ]] && log "Database backup saved to: $db_backup"
+  printf "\n"
+  ok "carbonpanel has been yeeted into the void 💨"
+  [[ -n "${db_backup:-}" ]] && note "db backup → ${BOLD}${db_backup}${NC}"
+  printf "\n"
 }
 
 while [[ $# -gt 0 ]]; do
