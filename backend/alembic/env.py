@@ -14,9 +14,14 @@ if config.config_file_name is not None:
 
 # Import all models so Base.metadata is populated
 from app.database import Base  # noqa: E402
+from app.config import settings  # noqa: E402
 import app.models.user  # noqa: E402, F401
 import app.models.site  # noqa: E402, F401
 import app.models.app_label  # noqa: E402, F401
+
+# Override alembic.ini's sqlalchemy.url with the value from settings so that
+# DATABASE_URL in the environment is always used (e.g. production vs local dev).
+config.set_main_option("sqlalchemy.url", str(settings.database_url))
 
 target_metadata = Base.metadata
 
