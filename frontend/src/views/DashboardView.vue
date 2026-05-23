@@ -22,48 +22,13 @@
 
     <!-- ── Normal mode ── -->
     <div v-else-if="!editMode" class="grid">
-      <div class="grid-item span-6">
-        <CpuWidget :cpu="metrics.latest.cpu" :history="metrics.cpuHistory" />
-      </div>
-      <div class="grid-item span-6">
-        <RamWidget :mem="metrics.latest.memory" :history="metrics.memHistory" />
-      </div>
-
-      <div v-if="metrics.latest.gpu.available" class="grid-item span-6">
-        <GpuWidget :gpu="metrics.latest.gpu" :history="metrics.gpuHistory" />
-      </div>
-      <div :class="['grid-item', metrics.latest.gpu.available ? 'span-6' : 'span-12']">
-        <SystemWidget :system="metrics.latest.system" :cpu="metrics.latest.cpu" />
-      </div>
-
-      <div class="grid-item span-12">
-        <DiskWidget :disks="metrics.latest.disks" />
-      </div>
-
-      <div class="grid-item span-12">
-        <NetworkWidget
-          :network="metrics.latest.network"
-          :rx-history="metrics.netRxHistory"
-          :tx-history="metrics.netTxHistory"
-        />
-      </div>
-
-      <div v-if="metrics.latest.cpu.temps.length" class="grid-item span-6">
-        <CpuTempWidget :temps="metrics.latest.cpu.temps" />
-      </div>
-      <div :class="['grid-item', metrics.latest.cpu.temps.length ? 'span-6' : 'span-12']">
-        <BandwidthWidget :network="metrics.latest.network" />
-      </div>
-
-      <div class="grid-item span-12">
-        <HistoryWidget :points="historyPoints" />
-      </div>
-
-      <div class="grid-item span-12">
-        <ProcessListWidget
-          :processes="metrics.latest.processes"
-          @sort-change="onSortChange"
-        />
+      <div
+        v-for="w in sortedWidgets"
+        :key="w.id"
+        class="grid-item"
+        :style="normalGridStyle(w.id)"
+      >
+        <component :is="w.comp" v-bind="w.props" />
       </div>
     </div>
 
@@ -349,6 +314,20 @@ const visibleWidgets = computed(() => {
     { id: 'processes' as WidgetId, comp: ProcessListWidget, props: { processes: m.processes, onSortChange },                                               show: true },
   ].filter(w => w.show)
 })
+
+// Sorted by row then col — used by normal mode to honour the saved layout order
+const sortedWidgets = computed(() =>
+  visibleWidgets.value.slice().sort((a, b) => {
+    const la = layoutStore.layout[a.id]
+    const lb = layoutStore.layout[b.id]
+    return la.row !== lb.row ? la.row - lb.row : la.col - lb.col
+  })
+)
+
+function normalGridStyle(id: WidgetId) {
+  const p = layoutStore.layout[id]
+  return { gridColumn: `${p.col + 1} / span ${p.w}` }
+}
 </script>
 
 <style scoped>
@@ -365,10 +344,8 @@ const visibleWidgets = computed(() => {
 
 /* Normal grid */
 .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
-.span-6 { grid-column: span 6; }
-.span-12 { grid-column: span 12; }
 .grid-item { min-width: 0; }
-@media (max-width: 900px) { .span-6 { grid-column: span 12; } }
+@media (max-width: 900px) { .grid-item { grid-column: 1 / -1 !important; } }
 
 /* Edit FAB */
 .edit-fab {
