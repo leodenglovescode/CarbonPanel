@@ -460,6 +460,18 @@ const visibleWidgets = computed(() => {
   border-radius: calc(var(--radius) - 2px);
 }
 
+/* Force BaseCard to fill widget height and distribute space to its body */
+.widget-body :deep(.card) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.widget-body :deep(.card-body) {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* Corner resize handles */
 .handle {
   position: absolute;
