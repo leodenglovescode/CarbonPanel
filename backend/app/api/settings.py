@@ -1,4 +1,7 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -11,8 +14,60 @@ from app.schemas.auth import (
     TOTPSetupResponse,
 )
 from app.services import auth_service
+from app.services.proxy_service import build_opener, get_proxy, set_proxy
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+# ── Proxy ──────────────────────────────────────────────────────────────────────
+
+class ProxyConfig(BaseModel):
+    enabled: bool = False
+    type: str = "http"   # "http" | "socks5"
+    host: str = "127.0.0.1"
+    port: int = 7890
+
+
+@router.get("/proxy", response_model=ProxyConfig)
+async def get_proxy_settings(_: User = Depends(get_current_user)):
+    return get_proxy()
+
+
+@router.put("/proxy", response_model=ProxyConfig)
+async def update_proxy_settings(config: ProxyConfig, _: User = Depends(get_current_user)):
+    set_proxy(config.model_dump())
+    return config
+
+
+def _test_proxy_sync() -> dict:
+    import json
+    import urllib.request
+    from app.services.update_runtime import GITHUB_API_LATEST
+
+    req = urllib.request.Request(
+        GITHUB_API_LATEST,
+        headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "CarbonPanel"},
+    )
+    try:
+        opener = build_opener()
+        if opener:
+            with opener.open(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+        else:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+        tag = data.get("tag_name", "?")
+        return {"success": True, "message": f"Connected — latest release: {tag}"}
+    except RuntimeError as exc:
+        return {"success": False, "message": str(exc)}
+    except Exception as exc:
+        return {"success": False, "message": f"Connection failed: {exc}"}
+
+
+@router.post("/proxy/test")
+async def test_proxy_settings(_: User = Depends(get_current_user)):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _test_proxy_sync)
 
 
 @router.put("/profile", response_model=SuccessResponse)

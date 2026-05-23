@@ -71,15 +71,18 @@ def _is_docker_mode() -> bool:
 
 def _fetch_github_release() -> dict[str, Any]:
     """Fetch latest release from GitHub API. Returns {} on any error."""
+    from app.services.proxy_service import build_opener
+
+    req = urllib.request.Request(
+        GITHUB_API_LATEST,
+        headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "CarbonPanel"},
+    )
     try:
-        req = urllib.request.Request(
-            GITHUB_API_LATEST,
-            headers={
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "CarbonPanel",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        opener = build_opener()
+        if opener:
+            with opener.open(req, timeout=10) as resp:
+                return json.loads(resp.read().decode())
+        with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode())
     except Exception:
         return {}

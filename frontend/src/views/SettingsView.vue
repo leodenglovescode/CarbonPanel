@@ -758,6 +758,67 @@
             </BaseButton>
           </div>
         </div>
+
+        <!-- Proxy Section -->
+        <div id="section-proxy" class="section">
+          <div class="section-header">
+            <span class="section-title">Outbound Proxy</span>
+            <span :class="['badge', proxy.enabled ? 'badge-green' : 'badge-gray']">
+              {{ proxy.enabled ? 'enabled' : 'disabled' }}
+            </span>
+          </div>
+          <p class="section-desc">
+            Route update checks through an HTTP or SOCKS5 proxy (e.g. Clash on 7890).
+            Useful if GitHub is blocked on your network.
+          </p>
+
+          <div class="proxy-row">
+            <span class="style-lbl">Enable proxy</span>
+            <button
+              :class="['theme-btn', { active: proxy.enabled }]"
+              @click="proxy.enabled = true"
+            >On</button>
+            <button
+              :class="['theme-btn', { active: !proxy.enabled }]"
+              @click="proxy.enabled = false"
+            >Off</button>
+          </div>
+
+          <div class="proxy-row">
+            <span class="style-lbl">Type</span>
+            <button
+              :class="['theme-btn', { active: proxy.type === 'http' }]"
+              @click="proxy.type = 'http'"
+            >HTTP</button>
+            <button
+              :class="['theme-btn', { active: proxy.type === 'socks5' }]"
+              @click="proxy.type = 'socks5'"
+            >SOCKS5</button>
+          </div>
+
+          <div class="proxy-fields">
+            <div class="proxy-field">
+              <span class="style-lbl">Host</span>
+              <BaseInput v-model="proxy.host" placeholder="127.0.0.1" />
+            </div>
+            <div class="proxy-field proxy-field-port">
+              <span class="style-lbl">Port</span>
+              <BaseInput v-model.number="proxy.port" type="number" placeholder="7890" />
+            </div>
+          </div>
+
+          <p v-if="proxyError" class="error-msg">{{ proxyError }}</p>
+          <p v-if="proxySuccess" class="success-msg">{{ proxySuccess }}</p>
+
+          <div class="proxy-actions">
+            <BaseButton variant="ghost" :disabled="proxySaving" @click="saveProxy">
+              {{ proxySaving ? 'Saving…' : 'Save' }}
+            </BaseButton>
+            <BaseButton variant="ghost" :disabled="proxyTesting" @click="testProxy">
+              {{ proxyTesting ? 'Testing…' : 'Test connection' }}
+            </BaseButton>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -775,7 +836,7 @@ import { useBackgroundStore } from '@/stores/background'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, type SystemVersionResponse, type WebhookResponse } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -802,6 +863,7 @@ const navSections = [
   { id: 'section-account',    label: 'Account' },
   { id: 'section-language',   label: t('settings.language') },
   { id: 'section-webhooks',   label: t('settings.webhooks') },
+  { id: 'section-proxy',      label: 'Proxy' },
 ]
 
 function scrollTo(id: string) {
@@ -1178,9 +1240,58 @@ async function testWebhook(wh: WebhookResponse) {
   }
 }
 
+// ── Proxy ──────────────────────────────────────────────────────────────────────
+
+const proxy = ref<ProxyConfig>({ enabled: false, type: 'http', host: '127.0.0.1', port: 7890 })
+const proxySaving = ref(false)
+const proxyTesting = ref(false)
+const proxyError = ref('')
+const proxySuccess = ref('')
+
+async function loadProxy() {
+  try {
+    const { data } = await proxyApi.get()
+    proxy.value = data
+  } catch { /* ignore — defaults remain */ }
+}
+
+async function saveProxy() {
+  proxySaving.value = true
+  proxyError.value = ''
+  proxySuccess.value = ''
+  try {
+    await proxyApi.update(proxy.value)
+    proxySuccess.value = 'Proxy settings saved.'
+  } catch (e: any) {
+    proxyError.value = e.response?.data?.detail || 'Failed to save proxy settings.'
+  } finally {
+    proxySaving.value = false
+  }
+}
+
+async function testProxy() {
+  proxyTesting.value = true
+  proxyError.value = ''
+  proxySuccess.value = ''
+  try {
+    await proxyApi.update(proxy.value)
+    const { data } = await proxyApi.test()
+    if (data.success) {
+      proxySuccess.value = data.message
+    } else {
+      proxyError.value = data.message
+    }
+  } catch (e: any) {
+    proxyError.value = e.response?.data?.detail || 'Test failed.'
+  } finally {
+    proxyTesting.value = false
+  }
+}
+
 onMounted(() => {
   void loadVersionInfo()
   void loadWebhooks()
+  void loadProxy()
 })
 </script>
 
@@ -1647,4 +1758,12 @@ onMounted(() => {
 .danger-sm:hover { background: var(--danger-dim); border-color: rgba(255,68,68,0.5); }
 
 .upload-error { font-size: 11px; color: var(--danger); }
+
+/* Proxy section */
+.proxy-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.proxy-row .style-lbl { width: 64px; flex-shrink: 0; }
+.proxy-fields { display: flex; gap: 10px; margin-bottom: 10px; }
+.proxy-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.proxy-field-port { max-width: 110px; }
+.proxy-actions { display: flex; gap: 8px; margin-top: 10px; }
 </style>
