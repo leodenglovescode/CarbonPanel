@@ -39,12 +39,18 @@ async def get_version_status(_: dict = Depends(require_authenticated_token)):
 @router.post("/check-updates", status_code=status.HTTP_202_ACCEPTED)
 async def check_updates(_: dict = Depends(require_authenticated_token)):
     loop = asyncio.get_event_loop()
+    note: str | None = None
     try:
         await loop.run_in_executor(None, trigger_update_check)
-    except RuntimeError:
-        # Service not installed or not permitted — version endpoint serves live/cached data
-        pass
+    except RuntimeError as exc:
+        note = str(exc)
 
+    if note:
+        return {
+            "success": True,
+            "message": f"Update check could not start the update daemon — {note}. "
+                       "Version status is still available via the live GitHub check below.",
+        }
     return {"success": True, "message": "Update check started."}
 
 

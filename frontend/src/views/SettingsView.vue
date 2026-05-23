@@ -968,12 +968,18 @@ async function checkForUpdates() {
   versionSuccess.value = ''
 
   try {
-    await systemApi.checkUpdates()
-    versionSuccess.value = 'Update check started. Refreshing status...'
+    const res = await systemApi.checkUpdates()
+    versionSuccess.value = res.data.message || 'Update check started.'
     await wait(1200)
     await loadVersionInfo()
   } catch (e: any) {
-    versionError.value = e.response?.data?.detail || 'Failed to start update check'
+    const detail = e.response?.data?.detail || e.response?.data?.message
+    const network = e.code === 'ECONNABORTED'
+      ? 'Request timed out — backend may be unreachable'
+      : e.message
+        ? `Network error: ${e.message}`
+        : null
+    versionError.value = detail || network || 'Failed to start update check'
   } finally {
     versionActionLoading.value = false
   }
@@ -1000,7 +1006,11 @@ async function installUpdate() {
     await wait(1200)
     await loadVersionInfo()
   } catch (e: any) {
-    versionError.value = e.response?.data?.detail || 'Failed to start update installation'
+    const detail = e.response?.data?.detail || e.response?.data?.message
+    const network = e.code === 'ECONNABORTED'
+      ? 'Request timed out — backend may be unreachable'
+      : e.message ? `Network error: ${e.message}` : null
+    versionError.value = detail || network || 'Failed to start update installation'
   } finally {
     versionActionLoading.value = false
   }
