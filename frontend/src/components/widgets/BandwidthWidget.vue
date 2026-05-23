@@ -79,6 +79,8 @@ function fmtTotal(mb: number) {
 .rx-fill { background: var(--accent); }
 .tx-fill { background: #60a5fa; }
 .bw-val { font-size: 10px; color: var(--fg-muted); width: 64px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+@container (max-width: 180px) { .bw-val { display: none; } }
+@container (max-width: 130px) { .bw-bars { display: none; } }
 .show-more { background: none; border: none; color: var(--fg-dim); font-family: var(--font); font-size: 10px; padding: 2px 0; cursor: pointer; text-align: left; transition: color var(--transition); }
 .show-more:hover { color: var(--accent); }
 </style>

@@ -104,4 +104,5 @@ function pctBadge(pct: number) {
 .swap-val { font-size: 10px; color: var(--fg-muted); white-space: nowrap; }
 
 .sparkline-row { margin-top: 4px; }
+@container (max-width: 180px) { .mem-stats, .swap-row, .sparkline-row { display: none; } }
 </style>

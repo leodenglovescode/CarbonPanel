@@ -78,4 +78,6 @@ function fmt(mb: number) { return (mb / 1024).toFixed(1) + ' GB' }
 .stat-plain { font-size: 11px; color: var(--fg); }
 
 .sparkline-row { margin-top: 10px; }
+@container (max-width: 200px) { .sparkline-row { display: none; } }
+@container (max-width: 160px) { .dev-metrics { flex-direction: column; align-items: flex-start; } }
 </style>

@@ -6,12 +6,18 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-_SETTINGS_FILE = Path(
-    os.getenv(
-        "CARBONPANEL_SETTINGS_FILE",
-        str(Path.home() / ".config" / "carbonpanel" / "settings.json"),
-    )
-)
+def _default_settings_path() -> Path:
+    # Honour explicit override first.
+    if override := os.getenv("CARBONPANEL_SETTINGS_FILE"):
+        return Path(override)
+    # In a production install, write alongside the other shared state files.
+    shared = Path(os.getenv("CARBONPANEL_INSTALL_ROOT", "/opt/carbonpanel")) / "shared"
+    if shared.is_dir():
+        return shared / "settings.json"
+    # Dev / non-installed fallback.
+    return Path.home() / ".config" / "carbonpanel" / "settings.json"
+
+_SETTINGS_FILE = _default_settings_path()
 
 DEFAULT_PROXY: dict[str, Any] = {
     "enabled": False,
