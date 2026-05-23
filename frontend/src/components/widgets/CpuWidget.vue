@@ -93,4 +93,6 @@ function loadColor(val: number) {
 .load-lbl { font-size: 9px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .sparkline-row { margin-top: 10px; }
+@container (max-width: 200px) { .cpu-layout { flex-direction: column; align-items: flex-start; } }
+@container (max-width: 160px) { .sparkline-row, .load-row { display: none; } }
 </style>

@@ -96,7 +96,8 @@ const areaPath = computed(() => toPath(values.value, true))
 .no-data { font-size: 11px; color: var(--fg-dim); padding: 8px 0; }
 
 .chart-area { position: relative; display: flex; gap: 6px; align-items: stretch; }
-.chart-svg { flex: 1; height: 80px; display: block; }
+.chart-svg { flex: 1; height: 80px; display: block; min-width: 0; }
+@container (max-width: 200px) { .chart-area, .legend { display: none; } }
 .y-labels { display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: var(--fg-dim); padding: 0; text-align: right; width: 28px; flex-shrink: 0; }
 
 .legend { display: flex; gap: 12px; margin-top: 6px; }

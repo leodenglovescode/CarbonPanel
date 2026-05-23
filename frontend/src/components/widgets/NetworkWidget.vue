@@ -75,16 +75,21 @@ function sparkMax(iface: string, dir: 'rx' | 'tx') {
 .net-list { display: flex; flex-direction: column; gap: 10px; }
 .net-row {
   display: grid;
-  grid-template-columns: 90px auto 1fr 140px;
+  /* iface-name can shrink; totals/sparklines hidden via @container below */
+  grid-template-columns: minmax(0, 100px) auto minmax(0, 1fr) minmax(0, 130px);
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   padding: 5px 0;
+  overflow: hidden;
 }
 .net-row + .net-row { border-top: 1px solid var(--border-subtle); }
 
-.iface-name { font-size: 11px; font-weight: 600; color: var(--fg); }
+.iface-name {
+  font-size: 11px; font-weight: 600; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
-.rate-group { display: flex; gap: 12px; }
+.rate-group { display: flex; gap: 10px; flex-shrink: 0; }
 .rate { display: flex; align-items: center; gap: 3px; }
 .arrow { font-size: 10px; }
 .rate-val { font-size: 13px; font-weight: 600; }
@@ -92,10 +97,14 @@ function sparkMax(iface: string, dir: 'rx' | 'tx') {
 .rx .arrow, .rx .rate-val { color: var(--accent); }
 .tx .arrow, .tx .rate-val { color: #60a5fa; }
 
-.sparklines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sparklines { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
 
-.totals { display: flex; flex-direction: column; gap: 2px; text-align: right; }
-.total { font-size: 10px; }
+.totals { display: flex; flex-direction: column; gap: 2px; text-align: right; min-width: 0; overflow: hidden; }
+.total { font-size: 10px; white-space: nowrap; }
 .rx-total { color: var(--fg-muted); }
 .tx-total { color: var(--fg-dim); }
+
+/* Hide progressively as the card body narrows */
+@container (max-width: 440px) { .sparklines { display: none; } }
+@container (max-width: 340px) { .totals    { display: none; } }
 </style>

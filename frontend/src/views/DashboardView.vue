@@ -191,6 +191,21 @@ function startResize(id: WidgetId, corner: 'tl' | 'tr' | 'bl' | 'br', e: MouseEv
   }
 }
 
+// Returns true if `pos` for widget `id` would overlap any OTHER visible widget.
+function hasOverlap(id: WidgetId, pos: { col: number; row: number; w: number; h: number }): boolean {
+  const visibleIds = new Set(visibleWidgets.value.map(w => w.id))
+  for (const [otherId, other] of Object.entries(layoutStore.layout) as [WidgetId, { col: number; row: number; w: number; h: number }][]) {
+    if (otherId === id || !visibleIds.has(otherId)) continue
+    const noOverlap =
+      pos.col + pos.w <= other.col ||
+      other.col + other.w <= pos.col ||
+      pos.row + pos.h <= other.row ||
+      other.row + other.h <= pos.row
+    if (!noOverlap) return true
+  }
+  return false
+}
+
 function onMouseMove(e: MouseEvent) {
   const d = drag.value
   if (!d) return
@@ -200,48 +215,52 @@ function onMouseMove(e: MouseEvent) {
   const drow = Math.round((e.clientY - d.my0) / (ROW_H + GAP))
 
   if (d.type === 'drag') {
-    layoutStore.update(d.id, {
+    const proposed = {
       col: Math.max(0, Math.min(COLS - d.w0, d.col0 + dcol)),
       row: Math.max(0, d.row0 + drow),
-    })
+      w: d.w0, h: d.h0,
+    }
+    if (!hasOverlap(d.id, proposed))
+      layoutStore.update(d.id, { col: proposed.col, row: proposed.row })
     return
   }
 
-  // Resize
+  // Resize — build the full proposed rect then check overlap before committing
+  let proposed: { col: number; row: number; w: number; h: number }
+
   switch (d.corner) {
     case 'br':
-      layoutStore.update(d.id, {
+      proposed = {
+        col: d.col0, row: d.row0,
         w: Math.max(MIN_W, Math.min(COLS - d.col0, d.w0 + dcol)),
         h: Math.max(MIN_H, d.h0 + drow),
-      })
+      }
       break
     case 'bl': {
       const nc = Math.max(0, Math.min(d.col0 + d.w0 - MIN_W, d.col0 + dcol))
-      layoutStore.update(d.id, {
-        col: nc, w: d.w0 + d.col0 - nc,
-        h: Math.max(MIN_H, d.h0 + drow),
-      })
+      proposed = { col: nc, row: d.row0, w: d.w0 + d.col0 - nc, h: Math.max(MIN_H, d.h0 + drow) }
       break
     }
     case 'tr': {
       const nr = Math.max(0, Math.min(d.row0 + d.h0 - MIN_H, d.row0 + drow))
-      layoutStore.update(d.id, {
-        row: nr, h: d.h0 + d.row0 - nr,
+      proposed = {
+        col: d.col0, row: nr,
         w: Math.max(MIN_W, Math.min(COLS - d.col0, d.w0 + dcol)),
-      })
+        h: d.h0 + d.row0 - nr,
+      }
       break
     }
     case 'tl': {
       const nc = Math.max(0, Math.min(d.col0 + d.w0 - MIN_W, d.col0 + dcol))
       const nr = Math.max(0, Math.min(d.row0 + d.h0 - MIN_H, d.row0 + drow))
-      layoutStore.update(d.id, {
-        col: nc, row: nr,
-        w: d.w0 + d.col0 - nc,
-        h: d.h0 + d.row0 - nr,
-      })
+      proposed = { col: nc, row: nr, w: d.w0 + d.col0 - nc, h: d.h0 + d.row0 - nr }
       break
     }
+    default: return
   }
+
+  if (!hasOverlap(d.id, proposed)) layoutStore.update(d.id, proposed)
+  // If overlap: keep current position — widget stays at last valid spot
 }
 
 function onMouseUp() {

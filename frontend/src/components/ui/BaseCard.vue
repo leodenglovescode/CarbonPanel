@@ -52,5 +52,8 @@ defineProps<{ title?: string }>()
 
 .card-body {
   padding: 12px 14px;
+  overflow: hidden;
+  min-height: 0;
+  container-type: inline-size;
 }
 </style>
