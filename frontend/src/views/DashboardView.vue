@@ -326,7 +326,10 @@ const sortedWidgets = computed(() =>
 
 function normalGridStyle(id: WidgetId) {
   const p = layoutStore.layout[id]
-  return { gridColumn: `${p.col + 1} / span ${p.w}` }
+  return {
+    gridColumn: `${p.col + 1} / span ${p.w}`,
+    gridRow:    `${p.row + 1} / span ${p.h}`,
+  }
 }
 </script>
 
@@ -342,10 +345,17 @@ function normalGridStyle(id: WidgetId) {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.1; } }
 .loading-text { margin-left: 8px; }
 
-/* Normal grid */
-.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
-.grid-item { min-width: 0; }
-@media (max-width: 900px) { .grid-item { grid-column: 1 / -1 !important; } }
+/* Normal grid — same gap and row height as edit mode so saved layout renders identically */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: 30px;
+  gap: 6px;
+}
+.grid-item { min-width: 0; overflow: hidden; }
+@media (max-width: 900px) {
+  .grid-item { grid-column: 1 / -1 !important; grid-row: auto !important; }
+}
 
 /* Edit FAB */
 .edit-fab {
