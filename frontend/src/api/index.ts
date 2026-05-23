@@ -203,6 +203,19 @@ export const metricsApi = {
   history: () => api.get<HistoryPoint[]>('/metrics/history'),
 }
 
+export interface ProxyConfig {
+  enabled: boolean
+  type: 'http' | 'socks5'
+  host: string
+  port: number
+}
+
+export const proxyApi = {
+  get: () => api.get<ProxyConfig>('/settings/proxy'),
+  update: (config: ProxyConfig) => api.put<ProxyConfig>('/settings/proxy', config),
+  test: () => api.post<{ success: boolean; message: string }>('/settings/proxy/test'),
+}
+
 export const sitesApi = {
   list: () => api.get<SiteResponse[]>('/sites'),
   get: (id: string) => api.get<SiteResponse>(`/sites/${id}`),

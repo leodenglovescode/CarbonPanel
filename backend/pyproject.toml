@@ -20,6 +20,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "aiosqlite>=0.20",
     "alembic>=1.13",
+    "PySocks>=1.7",
 ]
 
 [project.optional-dependencies]
