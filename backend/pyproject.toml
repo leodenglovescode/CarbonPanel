@@ -21,6 +21,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "alembic>=1.13",
     "PySocks>=1.7",
+    "webauthn>=2.0",
 ]
 
 [project.optional-dependencies]

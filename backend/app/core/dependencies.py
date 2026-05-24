@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
 from app.database import get_db
+from app.models.device import Device
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -30,6 +31,14 @@ async def get_current_user(
     user_id: str | None = payload.get("sub")
     if not user_id:
         raise credentials_error
+
+    # JTI revocation check — only enforced when jti is present in the token
+    jti: str | None = payload.get("jti")
+    if jti:
+        result = await db.execute(select(Device).where(Device.jti == jti))
+        device = result.scalar_one_or_none()
+        if device is None or device.revoked:
+            raise credentials_error
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
