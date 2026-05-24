@@ -178,7 +178,7 @@ function statusClass(status: string) {
 .expand-btn:hover { color: var(--fg-muted); border-color: var(--fg-dim); }
 .expand-btn.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap { flex: 1; overflow: auto; min-height: 0; }
 table { width: 100%; border-collapse: collapse; }
 thead th {
   font-size: 9px;

@@ -1,5 +1,5 @@
 <template>
-  <div class="sparkline-wrap" :style="{ height: height + 'px' }">
+  <div class="sparkline-wrap" :style="height ? { height: height + 'px' } : {}">
     <Line :data="chartData" :options="chartOptions" />
   </div>
 </template>
@@ -22,11 +22,10 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, 
 const props = withDefaults(defineProps<{
   data: number[]
   color?: string
-  height?: number
+  height?: number  // omit to fill parent container
   maxY?: number
 }>(), {
   color: '#00ff88',
-  height: 36,
   maxY: 100,
 })
 
@@ -59,6 +58,8 @@ const chartOptions = computed(() => ({
 <style scoped>
 .sparkline-wrap {
   width: 100%;
+  height: 100%; /* fills parent when no inline height is set */
+  min-height: 20px;
   position: relative;
 }
 </style>

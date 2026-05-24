@@ -40,7 +40,7 @@
     </div>
 
     <div class="sparkline-row">
-      <Sparkline :data="history" :height="30" />
+      <Sparkline :data="history" />
     </div>
   </BaseCard>
 </template>
@@ -103,6 +103,6 @@ function pctBadge(pct: number) {
 .bar-fill.swap-fill { height: 100%; background: var(--info, #4488ff); border-radius: 2px; transition: width var(--bar-transition); }
 .swap-val { font-size: 10px; color: var(--fg-muted); white-space: nowrap; }
 
-.sparkline-row { margin-top: 4px; }
+.sparkline-row { margin-top: 4px; flex: 1; min-height: 24px; }
 @container (max-width: 180px) { .mem-stats, .swap-row, .sparkline-row { display: none; } }
 </style>

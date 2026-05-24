@@ -66,7 +66,7 @@ function fmtTotal(mb: number) {
 <style scoped>
 .card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
 .no-data { font-size: 11px; color: var(--fg-dim); }
-.bw-list { display: flex; flex-direction: column; gap: 12px; }
+.bw-list { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow: auto; min-height: 0; }
 .bw-row { display: flex; flex-direction: column; gap: 6px; }
 .iface-name { font-size: 11px; font-weight: 600; color: var(--fg); }
 .bw-bars { display: flex; flex-direction: column; gap: 5px; }
