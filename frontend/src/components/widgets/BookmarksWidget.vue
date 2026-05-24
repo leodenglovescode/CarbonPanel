@@ -25,18 +25,20 @@
     </div>
 
     <div v-else class="bm-grid">
-      <div
-        v-for="bm in bookmarks"
-        :key="bm.id"
-        class="bm-tile"
-      >
+      <div v-for="bm in bookmarks" :key="bm.id" class="bm-tile">
         <a :href="bm.url" target="_blank" rel="noopener noreferrer" class="bm-link" @click.stop>
-          <img
-            class="bm-icon"
-            :src="iconSrc(bm)"
-            :alt="bm.title"
-            @error="onIconError($event, bm)"
-          />
+          <div class="bm-icon-wrap">
+            <img
+              v-if="!iconErrors.has(bm.id)"
+              class="bm-icon"
+              :src="iconSrc(bm)"
+              :alt="bm.title"
+              @error="onIconError($event, bm)"
+            />
+            <div v-else class="bm-icon-fallback" :style="{ background: tileColor(bm.title) }">
+              {{ bm.title.charAt(0).toUpperCase() }}
+            </div>
+          </div>
           <span class="bm-label">{{ bm.title }}</span>
         </a>
         <div class="bm-actions">
@@ -49,19 +51,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import { bookmarksApi, type BookmarkInfo } from '@/api'
 
 const bookmarks = ref<BookmarkInfo[]>([])
+const iconErrors = reactive(new Set<string>())
 
 const formOpen = ref(false)
 const editId = ref<string | null>(null)
 const formTitle = ref('')
 const formUrl = ref('')
 const formIconUrl = ref('')
-
-const iconErrors = ref(new Set<string>())
 
 onMounted(async () => {
   try {
@@ -73,19 +74,24 @@ onMounted(async () => {
 function faviconUrl(url: string) {
   try {
     const domain = new URL(url).hostname
-    return `https://www.google.com/s2/favicons?sz=32&domain_url=${domain}`
+    return `https://www.google.com/s2/favicons?sz=64&domain_url=${domain}`
   } catch { return '' }
 }
 
 function iconSrc(bm: BookmarkInfo) {
-  if (bm.icon_url) return bm.icon_url
-  if (!iconErrors.value.has(bm.id)) return faviconUrl(bm.url)
-  return ''
+  return bm.icon_url || faviconUrl(bm.url)
 }
 
 function onIconError(e: Event, bm: BookmarkInfo) {
-  iconErrors.value.add(bm.id)
+  iconErrors.add(bm.id)
   ;(e.target as HTMLImageElement).style.display = 'none'
+}
+
+const PALETTE = ['#4f46e5','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#db2777','#0284c7']
+function tileColor(title: string) {
+  let hash = 0
+  for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) & 0xffffffff
+  return PALETTE[Math.abs(hash) % PALETTE.length]
 }
 
 function openAdd() {
@@ -127,7 +133,7 @@ async function submitForm() {
       bookmarks.value.push(data)
     }
     closeForm()
-  } catch { /* TODO: show error */ }
+  } catch { /* silent */ }
 }
 
 async function deleteBookmark(id: string) {
@@ -161,56 +167,102 @@ async function deleteBookmark(id: string) {
 
 .empty-state { font-size: 11px; color: var(--fg-dim); padding: 4px 0; }
 
+/* App-icon grid */
 .bm-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
+  align-content: flex-start;
 }
 
 .bm-tile {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  background: var(--bg-subtle, rgba(128,128,128,0.06));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 4px 6px;
-  transition: border-color var(--transition);
+  width: 68px;
 }
-.bm-tile:hover { border-color: var(--accent-border); }
 
 .bm-link {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 6px;
   text-decoration: none;
   color: var(--fg);
-  min-width: 0;
+  width: 100%;
 }
 
-.bm-icon { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
+.bm-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--bg-subtle, rgba(128,128,128,0.08));
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  flex-shrink: 0;
+}
+.bm-tile:hover .bm-icon-wrap {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.bm-icon { width: 32px; height: 32px; object-fit: contain; }
+
+.bm-icon-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 12px;
+}
 
 .bm-label {
-  font-size: 11px;
+  font-size: 10px;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
+  width: 100%;
+  color: var(--fg-muted);
 }
 
-.bm-actions { display: flex; gap: 2px; margin-left: 2px; }
-.bm-edit, .bm-del {
-  background: none;
-  border: none;
-  color: var(--fg-dim);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-  transition: color var(--transition);
+/* Edit / Delete overlay buttons */
+.bm-actions {
+  position: absolute;
+  top: -5px;
+  right: 2px;
+  display: none;
+  gap: 2px;
 }
-.bm-edit:hover { color: var(--accent); }
-.bm-del:hover { color: var(--danger); }
+.bm-tile:hover .bm-actions { display: flex; }
+
+.bm-edit, .bm-del {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--fg-dim);
+  font-size: 10px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: color var(--transition), border-color var(--transition);
+}
+.bm-edit:hover { color: var(--accent); border-color: var(--accent-border); }
+.bm-del:hover { color: var(--danger); border-color: rgba(255,68,68,0.4); }
 
 /* Inline add/edit form */
 .bm-form { display: flex; flex-direction: column; gap: 8px; }

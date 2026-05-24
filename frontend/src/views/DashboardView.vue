@@ -15,45 +15,35 @@
       ⊞
     </button>
 
-    <div v-if="!metrics.latest" class="loading">
+    <div v-if="!metrics.latest && visibleWidgets.length === 0" class="loading">
       <span class="loading-dot" /><span class="loading-dot" /><span class="loading-dot" />
       <span class="loading-text">connecting…</span>
     </div>
 
-    <!-- ── Normal mode ── -->
-    <div v-else-if="!editMode" class="grid">
+    <!-- ── Unified grid (normal + edit mode) ── -->
+    <div
+      v-else
+      ref="gridEl"
+      class="grid"
+      :class="{ 'grid-edit': editMode }"
+    >
       <div
         v-for="w in sortedWidgets"
         :key="w.id"
         class="grid-item"
-        :style="normalGridStyle(w.id)"
+        :class="{ 'edit-widget': editMode, 'is-active': editMode && drag?.id === w.id }"
+        :style="gridItemStyle(w.id)"
+        @mousedown.left.prevent="editMode ? startDrag(w.id, $event) : undefined"
       >
-        <component :is="w.comp" v-bind="w.props" />
-      </div>
-    </div>
-
-    <!-- ── Edit mode grid ── -->
-    <div
-      v-else
-      ref="gridEl"
-      class="edit-grid"
-      :style="{ height: editGridHeight + 'px' }"
-    >
-      <div
-        v-for="w in visibleWidgets"
-        :key="w.id"
-        class="edit-widget"
-        :class="{ 'is-active': drag?.id === w.id }"
-        :style="widgetStyle(w.id)"
-        @mousedown.left.prevent="startDrag(w.id, $event)"
-      >
-        <div class="widget-body">
+        <div :class="{ 'widget-body': editMode }">
           <component :is="w.comp" v-bind="w.props" />
         </div>
-        <div class="handle tl" @mousedown.left.stop.prevent="startResize(w.id, 'tl', $event)" />
-        <div class="handle tr" @mousedown.left.stop.prevent="startResize(w.id, 'tr', $event)" />
-        <div class="handle bl" @mousedown.left.stop.prevent="startResize(w.id, 'bl', $event)" />
-        <div class="handle br" @mousedown.left.stop.prevent="startResize(w.id, 'br', $event)" />
+        <template v-if="editMode">
+          <div class="handle tl" @mousedown.left.stop.prevent="startResize(w.id, 'tl', $event)" />
+          <div class="handle tr" @mousedown.left.stop.prevent="startResize(w.id, 'tr', $event)" />
+          <div class="handle bl" @mousedown.left.stop.prevent="startResize(w.id, 'bl', $event)" />
+          <div class="handle br" @mousedown.left.stop.prevent="startResize(w.id, 'br', $event)" />
+        </template>
       </div>
     </div>
 
@@ -120,48 +110,27 @@ const editMode = ref(false)
 const gridEl = ref<HTMLElement | null>(null)
 const gridW = ref(0)
 
-// Grid constants
+// Grid constants — must match CSS (.grid { grid-auto-rows: 30px; gap: 6px })
 const COLS = 12
-const ROW_H = 30   // px per row unit
-const GAP = 6      // px gap
+const ROW_H = 30
+const GAP = 6
 const MIN_W = 3
 const MIN_H = 3
 
+// cellW is only used for drag-delta snapping; CSS grid handles actual sizing
 const cellW = computed(() => {
   const w = gridW.value || 1200
   return (w - GAP * (COLS - 1)) / COLS
 })
 
-function toPixels(id: WidgetId) {
+// Single placement function used by both normal and edit mode
+function gridItemStyle(id: WidgetId) {
   const p = layoutStore.layout[id]
-  const cw = cellW.value
   return {
-    left:   p.col * (cw + GAP),
-    top:    p.row * (ROW_H + GAP),
-    width:  p.w  * cw  + (p.w - 1) * GAP,
-    height: p.h  * ROW_H + (p.h - 1) * GAP,
+    gridColumn: `${p.col + 1} / span ${p.w}`,
+    gridRow: `${p.row + 1} / span ${p.h}`,
   }
 }
-
-function widgetStyle(id: WidgetId) {
-  const px = toPixels(id)
-  return {
-    left:   px.left   + 'px',
-    top:    px.top    + 'px',
-    width:  px.width  + 'px',
-    height: px.height + 'px',
-  }
-}
-
-const editGridHeight = computed(() => {
-  let maxRow = 0
-  for (const id of Object.keys(layoutStore.layout) as WidgetId[]) {
-    const p = layoutStore.layout[id]
-    const bottom = p.row + p.h
-    if (bottom > maxRow) maxRow = bottom
-  }
-  return maxRow * (ROW_H + GAP) + 20
-})
 
 // ── Drag / resize ─────────────────────────────────────────────────────────────
 
@@ -276,10 +245,7 @@ function enterEdit() {
   editMode.value = true
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
-  // Measure container width after render
-  requestAnimationFrame(() => {
-    if (gridEl.value) gridW.value = gridEl.value.clientWidth
-  })
+  if (gridEl.value) gridW.value = gridEl.value.clientWidth
 }
 
 function exitEdit() {
@@ -340,7 +306,7 @@ const visibleWidgets = computed(() => {
   ].filter(w => w.show)
 })
 
-// Sorted by row then col — used by normal mode to honour the saved layout order
+// Sort by row then col so tab order matches visual order
 const sortedWidgets = computed(() =>
   visibleWidgets.value.slice().sort((a, b) => {
     const la = layoutStore.layout[a.id]
@@ -348,14 +314,6 @@ const sortedWidgets = computed(() =>
     return la.row !== lb.row ? la.row - lb.row : la.col - lb.col
   })
 )
-
-function normalGridStyle(id: WidgetId) {
-  const p = layoutStore.layout[id]
-  return {
-    gridColumn: `${p.col + 1} / span ${p.w}`,
-    gridRow:    `${p.row + 1} / span ${p.h}`,
-  }
-}
 </script>
 
 <style scoped>
@@ -370,7 +328,7 @@ function normalGridStyle(id: WidgetId) {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.1; } }
 .loading-text { margin-left: 8px; }
 
-/* Normal grid — same gap and row height as edit mode so saved layout renders identically */
+/* Shared grid — used in both normal and edit mode */
 .grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -380,6 +338,24 @@ function normalGridStyle(id: WidgetId) {
 .grid-item { min-width: 0; overflow: hidden; }
 @media (max-width: 900px) {
   .grid-item { grid-column: 1 / -1 !important; grid-row: auto !important; }
+}
+
+/* Edit mode overlay on the same grid */
+.grid-edit { user-select: none; }
+.grid-edit .grid-item {
+  overflow: visible;   /* allow resize handles to extend outside the cell */
+  position: relative;
+  border: 1.5px dashed var(--accent-border);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+  cursor: move;
+  transition: box-shadow 80ms, border-color 80ms;
+}
+.grid-edit .grid-item:hover { border-color: var(--accent); }
+.grid-edit .grid-item.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-border), var(--shadow-card-hover);
+  z-index: 20;
 }
 
 /* Edit FAB */
@@ -439,30 +415,6 @@ function normalGridStyle(id: WidgetId) {
 .toolbar-enter-active, .toolbar-leave-active { transition: opacity 150ms, transform 150ms; }
 .toolbar-enter-from, .toolbar-leave-to { opacity: 0; transform: translateY(-6px); }
 
-/* Edit grid */
-.edit-grid {
-  position: relative;
-  width: 100%;
-  user-select: none;
-}
-
-/* Individual widget in edit mode */
-.edit-widget {
-  position: absolute;
-  border: 1.5px dashed var(--accent-border);
-  border-radius: var(--radius);
-  box-sizing: border-box;
-  cursor: move;
-  transition: box-shadow 80ms, border-color 80ms;
-  overflow: visible;
-}
-.edit-widget:hover { border-color: var(--accent); }
-.edit-widget.is-active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-border), var(--shadow-card-hover);
-  z-index: 20;
-}
-
 /* Widget inner content: disable pointer events while editing */
 .widget-body {
   width: 100%;
@@ -496,8 +448,8 @@ function normalGridStyle(id: WidgetId) {
   opacity: 0;
   transition: opacity var(--transition), transform var(--transition);
 }
-.edit-widget:hover .handle,
-.edit-widget.is-active .handle { opacity: 1; }
+.grid-edit .grid-item:hover .handle,
+.grid-edit .grid-item.is-active .handle { opacity: 1; }
 .handle.tl { top: -6px;    left: -6px;    cursor: nwse-resize; }
 .handle.tr { top: -6px;    right: -6px;   cursor: nesw-resize; }
 .handle.bl { bottom: -6px; left: -6px;    cursor: nesw-resize; }

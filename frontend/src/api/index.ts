@@ -266,6 +266,11 @@ export const passkeysApi = {
     api.post<{ access_token: string }>('/auth/passkey/login/complete', { session_id, credential }),
 }
 
+export const userPrefsApi = {
+  get: () => api.get<{ prefs: Record<string, unknown> }>('/settings/preferences'),
+  save: (prefs: Record<string, unknown>) => api.put('/settings/preferences', { prefs }),
+}
+
 export const sitesApi = {
   list: () => api.get<SiteResponse[]>('/sites'),
   get: (id: string) => api.get<SiteResponse>(`/sites/${id}`),

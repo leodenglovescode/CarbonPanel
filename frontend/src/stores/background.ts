@@ -22,18 +22,21 @@ const APP_BG_IMG_KEY = 'cp_bg_app_img'
 const LOGIN_BG_KEY = 'cp_bg_login'
 const LOGIN_BG_IMG_KEY = 'cp_bg_login_img'
 
+function parseConfig(raw: unknown): BgConfig {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_BG }
+  const p = raw as Record<string, unknown>
+  return {
+    type: ['color', 'gradient', 'image'].includes(p.type as string) ? (p.type as BgConfig['type']) : DEFAULT_BG.type,
+    gradientAngle: typeof p.gradientAngle === 'number' ? p.gradientAngle : DEFAULT_BG.gradientAngle,
+    gradientStart: typeof p.gradientStart === 'string' ? p.gradientStart : DEFAULT_BG.gradientStart,
+    gradientEnd: typeof p.gradientEnd === 'string' ? p.gradientEnd : DEFAULT_BG.gradientEnd,
+    blur: typeof p.blur === 'number' ? Math.min(20, Math.max(0, p.blur)) : DEFAULT_BG.blur,
+  }
+}
+
 function loadConfig(key: string): BgConfig {
   try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return { ...DEFAULT_BG }
-    const p = JSON.parse(raw)
-    return {
-      type: ['color', 'gradient', 'image'].includes(p.type) ? p.type : DEFAULT_BG.type,
-      gradientAngle: typeof p.gradientAngle === 'number' ? p.gradientAngle : DEFAULT_BG.gradientAngle,
-      gradientStart: typeof p.gradientStart === 'string' ? p.gradientStart : DEFAULT_BG.gradientStart,
-      gradientEnd: typeof p.gradientEnd === 'string' ? p.gradientEnd : DEFAULT_BG.gradientEnd,
-      blur: typeof p.blur === 'number' ? Math.min(20, Math.max(0, p.blur)) : DEFAULT_BG.blur,
-    }
+    return parseConfig(JSON.parse(localStorage.getItem(key) || 'null'))
   } catch {
     return { ...DEFAULT_BG }
   }
@@ -153,6 +156,34 @@ export const useBackgroundStore = defineStore('background', () => {
   // Apply on store init
   applyAppBg()
 
+  function loadFromDb(data: {
+    appBg?: unknown
+    loginBg?: unknown
+    appBgImage?: string | null
+    loginBgImage?: string | null
+  }) {
+    if (data.appBg) {
+      appBg.value = parseConfig(data.appBg)
+      localStorage.setItem(APP_BG_KEY, JSON.stringify(appBg.value))
+      applyAppBg()
+    }
+    if ('appBgImage' in data) {
+      appBgImage.value = data.appBgImage ?? null
+      if (data.appBgImage) localStorage.setItem(APP_BG_IMG_KEY, data.appBgImage)
+      else localStorage.removeItem(APP_BG_IMG_KEY)
+      applyAppBg()
+    }
+    if (data.loginBg) {
+      loginBg.value = parseConfig(data.loginBg)
+      localStorage.setItem(LOGIN_BG_KEY, JSON.stringify(loginBg.value))
+    }
+    if ('loginBgImage' in data) {
+      loginBgImage.value = data.loginBgImage ?? null
+      if (data.loginBgImage) localStorage.setItem(LOGIN_BG_IMG_KEY, data.loginBgImage)
+      else localStorage.removeItem(LOGIN_BG_IMG_KEY)
+    }
+  }
+
   return {
     appBg,
     loginBg,
@@ -170,5 +201,6 @@ export const useBackgroundStore = defineStore('background', () => {
     setLoginBg,
     setLoginBgImage,
     resetLoginBg,
+    loadFromDb,
   }
 })
