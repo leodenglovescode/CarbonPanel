@@ -23,11 +23,15 @@ import { systemApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useBackgroundStore } from '@/stores/background'
+import { useUserPrefsSync } from '@/composables/useUserPrefsSync'
 
 const UPDATE_PROMPT_STORAGE_KEY = 'cp_update_prompt_version'
 
 useThemeStore()
 useBackgroundStore()
+
+const prefsSync = useUserPrefsSync()
+prefsSync.startWatching()
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -62,6 +66,14 @@ async function maybePromptForUpdate() {
     // Intentionally ignore update prompt errors to avoid interrupting app usage.
   }
 }
+
+watch(
+  () => auth.token,
+  (token) => {
+    if (token) void prefsSync.load()
+  },
+  { immediate: true },
+)
 
 watch(
   [() => auth.token, () => route.fullPath],

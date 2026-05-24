@@ -28,11 +28,18 @@ export const useDisplayPrefsStore = defineStore('displayPrefs', () => {
   function setNetworkUnit(unit: NetworkUnit) { networkUnit.value = unit; save() }
   function setStorageUnit(unit: StorageUnit) { storageUnit.value = unit; save() }
 
+  function loadFromDb(data: { ramUnit?: string; networkUnit?: string; storageUnit?: string }) {
+    if (data.ramUnit === 'gb' || data.ramUnit === 'mb') ramUnit.value = data.ramUnit
+    if (data.networkUnit === 'mb_s' || data.networkUnit === 'mbps') networkUnit.value = data.networkUnit
+    if (data.storageUnit === 'gb' || data.storageUnit === 'auto_tb' || data.storageUnit === 'tb') storageUnit.value = data.storageUnit
+    save()
+  }
+
   function fmtStorage(gb: number): string {
     if (storageUnit.value === 'tb') return (gb / 1024).toFixed(2) + ' TB'
     if (storageUnit.value === 'auto_tb' && gb >= 1024) return (gb / 1024).toFixed(2) + ' TB'
     return gb.toFixed(1) + ' GB'
   }
 
-  return { ramUnit, networkUnit, storageUnit, setRamUnit, setNetworkUnit, setStorageUnit, fmtStorage }
+  return { ramUnit, networkUnit, storageUnit, setRamUnit, setNetworkUnit, setStorageUnit, fmtStorage, loadFromDb }
 })

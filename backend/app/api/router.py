@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.api import (
     apps, auth, bookmarks, cron, dashboard_layout, devices, disks,
-    docker_api, metrics_history, passkeys, processes, sessions,
+    docker_api, metrics_history, passkeys, preferences, processes, sessions,
     settings, sites, webhooks, ws, ws_logs,
 )
 
@@ -22,6 +22,7 @@ api_router.include_router(metrics_history.router)
 api_router.include_router(devices.router)
 api_router.include_router(bookmarks.router)
 api_router.include_router(dashboard_layout.router)
+api_router.include_router(preferences.router)
 
 # WebSockets are at root level (no /api/v1 prefix)
 ws_router = ws.router

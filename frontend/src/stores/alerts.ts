@@ -115,5 +115,15 @@ export const useAlertsStore = defineStore('alerts', () => {
     }
   }
 
-  return { thresholds, diskScope, toasts, setThreshold, setDiskScope, dismiss, check }
+  function loadFromDb(data: { cpu?: number; ram?: number; disk?: number; diskScope?: string }) {
+    if (typeof data.cpu === 'number') { thresholds.value.cpu = data.cpu; localStorage.setItem('cp_alert_cpu', String(data.cpu)) }
+    if (typeof data.ram === 'number') { thresholds.value.ram = data.ram; localStorage.setItem('cp_alert_ram', String(data.ram)) }
+    if (typeof data.disk === 'number') { thresholds.value.disk = data.disk; localStorage.setItem('cp_alert_disk', String(data.disk)) }
+    if (data.diskScope === 'physical' || data.diskScope === 'all') {
+      diskScope.value = data.diskScope
+      localStorage.setItem(DISK_ALERT_SCOPE_STORAGE_KEY, data.diskScope)
+    }
+  }
+
+  return { thresholds, diskScope, toasts, setThreshold, setDiskScope, dismiss, check, loadFromDb }
 })

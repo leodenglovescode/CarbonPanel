@@ -410,6 +410,19 @@ export const useThemeStore = defineStore('theme', () => {
     applyStyleSettings(theme.value, styleSettings.value)
   }
 
+  function loadFromDb(data: { theme?: unknown; styleSettings?: unknown }) {
+    if (data.theme && isTheme(data.theme as string)) {
+      theme.value = data.theme as Theme
+      localStorage.setItem(THEME_STORAGE_KEY, data.theme as string)
+      applyTheme(data.theme as Theme)
+    }
+    if (data.styleSettings) {
+      styleSettings.value = sanitizeStyleSettings(data.styleSettings)
+      persistStyleSettings()
+      applyStyleSettings(theme.value, styleSettings.value)
+    }
+  }
+
   applyTheme(theme.value)
   applyStyleSettings(theme.value, styleSettings.value)
 
@@ -422,5 +435,6 @@ export const useThemeStore = defineStore('theme', () => {
     setTheme,
     setStyleSetting,
     resetStyleSettings,
+    loadFromDb,
   }
 })
