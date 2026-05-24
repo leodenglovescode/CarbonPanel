@@ -57,6 +57,21 @@ die() {
   exit 1
 }
 
+# Run a command silently. On failure, dump its combined output to stderr and
+# return the original exit code so callers can handle it (die, || true, etc.).
+run_silent() {
+  local _tmp _rc=0
+  _tmp=$(mktemp)
+  "$@" >"$_tmp" 2>&1 || _rc=$?
+  if [[ $_rc -ne 0 ]]; then
+    printf '\n' >&2
+    cat "$_tmp" >&2
+    printf '\n' >&2
+  fi
+  rm -f "$_tmp"
+  return $_rc
+}
+
 require_root() {
   [[ "${EUID}" -eq 0 ]] || die "this needs root. sudo up."
 }
@@ -309,9 +324,9 @@ install_os_prerequisites() {
   export DEBIAN_FRONTEND=noninteractive
   # Broken third-party repos (Docker, NVIDIA, Chrome, etc.) cause apt-get update
   # to return exit code 100. Treat that as a warning — the cached lists are enough.
-  apt-get update -y 2>&1 || warn "some apt sources threw a tantrum — rolling with cached package lists, should be fine"
+  apt-get update -y >/dev/null 2>&1 || warn "some apt sources threw a tantrum — rolling with cached package lists, should be fine"
   # Core utilities — safe to install unconditionally on any apt system.
-  apt-get install -y \
+  run_silent apt-get install -y \
     ca-certificates \
     curl \
     git \
@@ -324,19 +339,19 @@ install_os_prerequisites() {
   # nginx — skip if already present (nginx.org repo, BunkerWeb, OpenResty, etc. all conflict
   # with Ubuntu's nginx package but provide a compatible binary).
   if ! command_exists nginx; then
-    apt-get install -y nginx 2>/dev/null || true
+    apt-get install -y nginx >/dev/null 2>&1 || true
   fi
 
   # nodejs — skip if already present (NodeSource, nvm, volta, fnm all conflict
   # with Ubuntu's nodejs package but provide a compatible binary).
   if ! command_exists node && ! command_exists nodejs; then
-    apt-get install -y nodejs 2>/dev/null || true
+    apt-get install -y nodejs >/dev/null 2>&1 || true
   fi
 
   # npm is bundled with NodeSource nodejs. Only fall back to the apt package
   # on systems where nodejs was installed without npm (older Ubuntu apt nodejs).
   if ! command_exists npm; then
-    apt-get install -y npm 2>/dev/null || true
+    apt-get install -y npm >/dev/null 2>&1 || true
   fi
 
   command_exists python3 || die "python3 is required."
@@ -348,7 +363,7 @@ install_os_prerequisites() {
 
 ensure_service_account() {
   if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
-    useradd --system --home "$INSTALL_ROOT" --shell /usr/sbin/nologin "$SERVICE_USER"
+    run_silent useradd --system --home "$INSTALL_ROOT" --shell /usr/sbin/nologin "$SERVICE_USER"
   fi
 }
 
@@ -405,8 +420,7 @@ clone_release() {
   local ref="$1"
   local destination="$RELEASES_DIR/$2"
 
-  # Keep stderr visible so network/firewall errors are shown to the user.
-  git clone --depth 1 --branch "$ref" "$REPO_URL" "$destination" 1>/dev/null || \
+  run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$destination" || \
     die "Failed to clone $REPO_URL at ref $ref. If you are behind a firewall, set your proxy first: export https_proxy=http://host:port"
 
   printf '%s\n' "$destination"
@@ -417,19 +431,19 @@ build_release() {
 
   log "teaching python what's what..."
   note "spinning up a venv and pip installing — grab a coffee ☕"
-  python3 -m venv "$release_dir/backend/.venv"
-  "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel >/dev/null
-  "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend" >/dev/null
+  run_silent python3 -m venv "$release_dir/backend/.venv"
+  run_silent "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
+  run_silent "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
 
   log "bundling the frontend heat..."
   note "npm doing npm things — this one takes a sec 🌀"
   (
     cd "$release_dir/frontend"
-    npm ci >/dev/null
-    npm run build >/dev/null
+    run_silent npm ci
+    run_silent npm run build
   )
 
-  install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
+  run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
 }
 
 write_nginx_config() {
@@ -467,7 +481,7 @@ server {
 EOF
 
   ln -sf "$NGINX_SITE" "$NGINX_SITE_LINK"
-  nginx -t >/dev/null
+  run_silent nginx -t
 }
 
 write_backend_service() {
@@ -543,10 +557,10 @@ EOF
 }
 
 systemd_reload_enable() {
-  systemctl daemon-reload
-  systemctl enable --now "$BACKEND_SERVICE" >/dev/null
-  systemctl enable --now nginx >/dev/null
-  systemctl enable --now "$UPDATE_CHECK_TIMER" >/dev/null
+  run_silent systemctl daemon-reload
+  run_silent systemctl enable --now "$BACKEND_SERVICE"
+  run_silent systemctl enable --now nginx
+  run_silent systemctl enable --now "$UPDATE_CHECK_TIMER"
 }
 
 wait_for_http() {
@@ -571,13 +585,13 @@ run_database_tasks() {
   (
     load_backend_env
     cd "$release_dir/backend"
-    ./.venv/bin/alembic upgrade head >/dev/null
+    run_silent ./.venv/bin/alembic upgrade head
   )
 
   (
     load_backend_env
     cd "$release_dir/backend"
-    ./.venv/bin/python -m app.scripts.seed_admin >/dev/null
+    run_silent ./.venv/bin/python -m app.scripts.seed_admin
   )
 }
 
@@ -703,17 +717,17 @@ deploy_release() {
   write_nginx_config
   write_backend_service
   write_update_services
-  systemctl daemon-reload
-  systemctl restart "$BACKEND_SERVICE"
-  systemctl restart nginx
+  run_silent systemctl daemon-reload
+  run_silent systemctl restart "$BACKEND_SERVICE"
+  run_silent systemctl restart nginx
 
   if ! wait_for_http "http://127.0.0.1:$BACKEND_PORT/docs"; then
     warn "health check came back dead — rolling back to the last good version"
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
-    systemctl daemon-reload
-    systemctl restart "$BACKEND_SERVICE" || true
-    systemctl restart nginx || true
+    run_silent systemctl daemon-reload
+    run_silent systemctl restart "$BACKEND_SERVICE" || true
+    run_silent systemctl restart nginx || true
     [[ -n "$previous_target" ]] && switch_symlink "$PREVIOUS_LINK" "$previous_target"
     return 1
   fi
@@ -737,7 +751,7 @@ check_for_updates() {
 
   latest_dir="$TMP_DIR/check-$(safe_name "$ref")"
   rm -rf "$latest_dir"
-  git clone --depth 1 --branch "$ref" "$REPO_URL" "$latest_dir" >/dev/null 2>&1 || die "Unable to fetch latest version metadata."
+  run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$latest_dir" || die "Unable to fetch latest version metadata."
   latest_commit="$(git -C "$latest_dir" rev-parse HEAD)"
   rm -rf "$latest_dir"
 
@@ -871,9 +885,9 @@ rollback_release() {
     switch_symlink "$PREVIOUS_LINK" "$current_target"
   fi
 
-  systemctl daemon-reload
-  systemctl restart "$BACKEND_SERVICE"
-  systemctl restart nginx
+  run_silent systemctl daemon-reload
+  run_silent systemctl restart "$BACKEND_SERVICE"
+  run_silent systemctl restart nginx
   check_for_updates
 
   ok "rolled back to $(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version) — crisis averted 😅"
@@ -1007,16 +1021,16 @@ uninstall_carbonpanel() {
   # nginx, npm, nodejs, and any other system services are left untouched.
   log "yeeting carbonpanel services into the void..."
   for svc in "$UPDATE_CHECK_TIMER" "$UPDATE_CHECK_SERVICE" "$UPDATE_SERVICE" "$BACKEND_SERVICE"; do
-    systemctl stop "$svc" 2>/dev/null || true
-    systemctl disable "$svc" 2>/dev/null || true
+    systemctl stop "$svc" >/dev/null 2>&1 || true
+    systemctl disable "$svc" >/dev/null 2>&1 || true
     rm -f "/etc/systemd/system/$svc"
   done
-  systemctl daemon-reload
+  run_silent systemctl daemon-reload
 
   # Remove only CarbonPanel's nginx site config — nginx itself is not stopped or removed.
   log "scrubbing our nginx footprint (nginx itself stays up) ..."
   rm -f "$NGINX_SITE" "$NGINX_SITE_LINK"
-  nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+  nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
 
   log "revoking the sudo backstage pass..."
   rm -f "$SUDOERS_FILE"
@@ -1027,7 +1041,7 @@ uninstall_carbonpanel() {
   printf "  ${BOLD}remove the '%s' system user too? [y/N]:${NC} " "$SERVICE_USER"
   read -r remove_user
   if [[ "${remove_user,,}" == "y" ]]; then
-    userdel "$SERVICE_USER" 2>/dev/null || true
+    userdel "$SERVICE_USER" >/dev/null 2>&1 || true
     ok "service user gone"
   fi
 
