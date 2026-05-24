@@ -8,9 +8,14 @@
           <span v-if="activeTab === 'all'" class="virtual-hint">· includes virtual/loop</span>
         </p>
       </div>
-      <button class="refresh-btn" :disabled="loading" @click="load">
-        {{ loading ? 'refreshing...' : 'refresh' }}
-      </button>
+      <div class="header-actions">
+        <button class="refresh-btn" :disabled="smartBusy" @click="runSmartScan">
+          {{ smartBusy ? 'scanning...' : 'scan SMART' }}
+        </button>
+        <button class="refresh-btn" :disabled="loading" @click="load">
+          {{ loading ? 'refreshing...' : 'refresh' }}
+        </button>
+      </div>
     </div>
 
     <div class="tabs-row">
@@ -44,7 +49,22 @@
               <span class="meta-badge">{{ disk.fstype }}</span>
               <span :class="['meta-badge', `badge-bus-${disk.bus_type}`]">{{ disk.bus_type }}</span>
               <span v-if="disk.is_removable" class="meta-badge badge-removable">removable</span>
+              <span
+                v-if="disk.smart"
+                :class="['meta-badge', smartHealthClass(disk.smart.health)]"
+                :title="disk.smart.error || undefined"
+              >
+                {{ disk.smart.health }}
+              </span>
+              <span v-if="disk.smart?.temperature_c != null" class="meta-badge badge-temp">
+                {{ disk.smart.temperature_c }}°C
+              </span>
+            </div>
+            <div class="disk-mount-row">
               <span class="disk-mount">→ {{ disk.mountpoint }}</span>
+              <span v-if="disk.extra_mounts.length" class="extra-mounts">
+                +{{ disk.extra_mounts.length }} more
+              </span>
             </div>
           </div>
 
@@ -80,32 +100,102 @@
         </div>
 
         <Transition name="expand">
-          <div v-if="expandedKey === diskKey(disk)" class="disk-actions">
-            <div class="actions-header">Actions</div>
-            <div class="action-row">
-              <button
-                v-if="disk.can_unmount"
-                class="action-btn"
-                :disabled="actionBusy === diskKey(disk)"
-                title="Unmount this drive"
-                @click="confirmUnmount(disk)"
-              >
-                unmount
-              </button>
-              <span v-else class="action-locked" :title="`${disk.bus_type.toUpperCase()} drives cannot be unmounted`">
-                unmount unavailable
-              </span>
-              <button
-                class="action-btn"
-                :disabled="actionBusy === diskKey(disk)"
-                @click="runCheck(disk)"
-              >
-                check filesystem
-              </button>
+          <div v-if="expandedKey === diskKey(disk)" class="disk-expanded">
+
+            <!-- SMART info -->
+            <div v-if="disk.smart" class="smart-panel">
+              <div class="panel-label">SMART</div>
+              <div v-if="disk.smart.error && !disk.smart.model" class="smart-error">
+                {{ disk.smart.error }}
+              </div>
+              <div v-else class="smart-grid">
+                <div class="smart-item">
+                  <span class="si-label">model</span>
+                  <span class="si-val">{{ disk.smart.model || '—' }}</span>
+                </div>
+                <div class="smart-item">
+                  <span class="si-label">serial</span>
+                  <span class="si-val mono">{{ disk.smart.serial || '—' }}</span>
+                </div>
+                <div class="smart-item">
+                  <span class="si-label">firmware</span>
+                  <span class="si-val mono">{{ disk.smart.firmware || '—' }}</span>
+                </div>
+                <div class="smart-item">
+                  <span class="si-label">health</span>
+                  <span :class="['si-val', 'si-health', smartHealthClass(disk.smart.health)]">
+                    {{ disk.smart.health }}
+                  </span>
+                </div>
+                <div v-if="disk.smart.temperature_c != null" class="smart-item">
+                  <span class="si-label">temperature</span>
+                  <span class="si-val">{{ disk.smart.temperature_c }}°C</span>
+                </div>
+                <div v-if="disk.smart.power_on_hours != null" class="smart-item">
+                  <span class="si-label">power-on</span>
+                  <span class="si-val">{{ fmtHours(disk.smart.power_on_hours) }}</span>
+                </div>
+                <div v-if="disk.smart.reallocated_sectors != null" class="smart-item">
+                  <span class="si-label">bad sectors</span>
+                  <span :class="['si-val', disk.smart.reallocated_sectors > 0 ? 'text-danger' : '']">
+                    {{ disk.smart.reallocated_sectors }}
+                  </span>
+                </div>
+                <div v-if="disk.smart.pending_sectors != null" class="smart-item">
+                  <span class="si-label">pending</span>
+                  <span :class="['si-val', disk.smart.pending_sectors > 0 ? 'text-warning' : '']">
+                    {{ disk.smart.pending_sectors }}
+                  </span>
+                </div>
+                <div v-if="disk.smart.uncorrectable_errors != null" class="smart-item">
+                  <span class="si-label">uncorrectable</span>
+                  <span :class="['si-val', disk.smart.uncorrectable_errors > 0 ? 'text-danger' : '']">
+                    {{ disk.smart.uncorrectable_errors }}
+                  </span>
+                </div>
+                <div class="smart-item">
+                  <span class="si-label">last scan</span>
+                  <span class="si-val si-dim">{{ fmtChecked(disk.smart.last_checked) }}</span>
+                </div>
+              </div>
             </div>
-            <div v-if="actionOutput[diskKey(disk)]" class="action-output" :class="{ 'output-error': actionError[diskKey(disk)] }">
-              <pre>{{ actionOutput[diskKey(disk)] }}</pre>
+            <div v-else class="smart-panel smart-unavailable">
+              <div class="panel-label">SMART</div>
+              <span class="smart-na">not yet scanned — click "scan SMART" above</span>
             </div>
+
+            <!-- Extra mounts -->
+            <div v-if="disk.extra_mounts.length" class="mounts-panel">
+              <div class="panel-label">also mounted at</div>
+              <div class="mount-list">
+                <span v-for="m in disk.extra_mounts" :key="m" class="mount-entry">{{ m }}</span>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions-panel">
+              <div class="panel-label">Actions</div>
+              <div class="action-row">
+                <button
+                  v-if="disk.can_unmount"
+                  class="action-btn"
+                  :disabled="actionBusy === diskKey(disk)"
+                  @click="confirmUnmount(disk)"
+                >unmount</button>
+                <span v-else class="action-locked" :title="`${disk.bus_type.toUpperCase()} drives cannot be unmounted`">
+                  unmount unavailable
+                </span>
+                <button
+                  class="action-btn"
+                  :disabled="actionBusy === diskKey(disk)"
+                  @click="runCheck(disk)"
+                >check filesystem</button>
+              </div>
+              <div v-if="actionOutput[diskKey(disk)]" class="action-output" :class="{ 'output-error': actionError[diskKey(disk)] }">
+                <pre>{{ actionOutput[diskKey(disk)] }}</pre>
+              </div>
+            </div>
+
           </div>
         </Transition>
       </div>
@@ -154,6 +244,7 @@ const confirmDisk = ref<DiskInfo | null>(null)
 const actionBusy = ref<string | null>(null)
 const actionOutput = ref<Record<string, string>>({})
 const actionError = ref<Record<string, boolean>>({})
+const smartBusy = ref(false)
 
 const tabs = [
   { key: 'physical' as const, label: 'Physical' },
@@ -191,6 +282,16 @@ async function load() {
   }
 }
 
+async function runSmartScan() {
+  smartBusy.value = true
+  try {
+    await disksApi.refreshSmart()
+    await load()
+  } catch { /* ignore */ } finally {
+    smartBusy.value = false
+  }
+}
+
 function toggleExpand(disk: DiskInfo) {
   const k = diskKey(disk)
   expandedKey.value = expandedKey.value === k ? null : k
@@ -206,6 +307,26 @@ function pctClass(pct: number) {
   if (pct < 70) return 'badge-green'
   if (pct < 85) return 'badge-yellow'
   return 'badge-red'
+}
+
+function smartHealthClass(health: string) {
+  if (health === 'PASSED') return 'badge-health-ok'
+  if (health === 'FAILED') return 'badge-health-fail'
+  return 'badge-health-unknown'
+}
+
+function fmtHours(h: number) {
+  if (h < 24) return `${h}h`
+  const days = Math.floor(h / 24)
+  if (days < 365) return `${days}d`
+  return `${(days / 365).toFixed(1)}y`
+}
+
+function fmtChecked(iso: string) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString()
+  } catch { return iso }
 }
 
 function metricsRead(device: string): number {
@@ -276,6 +397,8 @@ onMounted(load)
 .page-subtitle { font-size: 11px; color: var(--fg-dim); margin-top: 3px; }
 .virtual-hint { color: var(--fg-dim); font-style: italic; }
 
+.header-actions { display: flex; gap: 8px; }
+
 .refresh-btn {
   background: none; border: 1px solid var(--border); color: var(--fg-muted);
   font-family: var(--font); font-size: 11px; padding: 5px 12px; border-radius: 3px;
@@ -319,38 +442,39 @@ onMounted(load)
   padding: 14px 16px; cursor: pointer;
 }
 
-.disk-left { min-width: 180px; }
+.disk-left { min-width: 200px; }
 .disk-device { font-size: 13px; font-weight: 600; color: var(--fg); margin-bottom: 4px; }
-.disk-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.disk-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .meta-badge {
   font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
   background: var(--bg-badge); border: 1px solid var(--border); color: var(--fg-muted);
   padding: 1px 6px; border-radius: 3px;
 }
 .badge-removable { color: var(--warning); border-color: rgba(255,170,0,0.3); background: var(--warning-dim); }
-
-.badge-bus-usb  { color: var(--accent);  border-color: var(--accent-border); background: var(--accent-dim); }
-.badge-bus-mmc  { color: var(--accent);  border-color: var(--accent-border); background: var(--accent-dim); }
-.badge-bus-nvme { color: var(--info);    border-color: rgba(68,136,255,0.25); background: rgba(68,136,255,0.08); }
-.badge-bus-sata { color: var(--fg-muted); border-color: var(--border); background: var(--bg-badge); }
+.badge-bus-usb   { color: var(--accent);  border-color: var(--accent-border); background: var(--accent-dim); }
+.badge-bus-mmc   { color: var(--accent);  border-color: var(--accent-border); background: var(--accent-dim); }
+.badge-bus-nvme  { color: var(--info);    border-color: rgba(68,136,255,0.25); background: rgba(68,136,255,0.08); }
+.badge-bus-sata  { color: var(--fg-muted); border-color: var(--border); background: var(--bg-badge); }
 .badge-bus-virtual { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
 .badge-bus-unknown { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
+.badge-health-ok   { color: var(--accent); border-color: var(--accent-border); background: var(--accent-dim); }
+.badge-health-fail { color: var(--danger); border-color: rgba(255,68,68,0.3); background: var(--danger-dim); }
+.badge-health-unknown { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
+.badge-temp { color: var(--fg-muted); }
 
-.action-locked {
-  font-size: 11px; color: var(--fg-dim); padding: 5px 12px;
-  border: 1px dashed var(--border); border-radius: 3px;
-  cursor: not-allowed; user-select: none;
-}
+.disk-mount-row { display: flex; align-items: center; gap: 8px; }
 .disk-mount { font-size: 10px; color: var(--fg-dim); }
+.extra-mounts {
+  font-size: 9px; color: var(--fg-dim); background: var(--bg-badge);
+  border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px;
+}
 
 .disk-right { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .disk-usage-row { display: flex; align-items: baseline; justify-content: space-between; }
 .usage-numbers { font-size: 12px; }
 .used-val { font-weight: 700; color: var(--accent); font-size: 14px; }
 .sep { color: var(--fg-dim); }
-.pct-badge {
-  font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
-}
+.pct-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; }
 .badge-green { background: var(--accent-dim); color: var(--accent); }
 .badge-yellow { background: var(--warning-dim); color: var(--warning); }
 .badge-red { background: var(--danger-dim); color: var(--danger); }
@@ -370,14 +494,54 @@ onMounted(load)
 }
 .expand-arrow.rotated { transform: rotate(90deg); color: var(--accent); }
 
-/* Actions panel */
-.disk-actions {
+/* Expanded panel sections */
+.disk-expanded {
   border-top: 1px solid var(--border-subtle);
-  padding: 12px 16px;
   background: var(--bg-subtle);
+  display: flex; flex-direction: column; gap: 0;
+}
+
+.panel-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--fg-dim); margin-bottom: 8px;
+}
+
+/* SMART panel */
+.smart-panel {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.smart-unavailable .smart-na { font-size: 11px; color: var(--fg-dim); }
+.smart-error { font-size: 11px; color: var(--danger); }
+
+.smart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px 16px;
+}
+.smart-item { display: flex; flex-direction: column; gap: 2px; }
+.si-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
+.si-val { font-size: 11px; color: var(--fg-muted); }
+.si-val.mono { font-family: var(--font); letter-spacing: 0.04em; }
+.si-val.si-dim { color: var(--fg-dim); font-size: 10px; }
+.si-health.badge-health-ok   { color: var(--accent); font-weight: 700; }
+.si-health.badge-health-fail { color: var(--danger); font-weight: 700; }
+.text-danger { color: var(--danger) !important; }
+.text-warning { color: var(--warning) !important; }
+
+/* Extra mounts panel */
+.mounts-panel {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mount-list { display: flex; flex-direction: column; gap: 3px; }
+.mount-entry { font-size: 11px; color: var(--fg-dim); font-family: var(--font); }
+
+/* Actions panel */
+.actions-panel {
+  padding: 12px 16px;
   display: flex; flex-direction: column; gap: 10px;
 }
-.actions-header { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-dim); }
 .action-row { display: flex; gap: 8px; }
 
 .action-btn {
@@ -387,6 +551,11 @@ onMounted(load)
 }
 .action-btn:hover:not(:disabled) { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.action-locked {
+  font-size: 11px; color: var(--fg-dim); padding: 5px 12px;
+  border: 1px dashed var(--border); border-radius: 3px;
+  cursor: not-allowed; user-select: none;
+}
 
 .action-output {
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -401,7 +570,7 @@ onMounted(load)
 /* Transition */
 .expand-enter-active, .expand-leave-active { transition: all var(--transition); overflow: hidden; }
 .expand-enter-from, .expand-leave-to { opacity: 0; max-height: 0; }
-.expand-enter-to, .expand-leave-from { opacity: 1; max-height: 400px; }
+.expand-enter-to, .expand-leave-from { opacity: 1; max-height: 600px; }
 
 /* Modal */
 .modal-overlay {

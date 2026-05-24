@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import shutil
+from itertools import groupby
 
 import psutil
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 
 from app.core.dependencies import get_current_user
 from app.models.user import User
+from app.services import smart as smart_svc
 
 router = APIRouter(prefix="/disks", tags=["disks"])
 
@@ -25,9 +27,25 @@ _VIRTUAL_FSTYPES = {
 }
 
 
+class SmartResult(BaseModel):
+    model: str
+    serial: str
+    firmware: str
+    health: str
+    temperature_c: int | None
+    power_on_hours: int | None
+    reallocated_sectors: int | None
+    pending_sectors: int | None
+    uncorrectable_errors: int | None
+    last_checked: str
+    error: str | None
+
+
 class DiskInfo(BaseModel):
     device: str
     mountpoint: str
+    extra_mounts: list[str]
+    physical_device: str
     fstype: str
     opts: str
     total_gb: float
@@ -40,6 +58,7 @@ class DiskInfo(BaseModel):
     is_virtual: bool
     can_unmount: bool
     bus_type: str
+    smart: SmartResult | None
 
 
 class UnmountRequest(BaseModel):
@@ -59,10 +78,6 @@ def _is_virtual(device: str, fstype: str) -> bool:
 
 
 def _get_bus_type(device: str) -> str:
-    """Determine connection bus via sysfs.
-
-    Returns 'usb', 'nvme', 'sata', 'mmc', 'virtual', or 'unknown'.
-    """
     dev = device.replace("/dev/", "")
     if dev.startswith("nvme"):
         return "nvme"
@@ -70,7 +85,6 @@ def _get_bus_type(device: str) -> str:
         return "mmc"
     if dev.startswith("loop"):
         return "virtual"
-    # Strip partition suffix: sda1 → sda, sdb2 → sdb
     base = re.sub(r"\d+$", "", dev)
     sys_path = f"/sys/block/{base}"
     if not os.path.exists(sys_path):
@@ -102,38 +116,95 @@ def _is_removable(device: str, mountpoint: str) -> bool:
     return not_standard and not_system_mount
 
 
+def _smart_response(phys: str) -> SmartResult | None:
+    r = smart_svc.get_cache().get(phys)
+    if r is None:
+        return None
+    return SmartResult(
+        model=r.model,
+        serial=r.serial,
+        firmware=r.firmware,
+        health=r.health,
+        temperature_c=r.temperature_c,
+        power_on_hours=r.power_on_hours,
+        reallocated_sectors=r.reallocated_sectors,
+        pending_sectors=r.pending_sectors,
+        uncorrectable_errors=r.uncorrectable_errors,
+        last_checked=r.last_checked,
+        error=r.error,
+    )
+
+
+def _primary_mount(mounts: list[str]) -> str:
+    if "/" in mounts:
+        return "/"
+    return min(mounts, key=len)
+
+
 @router.get("", response_model=list[DiskInfo])
 async def list_disks(_: User = Depends(get_current_user)):
     loop = asyncio.get_event_loop()
-
     partitions = await loop.run_in_executor(None, lambda: psutil.disk_partitions(all=False))
 
-    results: list[DiskInfo] = []
+    raw: list[tuple] = []
     for p in partitions:
         try:
             usage = await loop.run_in_executor(None, lambda mp=p.mountpoint: psutil.disk_usage(mp))
+            raw.append((p, usage))
         except PermissionError:
             continue
 
-        fstype = p.fstype or "unknown"
+    # Deduplicate: same device can be bind-mounted at multiple paths
+    raw.sort(key=lambda t: t[0].device)
+    results: list[DiskInfo] = []
+
+    for device, group in groupby(raw, key=lambda t: t[0].device):
+        group_list = list(group)
+        mounts = [t[0].mountpoint for t in group_list]
+        primary_mp = _primary_mount(mounts)
+        extra_mounts = [m for m in mounts if m != primary_mp]
+
+        primary_part, primary_usage = next(t for t in group_list if t[0].mountpoint == primary_mp)
+        fstype = primary_part.fstype or "unknown"
+        phys = smart_svc.physical_device(device)
+
         results.append(DiskInfo(
-            device=p.device,
-            mountpoint=p.mountpoint,
+            device=device,
+            mountpoint=primary_mp,
+            extra_mounts=extra_mounts,
+            physical_device=phys,
             fstype=fstype,
-            opts=p.opts or "",
-            total_gb=usage.total / _GB,
-            used_gb=usage.used / _GB,
-            free_gb=usage.free / _GB,
-            usage_percent=usage.percent,
+            opts=primary_part.opts or "",
+            total_gb=primary_usage.total / _GB,
+            used_gb=primary_usage.used / _GB,
+            free_gb=primary_usage.free / _GB,
+            usage_percent=primary_usage.percent,
             read_mb_s=0.0,
             write_mb_s=0.0,
-            is_removable=_is_removable(p.device, p.mountpoint),
-            is_virtual=_is_virtual(p.device, fstype),
-            can_unmount=_can_unmount(p.device, p.mountpoint),
-            bus_type=_get_bus_type(p.device),
+            is_removable=_is_removable(device, primary_mp),
+            is_virtual=_is_virtual(device, fstype),
+            can_unmount=_can_unmount(device, primary_mp),
+            bus_type=_get_bus_type(device),
+            smart=_smart_response(phys),
         ))
 
     return results
+
+
+@router.post("/smart/refresh", response_model=list[SmartResult])
+async def refresh_smart(_: User = Depends(get_current_user)):
+    """Trigger an immediate SMART scan of all physical drives."""
+    await smart_svc.scan_all()
+    return [
+        SmartResult(
+            model=r.model, serial=r.serial, firmware=r.firmware,
+            health=r.health, temperature_c=r.temperature_c,
+            power_on_hours=r.power_on_hours, reallocated_sectors=r.reallocated_sectors,
+            pending_sectors=r.pending_sectors, uncorrectable_errors=r.uncorrectable_errors,
+            last_checked=r.last_checked, error=r.error,
+        )
+        for r in smart_svc.get_cache().values()
+    ]
 
 
 @router.post("/unmount", response_model=ActionResponse)

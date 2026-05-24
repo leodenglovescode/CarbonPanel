@@ -98,9 +98,25 @@ export const systemApi = {
   installUpdate: () => api.post<{ success: boolean; message: string }>('/system/install-update'),
 }
 
+export interface SmartResult {
+  model: string
+  serial: string
+  firmware: string
+  health: string        // "PASSED" | "FAILED" | "UNKNOWN"
+  temperature_c: number | null
+  power_on_hours: number | null
+  reallocated_sectors: number | null
+  pending_sectors: number | null
+  uncorrectable_errors: number | null
+  last_checked: string
+  error: string | null
+}
+
 export interface DiskInfo {
   device: string
   mountpoint: string
+  extra_mounts: string[]
+  physical_device: string
   fstype: string
   opts: string
   total_gb: number
@@ -113,6 +129,7 @@ export interface DiskInfo {
   is_virtual: boolean
   can_unmount: boolean
   bus_type: string
+  smart: SmartResult | null
 }
 
 export interface AppInfo {
@@ -135,6 +152,7 @@ export const disksApi = {
   list: () => api.get<DiskInfo[]>('/disks'),
   unmount: (mountpoint: string) => api.post<ApiActionResponse>('/disks/unmount', { mountpoint }),
   check: (mountpoint: string) => api.post<ApiActionResponse>('/disks/check', { mountpoint }),
+  refreshSmart: () => api.post<SmartResult[]>('/disks/smart/refresh'),
 }
 
 export const appsApi = {
