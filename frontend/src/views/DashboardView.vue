@@ -33,7 +33,7 @@
         class="grid-item"
         :class="{ 'edit-widget': editMode, 'is-active': editMode && drag?.id === w.id }"
         :style="gridItemStyle(w.id)"
-        @mousedown.left.prevent="editMode ? startDrag(w.id, $event) : undefined"
+        @mousedown.left="editMode ? (($event as MouseEvent).preventDefault(), startDrag(w.id, $event)) : undefined"
       >
         <div class="widget-body" :class="{ 'no-pe': editMode }">
           <component :is="w.comp" v-bind="w.props" />
