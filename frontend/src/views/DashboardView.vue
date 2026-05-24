@@ -35,7 +35,7 @@
         :style="gridItemStyle(w.id)"
         @mousedown.left.prevent="editMode ? startDrag(w.id, $event) : undefined"
       >
-        <div :class="{ 'widget-body': editMode }">
+        <div class="widget-body" :class="{ 'no-pe': editMode }">
           <component :is="w.comp" v-bind="w.props" />
         </div>
         <template v-if="editMode">
@@ -415,16 +415,17 @@ const sortedWidgets = computed(() =>
 .toolbar-enter-active, .toolbar-leave-active { transition: opacity 150ms, transform 150ms; }
 .toolbar-enter-from, .toolbar-leave-to { opacity: 0; transform: translateY(-6px); }
 
-/* Widget inner content: disable pointer events while editing */
+/* Widget body — always present so card height matches the grid cell in both modes */
 .widget-body {
   width: 100%;
   height: 100%;
-  pointer-events: none;
   overflow: hidden;
   border-radius: calc(var(--radius) - 2px);
 }
+/* Disable interaction only while editing */
+.no-pe { pointer-events: none; }
 
-/* Force BaseCard to fill widget height and distribute space to its body */
+/* Force BaseCard to fill the cell and flex its body */
 .widget-body :deep(.card) {
   height: 100%;
   display: flex;
@@ -432,6 +433,8 @@ const sortedWidgets = computed(() =>
 }
 .widget-body :deep(.card-body) {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   min-height: 0;
 }

@@ -72,7 +72,7 @@ function sparkMax(iface: string, dir: 'rx' | 'tx') {
 <style scoped>
 .card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
 
-.net-list { display: flex; flex-direction: column; gap: 10px; }
+.net-list { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow: auto; min-height: 0; }
 .net-row {
   display: grid;
   /* iface-name can shrink; totals/sparklines hidden via @container below */
