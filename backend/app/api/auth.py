@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -18,9 +18,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse | TOTPRequiredResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    request_data: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
     try:
-        return await auth_service.login(request, db)
+        return await auth_service.login(request_data, db, ip_address=ip, user_agent=ua)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -29,12 +35,20 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login/totp", response_model=TokenResponse)
-async def login_totp(request: TOTPLoginRequest, db: AsyncSession = Depends(get_db)):
+async def login_totp(
+    request_data: TOTPLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
     try:
         return await auth_service.login_totp(
-            request.session_token,
-            request.totp_code,
+            request_data.session_token,
+            request_data.totp_code,
             db,
+            ip_address=ip,
+            user_agent=ua,
         )
     except ValueError as exc:
         raise HTTPException(

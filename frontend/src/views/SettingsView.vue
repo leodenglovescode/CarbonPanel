@@ -760,6 +760,56 @@
         </div>
 
         <!-- Proxy Section -->
+        <!-- Devices Section -->
+        <div id="section-devices" class="section">
+          <div class="section-header">
+            <span class="section-title">Active Sessions</span>
+            <span class="badge badge-gray">{{ devices.length }}</span>
+          </div>
+          <p class="section-desc">
+            Devices currently signed in. Revoking a session immediately invalidates that login token.
+          </p>
+          <div v-if="devicesLoading" class="section-loading">Loading…</div>
+          <div v-else-if="!devices.length" class="section-empty">No active sessions.</div>
+          <div v-else class="device-list">
+            <div v-for="dev in devices" :key="dev.id" class="device-row">
+              <div class="device-info">
+                <span class="device-name">{{ dev.name }}</span>
+                <span class="device-meta">{{ dev.ip_address || 'unknown IP' }} · last seen {{ fmtDate(dev.last_seen) }}</span>
+              </div>
+              <button class="revoke-btn" @click="revokeDevice(dev.id)">Revoke</button>
+            </div>
+          </div>
+          <p v-if="devicesError" class="error-msg">{{ devicesError }}</p>
+        </div>
+
+        <!-- Passkeys Section -->
+        <div id="section-passkeys" class="section">
+          <div class="section-header">
+            <span class="section-title">Passkeys</span>
+            <span class="badge badge-gray">{{ passkeys.length }}</span>
+          </div>
+          <p class="section-desc">
+            Sign in with a hardware key, Face ID, or fingerprint — no password needed.
+          </p>
+          <div v-if="passkeysLoading" class="section-loading">Loading…</div>
+          <div v-else-if="!passkeys.length" class="section-empty">No passkeys registered.</div>
+          <div v-else class="device-list">
+            <div v-for="pk in passkeys" :key="pk.id" class="device-row">
+              <span class="device-name">{{ pk.device_name }}</span>
+              <button class="revoke-btn" @click="deletePasskey(pk.id)">Remove</button>
+            </div>
+          </div>
+          <p v-if="passkeysError" class="error-msg">{{ passkeysError }}</p>
+          <p v-if="passkeysSuccess" class="success-msg">{{ passkeysSuccess }}</p>
+          <div class="passkey-add-row">
+            <input v-model="newPasskeyName" placeholder="Device label (e.g. YubiKey 5)" class="pk-name-input" />
+            <BaseButton variant="ghost" :disabled="pkRegistering" @click="registerPasskey">
+              {{ pkRegistering ? 'Registering…' : 'Register passkey' }}
+            </BaseButton>
+          </div>
+        </div>
+
         <div id="section-proxy" class="section">
           <div class="section-header">
             <span class="section-title">Outbound Proxy</span>
@@ -836,7 +886,7 @@ import { useBackgroundStore } from '@/stores/background'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, passkeysApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PasskeyCredential } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -863,6 +913,8 @@ const navSections = [
   { id: 'section-account',    label: 'Account' },
   { id: 'section-language',   label: t('settings.language') },
   { id: 'section-webhooks',   label: t('settings.webhooks') },
+  { id: 'section-devices',    label: 'Sessions' },
+  { id: 'section-passkeys',   label: 'Passkeys' },
   { id: 'section-proxy',      label: 'Proxy' },
 ]
 
@@ -1240,6 +1292,121 @@ async function testWebhook(wh: WebhookResponse) {
   }
 }
 
+// ── Devices ────────────────────────────────────────────────────────────────────
+
+const devices = ref<DeviceInfo[]>([])
+const devicesLoading = ref(false)
+const devicesError = ref('')
+
+async function loadDevices() {
+  devicesLoading.value = true
+  try {
+    const { data } = await devicesApi.list()
+    devices.value = data
+  } catch { /* ignore */ } finally {
+    devicesLoading.value = false
+  }
+}
+
+async function revokeDevice(id: string) {
+  try {
+    await devicesApi.revoke(id)
+    devices.value = devices.value.filter(d => d.id !== id)
+  } catch (e: any) {
+    devicesError.value = e.response?.data?.detail || 'Failed to revoke session.'
+  }
+}
+
+function fmtDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString()
+  } catch { return iso }
+}
+
+// ── Passkeys ───────────────────────────────────────────────────────────────────
+
+const passkeys = ref<PasskeyCredential[]>([])
+const passkeysLoading = ref(false)
+const passkeysError = ref('')
+const passkeysSuccess = ref('')
+const pkRegistering = ref(false)
+const newPasskeyName = ref('')
+
+async function loadPasskeys() {
+  passkeysLoading.value = true
+  try {
+    const { data } = await passkeysApi.list()
+    passkeys.value = data
+  } catch { /* ignore */ } finally {
+    passkeysLoading.value = false
+  }
+}
+
+async function deletePasskey(id: string) {
+  try {
+    await passkeysApi.delete(id)
+    passkeys.value = passkeys.value.filter(p => p.id !== id)
+  } catch (e: any) {
+    passkeysError.value = e.response?.data?.detail || 'Failed to remove passkey.'
+  }
+}
+
+function b64urlToBuffer(b64: string): ArrayBuffer {
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'))
+  const buf = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+  return buf.buffer
+}
+
+function bufferToB64url(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let bin = ''
+  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+async function registerPasskey() {
+  passkeysError.value = ''
+  passkeysSuccess.value = ''
+  pkRegistering.value = true
+  try {
+    const { data: opts } = await passkeysApi.registerBegin()
+    // Convert base64url fields to ArrayBuffer
+    const pubKeyOpts: PublicKeyCredentialCreationOptions = {
+      ...(opts as any),
+      challenge: b64urlToBuffer((opts as any).challenge),
+      user: {
+        ...(opts as any).user,
+        id: b64urlToBuffer((opts as any).user.id),
+      },
+      excludeCredentials: ((opts as any).excludeCredentials || []).map((c: any) => ({
+        ...c,
+        id: b64urlToBuffer(c.id),
+      })),
+    }
+    const cred = await navigator.credentials.create({ publicKey: pubKeyOpts }) as PublicKeyCredential
+    if (!cred) throw new Error('No credential returned')
+    const response = cred.response as AuthenticatorAttestationResponse
+    const credJson = {
+      id: cred.id,
+      rawId: bufferToB64url(cred.rawId),
+      type: cred.type,
+      response: {
+        clientDataJSON: bufferToB64url(response.clientDataJSON),
+        attestationObject: bufferToB64url(response.attestationObject),
+      },
+    }
+    await passkeysApi.registerComplete(credJson, newPasskeyName.value || 'Passkey')
+    passkeysSuccess.value = 'Passkey registered successfully.'
+    newPasskeyName.value = ''
+    await loadPasskeys()
+  } catch (e: any) {
+    passkeysError.value = e.response?.data?.detail || e.message || 'Registration failed.'
+  } finally {
+    pkRegistering.value = false
+  }
+}
+
 // ── Proxy ──────────────────────────────────────────────────────────────────────
 
 const proxy = ref<ProxyConfig>({ enabled: false, type: 'http', host: '127.0.0.1', port: 7890 })
@@ -1292,6 +1459,8 @@ onMounted(() => {
   void loadVersionInfo()
   void loadWebhooks()
   void loadProxy()
+  void loadDevices()
+  void loadPasskeys()
 })
 </script>
 
@@ -1766,4 +1935,51 @@ onMounted(() => {
 .proxy-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .proxy-field-port { max-width: 110px; }
 .proxy-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* Devices / Passkeys sections */
+.section-loading { font-size: 11px; color: var(--fg-dim); }
+.section-empty { font-size: 11px; color: var(--fg-dim); }
+.device-list { display: flex; flex-direction: column; gap: 8px; }
+.device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  gap: 10px;
+}
+.device-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.device-name { font-size: 12px; color: var(--fg); }
+.device-meta { font-size: 10px; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.revoke-btn {
+  background: none;
+  border: 1px solid rgba(255,68,68,0.3);
+  color: var(--danger);
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.revoke-btn:hover { background: var(--danger-dim); border-color: rgba(255,68,68,0.5); }
+
+.passkey-add-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.pk-name-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.pk-name-input:focus { border-color: var(--accent-border); }
 </style>

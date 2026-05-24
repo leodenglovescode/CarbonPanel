@@ -72,6 +72,7 @@ import SystemWidget from '@/components/widgets/SystemWidget.vue'
 import CpuTempWidget from '@/components/widgets/CpuTempWidget.vue'
 import HistoryWidget from '@/components/widgets/HistoryWidget.vue'
 import BandwidthWidget from '@/components/widgets/BandwidthWidget.vue'
+import BookmarksWidget from '@/components/widgets/BookmarksWidget.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useLayoutStore, type WidgetId } from '@/stores/layout'
@@ -85,6 +86,7 @@ const historyPoints = ref<HistoryPoint[]>([])
 
 onMounted(async () => {
   connect()
+  layoutStore.loadRemote()
   try {
     const { data } = await metricsApi.history()
     historyPoints.value = data
@@ -319,18 +321,22 @@ watchEffect(() => {
 
 const visibleWidgets = computed(() => {
   const m = metrics.latest
-  if (!m) return []
+  const always = [
+    { id: 'bookmarks' as WidgetId, comp: BookmarksWidget, props: {}, show: true },
+  ]
+  if (!m) return always.filter(w => w.show)
   return [
-    { id: 'cpu'       as WidgetId, comp: CpuWidget,         props: { cpu: m.cpu, history: metrics.cpuHistory },                                            show: true },
-    { id: 'ram'       as WidgetId, comp: RamWidget,         props: { mem: m.memory, history: metrics.memHistory },                                         show: true },
-    { id: 'gpu'       as WidgetId, comp: GpuWidget,         props: { gpu: m.gpu, history: metrics.gpuHistory },                                            show: m.gpu.available },
-    { id: 'system'    as WidgetId, comp: SystemWidget,      props: { system: m.system, cpu: m.cpu },                                                       show: true },
-    { id: 'disk'      as WidgetId, comp: DiskWidget,        props: { disks: m.disks },                                                                     show: true },
-    { id: 'network'   as WidgetId, comp: NetworkWidget,     props: { network: m.network, rxHistory: metrics.netRxHistory, txHistory: metrics.netTxHistory }, show: true },
-    { id: 'cpuTemp'   as WidgetId, comp: CpuTempWidget,     props: { temps: m.cpu.temps },                                                                 show: m.cpu.temps.length > 0 },
-    { id: 'bandwidth' as WidgetId, comp: BandwidthWidget,   props: { network: m.network },                                                                 show: true },
-    { id: 'history'   as WidgetId, comp: HistoryWidget,     props: { points: historyPoints.value },                                                        show: true },
-    { id: 'processes' as WidgetId, comp: ProcessListWidget, props: { processes: m.processes, onSortChange },                                               show: true },
+    ...always,
+    { id: 'cpu'       as WidgetId, comp: CpuWidget,         props: { cpu: m.cpu, history: metrics.cpuHistory },                                              show: true },
+    { id: 'ram'       as WidgetId, comp: RamWidget,         props: { mem: m.memory, history: metrics.memHistory },                                           show: true },
+    { id: 'gpu'       as WidgetId, comp: GpuWidget,         props: { gpu: m.gpu, history: metrics.gpuHistory },                                              show: m.gpu.available },
+    { id: 'system'    as WidgetId, comp: SystemWidget,      props: { system: m.system, cpu: m.cpu },                                                         show: true },
+    { id: 'disk'      as WidgetId, comp: DiskWidget,        props: { disks: m.disks },                                                                       show: true },
+    { id: 'network'   as WidgetId, comp: NetworkWidget,     props: { network: m.network, rxHistory: metrics.netRxHistory, txHistory: metrics.netTxHistory },  show: true },
+    { id: 'cpuTemp'   as WidgetId, comp: CpuTempWidget,     props: { temps: m.cpu.temps },                                                                   show: m.cpu.temps.length > 0 },
+    { id: 'bandwidth' as WidgetId, comp: BandwidthWidget,   props: { network: m.network },                                                                   show: true },
+    { id: 'history'   as WidgetId, comp: HistoryWidget,     props: { points: historyPoints.value },                                                          show: true },
+    { id: 'processes' as WidgetId, comp: ProcessListWidget, props: { processes: m.processes, onSortChange },                                                  show: true },
   ].filter(w => w.show)
 })
 

@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -19,6 +20,7 @@ def create_access_token(
     username: str,
     scope: str = "full",
     expires_minutes: int | None = None,
+    jti: str | None = None,
 ) -> str:
     if expires_minutes is None:
         expires_minutes = settings.access_token_expire_minutes
@@ -30,6 +32,8 @@ def create_access_token(
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
+    if scope == "full":
+        payload["jti"] = jti or str(uuid.uuid4())
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 

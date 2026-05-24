@@ -216,6 +216,56 @@ export const proxyApi = {
   test: () => api.post<{ success: boolean; message: string }>('/settings/proxy/test'),
 }
 
+export interface DeviceInfo {
+  id: string
+  name: string
+  ip_address: string | null
+  last_seen: string
+  created_at: string
+}
+
+export const devicesApi = {
+  list: () => api.get<DeviceInfo[]>('/devices'),
+  revoke: (id: string) => api.delete(`/devices/${id}`),
+}
+
+export interface BookmarkInfo {
+  id: string
+  title: string
+  url: string
+  icon_url: string | null
+  sort_order: number
+}
+
+export const bookmarksApi = {
+  list: () => api.get<BookmarkInfo[]>('/bookmarks'),
+  create: (data: Omit<BookmarkInfo, 'id'>) => api.post<BookmarkInfo>('/bookmarks', data),
+  update: (id: string, data: Omit<BookmarkInfo, 'id'>) => api.put<BookmarkInfo>(`/bookmarks/${id}`, data),
+  delete: (id: string) => api.delete(`/bookmarks/${id}`),
+}
+
+export const dashboardApi = {
+  getLayout: () => api.get<{ layout: Record<string, object> } | null>('/dashboard/layout'),
+  saveLayout: (layout: Record<string, object>) => api.put('/dashboard/layout', { layout }),
+}
+
+export interface PasskeyCredential {
+  id: string
+  device_name: string
+}
+
+export const passkeysApi = {
+  registerBegin: () => api.post('/auth/passkey/register/begin'),
+  registerComplete: (credential: object, device_name: string) =>
+    api.post('/auth/passkey/register/complete', { credential, device_name }),
+  list: () => api.get<PasskeyCredential[]>('/auth/passkey/credentials'),
+  delete: (id: string) => api.delete(`/auth/passkey/credentials/${id}`),
+  loginBegin: (username: string) =>
+    api.post<Record<string, unknown>>('/auth/passkey/login/begin', { username }),
+  loginComplete: (session_id: string, credential: object) =>
+    api.post<{ access_token: string }>('/auth/passkey/login/complete', { session_id, credential }),
+}
+
 export const sitesApi = {
   list: () => api.get<SiteResponse[]>('/sites'),
   get: (id: string) => api.get<SiteResponse>(`/sites/${id}`),

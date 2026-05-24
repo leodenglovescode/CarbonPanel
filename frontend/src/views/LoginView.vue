@@ -29,6 +29,9 @@
         <BaseButton variant="primary" :disabled="loading" style="width:100%; justify-content:center">
           {{ loading ? 'Signing in…' : 'Sign in' }}
         </BaseButton>
+        <button type="button" class="passkey-btn" :disabled="pkLoading" @click="handlePasskey">
+          {{ pkLoading ? 'Waiting for key…' : '🔑 Sign in with passkey' }}
+        </button>
       </form>
 
       <!-- Step 2: TOTP -->
@@ -64,7 +67,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useBackgroundStore } from '@/stores/background'
-import { authApi } from '@/api'
+import { authApi, passkeysApi } from '@/api'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
@@ -104,6 +107,65 @@ async function handleLogin() {
     error.value = e.response?.data?.detail || 'Login failed'
   } finally {
     loading.value = false
+  }
+}
+
+const pkLoading = ref(false)
+
+function b64urlToBuffer(b64: string): ArrayBuffer {
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'))
+  const buf = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+  return buf.buffer
+}
+
+function bufferToB64url(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let bin = ''
+  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+async function handlePasskey() {
+  if (!username.value.trim()) {
+    error.value = 'Enter your username first.'
+    return
+  }
+  error.value = ''
+  pkLoading.value = true
+  try {
+    const { data: opts } = await passkeysApi.loginBegin(username.value.trim())
+    const sessionId = opts.session_id as string
+    const pubKeyOpts: PublicKeyCredentialRequestOptions = {
+      ...(opts as any),
+      challenge: b64urlToBuffer((opts as any).challenge),
+      allowCredentials: ((opts as any).allowCredentials || []).map((c: any) => ({
+        ...c,
+        id: b64urlToBuffer(c.id),
+      })),
+    }
+    const cred = await navigator.credentials.get({ publicKey: pubKeyOpts }) as PublicKeyCredential
+    if (!cred) throw new Error('No credential returned')
+    const response = cred.response as AuthenticatorAssertionResponse
+    const credJson = {
+      id: cred.id,
+      rawId: bufferToB64url(cred.rawId),
+      type: cred.type,
+      response: {
+        clientDataJSON: bufferToB64url(response.clientDataJSON),
+        authenticatorData: bufferToB64url(response.authenticatorData),
+        signature: bufferToB64url(response.signature),
+        userHandle: response.userHandle ? bufferToB64url(response.userHandle) : null,
+      },
+    }
+    const { data } = await passkeysApi.loginComplete(sessionId, credJson)
+    auth.setToken(data.access_token)
+    await auth.loadUser()
+    router.push('/')
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || e.message || 'Passkey login failed'
+  } finally {
+    pkLoading.value = false
   }
 }
 
@@ -184,6 +246,22 @@ async function handleTotp() {
 .totp-hint { font-size: 11px; color: var(--fg-muted); }
 
 .error-msg { font-size: 11px; color: var(--danger); padding: 6px 10px; background: var(--danger-dim); border-radius: var(--radius-sm); border: 1px solid rgba(255,68,68,0.2); }
+
+.passkey-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  transition: all var(--transition);
+}
+.passkey-btn:hover:not(:disabled) { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+.passkey-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .totp-actions { display: flex; gap: 10px; align-items: center; }
 .back-btn {

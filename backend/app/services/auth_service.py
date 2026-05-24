@@ -1,5 +1,6 @@
 import base64
 import io
+import uuid
 
 import pyotp
 import qrcode
@@ -13,6 +14,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.models.device import Device
 from app.models.user import User
 from app.schemas.auth import (
     ChangeProfileRequest,
@@ -23,7 +25,62 @@ from app.schemas.auth import (
 )
 
 
-async def login(request: LoginRequest, db: AsyncSession) -> TokenResponse | TOTPRequiredResponse:
+def _device_name(user_agent: str | None) -> str:
+    if not user_agent:
+        return "Unknown device"
+    ua = user_agent.lower()
+    if "iphone" in ua:
+        os_name = "iPhone"
+    elif "ipad" in ua:
+        os_name = "iPad"
+    elif "android" in ua:
+        os_name = "Android"
+    elif "windows" in ua:
+        os_name = "Windows"
+    elif "mac os" in ua or "macintosh" in ua:
+        os_name = "macOS"
+    elif "linux" in ua:
+        os_name = "Linux"
+    else:
+        os_name = "Unknown"
+    if "edg/" in ua or "edghtml" in ua:
+        browser = "Edge"
+    elif "firefox" in ua:
+        browser = "Firefox"
+    elif "chrome" in ua:
+        browser = "Chrome"
+    elif "safari" in ua:
+        browser = "Safari"
+    else:
+        browser = "Browser"
+    return f"{browser} on {os_name}"
+
+
+async def _record_device(
+    user_id: str,
+    jti: str,
+    ip_address: str | None,
+    user_agent: str | None,
+    db: AsyncSession,
+    name_prefix: str = "",
+) -> None:
+    name = (name_prefix + " " if name_prefix else "") + _device_name(user_agent)
+    device = Device(
+        user_id=user_id,
+        jti=jti,
+        name=name.strip(),
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    db.add(device)
+
+
+async def login(
+    request: LoginRequest,
+    db: AsyncSession,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> TokenResponse | TOTPRequiredResponse:
     result = await db.execute(select(User).where(User.username == request.username))
     user = result.scalar_one_or_none()
 
@@ -39,11 +96,20 @@ async def login(request: LoginRequest, db: AsyncSession) -> TokenResponse | TOTP
         )
         return TOTPRequiredResponse(session_token=session_token)
 
-    token = create_access_token(user_id=user.id, username=user.username)
+    jti = str(uuid.uuid4())
+    token = create_access_token(user_id=user.id, username=user.username, jti=jti)
+    await _record_device(user.id, jti, ip_address, user_agent, db)
+    await db.commit()
     return TokenResponse(access_token=token)
 
 
-async def login_totp(session_token: str, totp_code: str, db: AsyncSession) -> TokenResponse:
+async def login_totp(
+    session_token: str,
+    totp_code: str,
+    db: AsyncSession,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> TokenResponse:
     try:
         payload = decode_token(session_token)
     except ValueError:
@@ -63,7 +129,10 @@ async def login_totp(session_token: str, totp_code: str, db: AsyncSession) -> To
     if not totp.verify(totp_code, valid_window=1):
         raise ValueError("Invalid TOTP code")
 
-    token = create_access_token(user_id=user.id, username=user.username)
+    jti = str(uuid.uuid4())
+    token = create_access_token(user_id=user.id, username=user.username, jti=jti)
+    await _record_device(user.id, jti, ip_address, user_agent, db)
+    await db.commit()
     return TokenResponse(access_token=token)
 
 
