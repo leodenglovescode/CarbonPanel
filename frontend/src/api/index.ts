@@ -84,6 +84,7 @@ export interface SystemVersionResponse {
   checked_at: string | null
   update_available: boolean
   update_in_progress: boolean
+  check_in_progress: boolean
   status: string
   error: string | null
   release_url: string | null

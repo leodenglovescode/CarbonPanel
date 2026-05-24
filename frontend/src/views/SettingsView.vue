@@ -1083,9 +1083,22 @@ async function checkForUpdates() {
 
   try {
     const res = await systemApi.checkUpdates()
-    versionSuccess.value = res.data.message || 'Update check started.'
-    await wait(1200)
-    await loadVersionInfo()
+    versionSuccess.value = res.data.message || 'Checking for updates…'
+
+    // Poll until the check service finishes (up to 45s)
+    const deadline = Date.now() + 45_000
+    while (Date.now() < deadline) {
+      await wait(2000)
+      await loadVersionInfo()
+      const info = versionInfo.value
+      if (!info?.check_in_progress) break
+    }
+
+    if (versionInfo.value?.update_available) {
+      versionSuccess.value = 'Update available!'
+    } else if (!versionInfo.value?.check_in_progress) {
+      versionSuccess.value = 'Already up to date.'
+    }
   } catch (e: any) {
     const detail = e.response?.data?.detail || e.response?.data?.message
     const network = e.code === 'ECONNABORTED'

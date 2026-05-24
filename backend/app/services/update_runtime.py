@@ -21,6 +21,9 @@ DEFAULT_REPO_URL = "https://github.com/leodenglovescode/CarbonPanel"
 GITHUB_API_LATEST = (
     "https://api.github.com/repos/leodenglovescode/CarbonPanel/releases/latest"
 )
+GITHUB_API_COMMITS = (
+    "https://api.github.com/repos/leodenglovescode/CarbonPanel/commits/HEAD"
+)
 
 CHECK_SERVICE = "carbonpanel-update-check.service"
 UPDATE_SERVICE = "carbonpanel-update.service"
@@ -69,12 +72,12 @@ def _is_docker_mode() -> bool:
     return not INSTALL_ROOT.exists()
 
 
-def _fetch_github_release() -> dict[str, Any]:
-    """Fetch latest release from GitHub API. Returns {} on any error."""
+def _github_get(url: str) -> dict[str, Any]:
+    """GET a GitHub API URL. Returns {} on any error (including 404)."""
     from app.services.proxy_service import build_opener
 
     req = urllib.request.Request(
-        GITHUB_API_LATEST,
+        url,
         headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "CarbonPanel"},
     )
     try:
@@ -88,36 +91,63 @@ def _fetch_github_release() -> dict[str, Any]:
         return {}
 
 
+def _fetch_github_release() -> dict[str, Any]:
+    """Fetch latest release. Returns {} if no releases exist."""
+    data = _github_get(GITHUB_API_LATEST)
+    # GitHub returns {"message": "Not Found"} with 404 for repos with no releases
+    if data.get("message") == "Not Found" or not data.get("tag_name"):
+        return {}
+    return data
+
+
+def _fetch_latest_commit_sha() -> str | None:
+    """Return the SHA of the latest commit on the default branch, or None on error."""
+    data = _github_get(GITHUB_API_COMMITS)
+    return data.get("sha") or None
+
+
 # ── Docker-mode version status (GitHub API) ────────────────────────────────────
 
 def _docker_version_status() -> dict[str, Any]:
     current_version = os.getenv("CARBONPANEL_VERSION") or None
+    current_commit = os.getenv("CARBONPANEL_COMMIT") or None
+
     release = _fetch_github_release()
     latest_tag: str | None = release.get("tag_name") or None
 
-    update_available = bool(
-        current_version
-        and latest_tag
-        and current_version.lstrip("v") != latest_tag.lstrip("v")
-    )
+    # When no tagged release exists, fall back to comparing raw commits
+    latest_commit: str | None = None
+    if not latest_tag:
+        latest_commit = _fetch_latest_commit_sha()
+
+    if latest_tag and current_version:
+        update_available = current_version.lstrip("v") != latest_tag.lstrip("v")
+    elif latest_commit and current_commit:
+        update_available = current_commit != latest_commit
+    else:
+        update_available = False
 
     docker_image = "ghcr.io/leodenglovescode/carbonpanel:latest"
+    error: str | None = None
+    if not release and not latest_commit:
+        error = "Could not reach GitHub API"
 
     return {
         "configured": True,
         "repo_url": DEFAULT_REPO_URL,
-        "current_version": current_version,
-        "current_commit": None,
+        "current_version": current_version or current_commit,
+        "current_commit": current_commit,
         "current_source_type": "docker",
         "installed_at": None,
-        "latest_version": latest_tag,
-        "latest_commit": None,
+        "latest_version": latest_tag or latest_commit,
+        "latest_commit": latest_commit,
         "latest_source_type": "docker",
         "checked_at": release.get("published_at"),
         "update_available": update_available,
         "update_in_progress": False,
+        "check_in_progress": False,
         "status": "update-available" if update_available else "up-to-date",
-        "error": None if release else "Could not reach GitHub API",
+        "error": error,
         "release_url": release.get("html_url"),
         "notes_url": release.get("html_url"),
         "deployment_type": "docker",
@@ -131,11 +161,19 @@ def _selfhosted_version_status() -> dict[str, Any]:
     current = _read_json(CURRENT_METADATA_PATH)
     update = _read_json(UPDATE_STATUS_PATH)
 
+    check_in_progress = _service_is_active(CHECK_SERVICE)
     update_in_progress = _service_is_active(UPDATE_SERVICE)
     configured = bool(current) or bool(update) or INSTALL_ROOT.exists()
     status_value = str(
         update.get("status") or ("installing" if update_in_progress else "unknown")
     )
+
+    if update_in_progress:
+        display_status = "installing"
+    elif check_in_progress:
+        display_status = "checking"
+    else:
+        display_status = status_value
 
     return {
         "configured": configured,
@@ -152,7 +190,8 @@ def _selfhosted_version_status() -> dict[str, Any]:
         "checked_at": update.get("checked_at"),
         "update_available": bool(update.get("update_available")),
         "update_in_progress": update_in_progress,
-        "status": "installing" if update_in_progress else status_value,
+        "check_in_progress": check_in_progress,
+        "status": display_status,
         "error": update.get("error"),
         "release_url": update.get("release_url"),
         "notes_url": update.get("notes_url"),
