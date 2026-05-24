@@ -1368,6 +1368,10 @@ function bufferToB64url(buf: ArrayBuffer): string {
 async function registerPasskey() {
   passkeysError.value = ''
   passkeysSuccess.value = ''
+  if (!window.isSecureContext || !navigator.credentials) {
+    passkeysError.value = 'Passkeys require HTTPS. Access this panel over HTTPS or from localhost.'
+    return
+  }
   pkRegistering.value = true
   try {
     const { data: opts } = await passkeysApi.registerBegin()

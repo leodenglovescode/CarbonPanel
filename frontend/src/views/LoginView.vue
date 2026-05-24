@@ -131,6 +131,10 @@ async function handlePasskey() {
     error.value = 'Enter your username first.'
     return
   }
+  if (!window.isSecureContext || !navigator.credentials) {
+    error.value = 'Passkeys require HTTPS. Access this panel over HTTPS or from localhost.'
+    return
+  }
   error.value = ''
   pkLoading.value = true
   try {

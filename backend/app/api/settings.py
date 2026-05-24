@@ -39,25 +39,25 @@ async def update_proxy_settings(config: ProxyConfig, _: User = Depends(get_curre
     return config
 
 
+_PROXY_TEST_URL = "https://api.github.com"
+
+
 def _test_proxy_sync() -> dict:
-    import json
     import urllib.request
-    from app.services.update_runtime import GITHUB_API_LATEST
 
     req = urllib.request.Request(
-        GITHUB_API_LATEST,
+        _PROXY_TEST_URL,
         headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "CarbonPanel"},
     )
     try:
         opener = build_opener()
         if opener:
             with opener.open(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode())
+                resp.read()
         else:
             with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode())
-        tag = data.get("tag_name", "?")
-        return {"success": True, "message": f"Connected — latest release: {tag}"}
+                resp.read()
+        return {"success": True, "message": "Connected to GitHub API successfully"}
     except RuntimeError as exc:
         return {"success": False, "message": str(exc)}
     except Exception as exc:
