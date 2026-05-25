@@ -1134,11 +1134,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # When invoked via pipe (curl | sudo bash) stdin is the pipe, not the terminal.
-# Reopen stdin from /dev/tty so interactive prompts work.
-# Note: do NOT add 2>/dev/null here — it would permanently suppress all stderr.
-exec </dev/tty || true
-
-[[ -z "$COMMAND" ]] && show_menu
+# Reopen stdin from /dev/tty so interactive prompts work. Only needed when no
+# command was given (interactive menu mode) — skip entirely for non-interactive
+# invocations like systemd services where /dev/tty doesn't exist.
+if [[ -z "$COMMAND" ]]; then
+  exec </dev/tty || true
+  show_menu
+fi
 
 case "$COMMAND" in
   install)
