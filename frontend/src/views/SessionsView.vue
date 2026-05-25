@@ -82,4 +82,11 @@ onMounted(load)
 .meta-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
 .meta-item.cmd { flex: 1; min-width: 200px; }
 .meta-item code { font-size: 11px; color: var(--fg-muted); word-break: break-all; }
+
+@media (max-width: 640px) {
+  .sessions-page { padding: 12px; gap: 10px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .session-meta { gap: 10px; }
+  .meta-item.cmd { min-width: unset; }
+}
 </style>

@@ -204,6 +204,12 @@ onMounted(load)
 .act-msg { font-size: 10px; color: var(--accent); }
 .act-err { color: var(--danger); }
 
+@media (max-width: 640px) {
+  .docker-page { padding: 12px; gap: 10px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .stats-row { gap: 12px; }
+}
+
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0; min-width: 320px; max-width: 440px; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); }

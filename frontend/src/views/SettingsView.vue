@@ -1746,6 +1746,10 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
+  .settings-main { padding: 12px; }
+  .settings-nav { gap: 4px; padding: 8px 10px; }
+  .nav-pill { font-size: 9px; padding: 3px 8px; }
+
   .style-grid,
   .typography-grid {
     grid-template-columns: 1fr;
@@ -1755,6 +1759,20 @@ onMounted(() => {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .display-pref-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .proxy-fields { flex-direction: column; }
+  .proxy-field-port { max-width: 100%; }
+
+  .passkey-add-row { flex-direction: column; align-items: stretch; }
+
+  .version-actions { flex-direction: column; align-items: stretch; }
+  .version-link { text-align: center; }
 }
 
 /* Theme toggle */

@@ -572,6 +572,17 @@ onMounted(load)
 .expand-enter-from, .expand-leave-to { opacity: 0; max-height: 0; }
 .expand-enter-to, .expand-leave-from { opacity: 1; max-height: 600px; }
 
+@media (max-width: 640px) {
+  .disks-page { padding: 12px; gap: 12px; }
+  .page-header { flex-wrap: wrap; gap: 8px; }
+  .header-actions { flex-wrap: wrap; }
+  .disk-main { flex-wrap: wrap; gap: 10px; }
+  .disk-left { min-width: unset; width: 100%; }
+  .disk-right { width: 100%; }
+  .expand-arrow { align-self: flex-start; margin-left: auto; }
+  .smart-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);

@@ -95,4 +95,13 @@ tbody tr:last-child td { border-bottom: none; }
 .schedule-cell code { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
 .cmd-cell { max-width: 380px; }
 .cmd-cell code { font-size: 11px; color: var(--fg); word-break: break-all; }
+
+@media (max-width: 640px) {
+  .cron-page { padding: 12px; gap: 10px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .table-wrap { font-size: 10px; }
+  thead th { padding: 8px 10px; }
+  tbody td { padding: 7px 10px; }
+  .cmd-cell { max-width: 200px; }
+}
 </style>

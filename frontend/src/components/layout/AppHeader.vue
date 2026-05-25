@@ -1,6 +1,7 @@
 <template>
   <header class="header">
     <div class="header-left">
+      <button class="menu-btn" aria-label="Open menu" @click="$emit('menu')">☰</button>
       <span v-if="system" class="host">{{ system.hostname }}</span>
     </div>
 
@@ -26,6 +27,8 @@ defineProps<{
   loadAvg?: number[]
   connected?: boolean
 }>()
+
+defineEmits<{ menu: [] }>()
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -55,6 +58,20 @@ function formatUptime(seconds: number): string {
 .header-left, .header-right { display: flex; align-items: center; gap: 14px; }
 .header-center { display: flex; align-items: center; gap: 16px; }
 
+.menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), background var(--transition);
+}
+.menu-btn:hover { color: var(--fg); background: var(--bg-hover); }
+
 .host { font-size: 11px; color: var(--fg-muted); }
 
 .uptime, .load { font-size: 11px; color: var(--fg-muted); }
@@ -72,4 +89,8 @@ function formatUptime(seconds: number): string {
   50% { opacity: 0.2; }
 }
 
+@media (max-width: 640px) {
+  .menu-btn { display: flex; align-items: center; justify-content: center; }
+  .header-center { display: none; }
+}
 </style>

@@ -154,4 +154,13 @@ onUnmounted(() => {
 .line-error { color: var(--danger); }
 .line-warn  { color: var(--warning); }
 .empty-hint { color: var(--fg-dim); font-style: italic; }
+
+@media (max-width: 640px) {
+  .logs-page { padding: 12px; gap: 10px; }
+  .page-header { flex-direction: column; gap: 10px; }
+  .header-actions { width: 100%; flex-wrap: wrap; }
+  .source-select { flex: 1; min-width: 0; }
+  .custom-input { width: 100%; }
+  .hdr-btn { flex: 1; }
+}
 </style>

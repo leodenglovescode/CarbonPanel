@@ -176,6 +176,11 @@ async function submitForm() {
   gap: 10px;
 }
 
+@media (max-width: 640px) {
+  .sites-page { padding: 12px; gap: 12px; }
+  .sites-grid { grid-template-columns: 1fr; }
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

@@ -763,4 +763,13 @@ onMounted(() => {
   color: var(--fg-muted);
   min-height: 14px;
 }
+
+@media (max-width: 640px) {
+  .services-page { padding: 12px; gap: 12px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .header-actions { width: 100%; flex-wrap: wrap; }
+  .tabs-row { gap: 6px; }
+  .tab-btn { font-size: 10px; padding: 5px 10px; }
+  .services-grid { grid-template-columns: 1fr; }
+}
 </style>
