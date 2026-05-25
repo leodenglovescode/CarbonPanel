@@ -90,7 +90,7 @@ async def get_service_logs(_: dict = Depends(require_authenticated_token)):
                 cmd, capture_output=True, text=True, timeout=10
             )
             output = result.stdout or result.stderr or ""
-            return [l for l in output.splitlines() if l.strip()]
+            return [line for line in output.splitlines() if line.strip()]
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return []
 
