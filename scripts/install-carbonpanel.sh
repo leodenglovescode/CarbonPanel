@@ -365,6 +365,11 @@ ensure_service_account() {
   if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
     run_silent useradd --system --home "$INSTALL_ROOT" --shell /usr/sbin/nologin "$SERVICE_USER"
   fi
+  # Add service user to the docker group so the Docker API works without sudo.
+  # The group may not exist if Docker isn't installed yet — skip silently in that case.
+  if getent group docker >/dev/null 2>&1; then
+    usermod -aG docker "$SERVICE_USER" 2>/dev/null || true
+  fi
 }
 
 ensure_layout() {
@@ -967,8 +972,9 @@ show_menu() {
   printf "  ${CYAN}${BOLD}3${NC}  rollback       ${DIM}hit the oops button${NC}\n"
   printf "  ${CYAN}${BOLD}4${NC}  uninstall      ${DIM}scorched earth 🔥${NC}\n"
   printf "  ${CYAN}${BOLD}5${NC}  version info   ${DIM}see what's poppin${NC}\n"
+  printf "  ${CYAN}${BOLD}6${NC}  fix            ${DIM}repair permissions & common issues${NC}\n"
   printf "\n"
-  printf "  ${BOLD}pick one [1-5]:${NC} "
+  printf "  ${BOLD}pick one [1-6]:${NC} "
   read -r choice
   printf '\n'
   case "$choice" in
@@ -977,8 +983,58 @@ show_menu() {
     3) COMMAND="rollback" ;;
     4) COMMAND="uninstall" ;;
     5) COMMAND="current-version" ;;
-    *) die "that's not a valid option bud — pick a number between 1 and 5" ;;
+    6) COMMAND="fix" ;;
+    *) die "that's not a valid option bud — pick a number between 1 and 6" ;;
   esac
+}
+
+fix_carbonpanel() {
+  require_root
+
+  if [[ ! -d "$INSTALL_ROOT" ]]; then
+    die "CarbonPanel does not appear to be installed (${INSTALL_ROOT} not found)."
+  fi
+
+  local fixed=0
+
+  printf "\n"
+  printf "  ${CYAN}${BOLD}⚡  carbonpanel fix${NC}  ${DIM}— repairing common issues${NC}\n"
+  printf "\n"
+
+  # ── Docker socket permissions ─────────────────────────────────────────────
+  log "checking Docker socket permissions..."
+  if ! getent group docker >/dev/null 2>&1; then
+    warn "docker group not found — is Docker installed? skipping docker fix."
+  else
+    if id -nG "$SERVICE_USER" | grep -qw docker; then
+      ok "${SERVICE_USER} is already in the docker group"
+    else
+      usermod -aG docker "$SERVICE_USER"
+      ok "added ${BOLD}${SERVICE_USER}${NC} to the docker group"
+      fixed=1
+    fi
+  fi
+
+  # ── Shared directory ownership ────────────────────────────────────────────
+  log "checking shared directory ownership..."
+  if [[ "$(stat -c '%U:%G' "$SHARED_DIR")" != "${SERVICE_USER}:${SERVICE_GROUP}" ]]; then
+    chown "$SERVICE_USER:$SERVICE_GROUP" "$SHARED_DIR"
+    ok "fixed ownership of ${BOLD}${SHARED_DIR}${NC}"
+    fixed=1
+  else
+    ok "shared directory ownership is correct"
+  fi
+
+  # ── Restart service to pick up any group/permission changes ──────────────
+  if [[ "$fixed" -eq 1 ]]; then
+    log "restarting ${BACKEND_SERVICE} to apply changes..."
+    systemctl restart "$BACKEND_SERVICE" 2>/dev/null || warn "could not restart ${BACKEND_SERVICE} — do it manually: systemctl restart ${BACKEND_SERVICE}"
+    ok "service restarted"
+  fi
+
+  printf "\n"
+  ok "fix complete"
+  printf "\n"
 }
 
 uninstall_carbonpanel() {
@@ -1092,6 +1148,9 @@ case "$COMMAND" in
     ;;
   current-version)
     print_current_version
+    ;;
+  fix)
+    fix_carbonpanel
     ;;
   *)
     die "Unknown command: $COMMAND"
