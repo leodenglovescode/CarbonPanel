@@ -44,6 +44,25 @@ export interface ConfigReadResponse {
   path: string
 }
 
+export interface NginxSiteCandidate {
+  name: string
+  config_file_path: string
+  server_names: string[]
+  log_paths: string[]
+  already_exists: boolean
+}
+
+export interface NginxDiscoverResponse {
+  nginx_available: boolean
+  candidates: NginxSiteCandidate[]
+}
+
+export interface NginxImportResponse {
+  imported: number
+  skipped: number
+  sites: SiteResponse[]
+}
+
 export interface SystemServiceResponse {
   service_name: string
   description: string | null

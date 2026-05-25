@@ -105,7 +105,7 @@
             <!-- SMART info -->
             <div v-if="disk.smart" class="smart-panel">
               <div class="panel-label">SMART</div>
-              <div v-if="disk.smart.error && !disk.smart.model" class="smart-error">
+              <div v-if="disk.smart.error" class="smart-error">
                 {{ disk.smart.error }}
               </div>
               <div v-else class="smart-grid">

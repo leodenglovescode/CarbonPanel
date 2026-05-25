@@ -11,6 +11,9 @@ from app.models.user import User
 from app.schemas.sites import (
     ConfigReadResponse,
     ConfigWriteRequest,
+    NginxDiscoverResponse,
+    NginxImportRequest,
+    NginxImportResponse,
     SiteActionRequest,
     SiteActionResponse,
     SiteCreate,
@@ -152,6 +155,23 @@ async def reorder_starred_system_services(
         body.service_names,
     )
     return SiteActionResponse(success=True, output="reordered")
+
+
+@router.get("/discover/nginx", response_model=NginxDiscoverResponse)
+async def discover_nginx(
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await site_service.discover_nginx_sites(db)
+
+
+@router.post("/discover/nginx", response_model=NginxImportResponse)
+async def import_nginx(
+    body: NginxImportRequest,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await site_service.import_nginx_sites(db, body.config_file_paths)
 
 
 @router.get("/{site_id}", response_model=SiteResponse)

@@ -8,6 +8,8 @@ import type {
   ConfigReadResponse,
   SystemServiceResponse,
   SiteAction,
+  NginxDiscoverResponse,
+  NginxImportResponse,
 } from '@/types/sites'
 
 const api = axios.create({
@@ -327,4 +329,7 @@ export const sitesApi = {
     api.post<SiteActionResponse>('/sites/system-services/starred/reorder', {
       service_names: serviceNames,
     }),
+  discoverNginx: () => api.get<NginxDiscoverResponse>('/sites/discover/nginx'),
+  importNginx: (config_file_paths: string[]) =>
+    api.post<NginxImportResponse>('/sites/discover/nginx', { config_file_paths }),
 }

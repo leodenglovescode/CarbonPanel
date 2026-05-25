@@ -2,7 +2,10 @@
   <div class="sites-page">
     <div class="page-header">
       <h1 class="page-title">Sites</h1>
-      <button class="add-btn" @click="showForm = true">+ add site</button>
+      <div class="header-actions">
+        <button class="add-btn secondary" @click="openDiscover">⟳ from nginx</button>
+        <button class="add-btn" @click="showForm = true">+ add site</button>
+      </div>
     </div>
 
     <div v-if="store.loading" class="state-msg">loading…</div>
@@ -84,6 +87,65 @@
         </form>
       </div>
     </div>
+    <!-- Discover nginx modal -->
+    <div v-if="showDiscover" class="modal-overlay" @click.self="showDiscover = false">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">Discover nginx sites</span>
+          <button class="close-btn" @click="showDiscover = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="discoverLoading" class="state-msg">scanning…</div>
+          <div v-else-if="discoverError" class="state-msg error">{{ discoverError }}</div>
+          <div v-else-if="!discoverData?.nginx_available" class="state-msg muted">
+            /etc/nginx/sites-available not found on this server
+          </div>
+          <div v-else-if="!discoverData.candidates.length" class="state-msg muted">
+            no config files found in /etc/nginx/sites-available
+          </div>
+          <template v-else>
+            <p class="discover-hint">
+              Select configs to import as sites. Already-registered configs are pre-checked and
+              will be skipped.
+            </p>
+            <div class="candidate-list">
+              <label
+                v-for="c in discoverData.candidates"
+                :key="c.config_file_path"
+                class="candidate-row"
+              >
+                <input
+                  type="checkbox"
+                  :value="c.config_file_path"
+                  v-model="selectedPaths"
+                  :disabled="c.already_exists"
+                  class="cand-check"
+                />
+                <div class="cand-info">
+                  <span class="cand-name">{{ c.name }}</span>
+                  <span class="cand-path">{{ c.config_file_path }}</span>
+                  <span v-if="c.already_exists" class="cand-exists">already added</span>
+                  <span v-else-if="c.server_names.length" class="cand-meta">
+                    {{ c.server_names.join(', ') }}
+                  </span>
+                </div>
+              </label>
+            </div>
+            <p v-if="importError" class="form-error">{{ importError }}</p>
+            <div class="modal-actions">
+              <button class="btn-ghost" @click="showDiscover = false">cancel</button>
+              <button
+                class="btn-primary"
+                :disabled="importing || !selectedPaths.length"
+                @click="doImport"
+              >
+                {{ importing ? 'importing…' : `import ${selectedPaths.length}` }}
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -91,7 +153,8 @@
 import { ref, onMounted } from 'vue'
 import { useSitesStore } from '@/stores/sites'
 import SiteCard from '@/components/sites/SiteCard.vue'
-import type { SiteType, ServiceManager } from '@/types/sites'
+import { sitesApi } from '@/api/index'
+import type { SiteType, ServiceManager, NginxDiscoverResponse } from '@/types/sites'
 
 const store = useSitesStore()
 
@@ -118,6 +181,48 @@ function cancelForm() {
   form.value = defaultForm()
   logPathsRaw.value = ''
   formError.value = ''
+}
+
+// ── nginx discovery ────────────────────────────────────────────
+const showDiscover = ref(false)
+const discoverLoading = ref(false)
+const discoverError = ref('')
+const discoverData = ref<NginxDiscoverResponse | null>(null)
+const selectedPaths = ref<string[]>([])
+const importing = ref(false)
+const importError = ref('')
+
+async function openDiscover() {
+  showDiscover.value = true
+  discoverLoading.value = true
+  discoverError.value = ''
+  discoverData.value = null
+  selectedPaths.value = []
+  try {
+    const { data } = await sitesApi.discoverNginx()
+    discoverData.value = data
+    selectedPaths.value = data.candidates
+      .filter(c => !c.already_exists)
+      .map(c => c.config_file_path)
+  } catch (e: any) {
+    discoverError.value = e.response?.data?.detail || 'Failed to scan nginx'
+  } finally {
+    discoverLoading.value = false
+  }
+}
+
+async function doImport() {
+  importing.value = true
+  importError.value = ''
+  try {
+    await sitesApi.importNginx(selectedPaths.value)
+    showDiscover.value = false
+    await store.fetchSites()
+  } catch (e: any) {
+    importError.value = e.response?.data?.detail || 'Import failed'
+  } finally {
+    importing.value = false
+  }
 }
 
 async function submitForm() {
@@ -150,8 +255,9 @@ async function submitForm() {
 <style scoped>
 .sites-page { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 
-.page-header { display: flex; align-items: center; justify-content: space-between; }
+.page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .page-title { font-size: 16px; font-weight: 700; color: var(--fg); }
+.header-actions { display: flex; gap: 8px; }
 
 .add-btn {
   background: none;
@@ -165,6 +271,8 @@ async function submitForm() {
   transition: all var(--transition);
 }
 .add-btn:hover { background: var(--accent-dim); }
+.add-btn.secondary { border-color: var(--border); color: var(--fg-muted); }
+.add-btn.secondary:hover { border-color: var(--fg-dim); color: var(--fg); background: none; }
 
 .state-msg { font-size: 12px; color: var(--fg-muted); padding: 40px 0; text-align: center; }
 .state-msg.error { color: var(--danger); }
@@ -176,9 +284,28 @@ async function submitForm() {
   gap: 10px;
 }
 
+/* Discover modal specifics */
+.discover-hint { font-size: 11px; color: var(--fg-muted); line-height: 1.5; }
+
+.candidate-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.candidate-row {
+  display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;
+  transition: border-color var(--transition);
+}
+.candidate-row:has(.cand-check:not(:disabled)):hover { border-color: var(--accent-border); }
+.candidate-row:has(.cand-check:disabled) { opacity: 0.5; cursor: default; }
+.cand-check { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+.cand-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cand-name { font-size: 12px; font-weight: 600; color: var(--fg); }
+.cand-path { font-size: 10px; color: var(--fg-dim); font-family: monospace; word-break: break-all; }
+.cand-exists { font-size: 10px; color: var(--accent); }
+.cand-meta { font-size: 10px; color: var(--fg-muted); }
+
 @media (max-width: 640px) {
   .sites-page { padding: 12px; gap: 12px; }
   .sites-grid { grid-template-columns: 1fr; }
+  .header-actions { flex-wrap: wrap; }
 }
 
 /* Modal */
