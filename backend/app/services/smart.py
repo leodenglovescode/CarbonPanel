@@ -9,8 +9,7 @@ import json
 import logging
 import re
 import shutil
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
@@ -137,10 +136,20 @@ async def _scan_device(device: str) -> SmartResult:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-        # Exit code bits: 0=ok, 16=disk failing, others non-fatal
+        # Exit code bits: bit0=parse error, bit1=device open failed, bit3=disk failing, etc.
         rc = proc.returncode or 0
-        if rc & 1:  # command line error
-            return SmartResult(device=device, error=f"smartctl error (rc={rc})", last_checked=_iso_now())
+        if rc & 3:  # bits 0+1: command line / device-open error
+            try:
+                err_data = json.loads(stdout.decode(errors="replace"))
+                msgs = [
+                    m["string"]
+                    for m in err_data.get("smartctl", {}).get("messages", [])
+                    if m.get("severity") == "error"
+                ]
+                err_msg = msgs[0] if msgs else f"smartctl error (rc={rc})"
+            except Exception:
+                err_msg = f"smartctl error (rc={rc})"
+            return SmartResult(device=device, error=err_msg, last_checked=_iso_now())
 
         try:
             data = json.loads(stdout.decode(errors="replace"))

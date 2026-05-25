@@ -95,3 +95,26 @@ class SystemServiceResponse(BaseModel):
     unit_file_state: str
     autostart_enabled: bool
     starred: bool = False
+
+
+class NginxSiteCandidate(BaseModel):
+    name: str
+    config_file_path: str
+    server_names: list[str]
+    log_paths: list[str]
+    already_exists: bool
+
+
+class NginxDiscoverResponse(BaseModel):
+    nginx_available: bool
+    candidates: list[NginxSiteCandidate]
+
+
+class NginxImportRequest(BaseModel):
+    config_file_paths: list[str]
+
+
+class NginxImportResponse(BaseModel):
+    imported: int
+    skipped: int
+    sites: list[SiteResponse]

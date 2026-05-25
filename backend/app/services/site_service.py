@@ -1,14 +1,25 @@
 import asyncio
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import AsyncIterator
 
 from app.models.site import Site
 from app.models.starred_system_service import StarredSystemService
-from app.schemas.sites import SiteCreate, SiteStatus, SiteUpdate, SystemServiceResponse
+from app.schemas.sites import (
+    NginxDiscoverResponse,
+    NginxImportResponse,
+    NginxSiteCandidate,
+    SiteCreate,
+    SiteStatus,
+    SiteUpdate,
+    SystemServiceResponse,
+)
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_NGINX_SITES_AVAILABLE = Path("/etc/nginx/sites-available")
 
 _SYSTEMD_SHOW_PROPERTIES = [
     "Id",
@@ -616,4 +627,96 @@ def site_to_response(site: Site, status: SiteStatus | None = None):
         created_at=site.created_at,
         updated_at=site.updated_at,
         status=status,
+    )
+
+
+# ── nginx auto-discovery ────────────────────────────────────────────────────
+
+
+def _parse_nginx_config(path: Path) -> tuple[list[str], list[str]]:
+    """Return (server_names, log_paths) extracted from an nginx config file."""
+    try:
+        text_content = path.read_text(errors="replace")
+    except OSError:
+        return [], []
+
+    server_names: list[str] = []
+    for m in re.finditer(r"server_name\s+([^;]+);", text_content):
+        for tok in m.group(1).split():
+            if tok != "_" and tok not in server_names:
+                server_names.append(tok)
+
+    log_paths: list[str] = []
+    for directive in ("access_log", "error_log"):
+        for m in re.finditer(rf"{directive}\s+([^\s;]+)", text_content):
+            val = m.group(1)
+            if val != "off" and val not in log_paths:
+                log_paths.append(val)
+
+    return server_names, log_paths
+
+
+async def discover_nginx_sites(db: AsyncSession) -> NginxDiscoverResponse:
+    if not _NGINX_SITES_AVAILABLE.exists():
+        return NginxDiscoverResponse(nginx_available=False, candidates=[])
+
+    result = await db.execute(select(Site.config_file_path))
+    existing_paths = {row[0] for row in result.fetchall() if row[0]}
+
+    candidates: list[NginxSiteCandidate] = []
+    for cfg in sorted(_NGINX_SITES_AVAILABLE.iterdir()):
+        if cfg.name.startswith(".") or not cfg.is_file():
+            continue
+        server_names, log_paths = _parse_nginx_config(cfg)
+        name = next((n for n in server_names if not n.startswith("*")), cfg.name)
+        candidates.append(
+            NginxSiteCandidate(
+                name=name,
+                config_file_path=str(cfg),
+                server_names=server_names,
+                log_paths=log_paths,
+                already_exists=str(cfg) in existing_paths,
+            )
+        )
+
+    return NginxDiscoverResponse(nginx_available=True, candidates=candidates)
+
+
+async def import_nginx_sites(
+    db: AsyncSession, config_file_paths: list[str]
+) -> NginxImportResponse:
+    result = await db.execute(select(Site.config_file_path))
+    existing_paths = {row[0] for row in result.fetchall() if row[0]}
+
+    imported_sites: list[Site] = []
+    skipped = 0
+
+    for cfg_str in config_file_paths:
+        if cfg_str in existing_paths:
+            skipped += 1
+            continue
+        cfg = Path(cfg_str)
+        if not cfg.is_file():
+            skipped += 1
+            continue
+        server_names, log_paths = _parse_nginx_config(cfg)
+        name = next((n for n in server_names if not n.startswith("*")), cfg.name)
+        site = await create_site(
+            db,
+            SiteCreate(
+                name=name,
+                type="nginx",
+                service_manager="systemd",
+                service_name="nginx.service",
+                config_file_path=cfg_str,
+                log_paths=log_paths,
+            ),
+        )
+        imported_sites.append(site)
+        existing_paths.add(cfg_str)
+
+    return NginxImportResponse(
+        imported=len(imported_sites),
+        skipped=skipped,
+        sites=[site_to_response(s) for s in imported_sites],
     )
