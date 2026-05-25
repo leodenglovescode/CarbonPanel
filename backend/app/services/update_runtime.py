@@ -59,9 +59,11 @@ def _run_systemctl_start(service_name: str) -> None:
     if os.geteuid() != 0:
         command = ["/usr/bin/sudo", "-n", *command]
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(command, check=True, capture_output=True, text=True, timeout=20)
     except FileNotFoundError as exc:
         raise RuntimeError("Required system command is missing on this host.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Timed out waiting for systemctl to start {service_name}.") from exc
     except subprocess.CalledProcessError as exc:
         output = (exc.stderr or exc.stdout or "").strip()
         raise RuntimeError(output or f"Unable to start {service_name}.") from exc
