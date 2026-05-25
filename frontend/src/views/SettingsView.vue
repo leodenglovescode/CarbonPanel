@@ -556,6 +556,20 @@
 
           <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
           <p v-if="versionError" class="error-msg">{{ versionError }}</p>
+
+          <div class="log-box-wrap">
+            <div class="log-box-header">
+              <span class="log-box-title">Service Logs</span>
+              <span v-if="logsLoading" class="log-box-hint">refreshing…</span>
+              <button class="log-refresh-btn" :disabled="logsLoading" @click="fetchServiceLogs">↺</button>
+            </div>
+            <div ref="logsBox" class="log-box">
+              <template v-if="serviceLogs.length">
+                <div v-for="(line, i) in serviceLogs" :key="i" class="log-line">{{ line }}</div>
+              </template>
+              <div v-else class="log-empty">no logs yet — run a check or update to see output here</div>
+            </div>
+          </div>
         </div>
 
         <!-- 2FA Section -->
@@ -1055,6 +1069,24 @@ const versionError = ref('')
 const versionSuccess = ref('')
 const copied = ref(false)
 
+const serviceLogs = ref<string[]>([])
+const logsLoading = ref(false)
+const logsBox = ref<HTMLElement | null>(null)
+
+async function fetchServiceLogs() {
+  logsLoading.value = true
+  try {
+    const res = await systemApi.serviceLogs()
+    serviceLogs.value = res.data.lines
+    await nextTick()
+    if (logsBox.value) logsBox.value.scrollTop = logsBox.value.scrollHeight
+  } catch {
+    // silently ignore — not critical
+  } finally {
+    logsLoading.value = false
+  }
+}
+
 function copyPullCmd(cmd: string) {
   navigator.clipboard.writeText(cmd).then(() => {
     copied.value = true
@@ -1080,6 +1112,7 @@ async function checkForUpdates() {
   versionActionLoading.value = true
   versionError.value = ''
   versionSuccess.value = ''
+  await fetchServiceLogs()
 
   try {
     const res = await systemApi.checkUpdates()
@@ -1089,10 +1122,11 @@ async function checkForUpdates() {
     const deadline = Date.now() + 45_000
     while (Date.now() < deadline) {
       await wait(2000)
-      await loadVersionInfo()
+      await Promise.all([loadVersionInfo(), fetchServiceLogs()])
       const info = versionInfo.value
       if (!info?.check_in_progress) break
     }
+    await fetchServiceLogs()
 
     if (versionInfo.value?.update_available) {
       versionSuccess.value = 'Update available!'
@@ -1126,12 +1160,14 @@ async function installUpdate() {
   versionError.value = ''
   versionSuccess.value = ''
 
+  await fetchServiceLogs()
+
   try {
     await systemApi.installUpdate()
     versionSuccess.value =
       'Update installation started. CarbonPanel will restart automatically. Refresh this page in about a minute.'
     await wait(1200)
-    await loadVersionInfo()
+    await Promise.all([loadVersionInfo(), fetchServiceLogs()])
   } catch (e: any) {
     const detail = e.response?.data?.detail || e.response?.data?.message
     const network = e.code === 'ECONNABORTED'
@@ -1474,6 +1510,7 @@ async function testProxy() {
 
 onMounted(() => {
   void loadVersionInfo()
+  void fetchServiceLogs()
   void loadWebhooks()
   void loadProxy()
   void loadDevices()
@@ -1696,6 +1733,35 @@ onMounted(() => {
   transition: all var(--transition);
 }
 .copy-btn:hover { background: var(--accent-dim); }
+
+.log-box-wrap {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.log-box-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--bg) 60%, var(--bg-card));
+  border-bottom: 1px solid var(--border);
+}
+.log-box-title { font-size: 10px; font-weight: 600; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.06em; flex: 1; }
+.log-box-hint { font-size: 10px; color: var(--fg-dim); }
+.log-refresh-btn {
+  background: none; border: none; color: var(--fg-dim); font-size: 13px;
+  cursor: pointer; padding: 0 2px; line-height: 1;
+  transition: color var(--transition);
+}
+.log-refresh-btn:hover:not(:disabled) { color: var(--accent); }
+.log-refresh-btn:disabled { opacity: 0.4; cursor: default; }
+.log-box {
+  height: 180px; overflow-y: auto;
+  background: var(--bg); padding: 8px 10px;
+  font-family: var(--font); font-size: 10.5px; line-height: 1.55;
+}
+.log-line { color: var(--fg-muted); white-space: pre-wrap; word-break: break-all; }
+.log-empty { color: var(--fg-dim); font-size: 10.5px; padding: 4px 0; }
 
 .webhook-row {
   display: flex;

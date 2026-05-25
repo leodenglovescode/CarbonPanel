@@ -556,7 +556,7 @@ ExecStart=$CONTROL_SCRIPT update
 EOF
 
   cat > "$SUDOERS_FILE" <<EOF
-$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start $UPDATE_SERVICE
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start $UPDATE_SERVICE, /usr/bin/journalctl -u $UPDATE_CHECK_SERVICE -u $UPDATE_SERVICE --no-pager -n * --output=short-iso
 EOF
   chmod 440 "$SUDOERS_FILE"
 }
@@ -1023,6 +1023,20 @@ fix_carbonpanel() {
     fixed=1
   else
     ok "shared directory ownership is correct"
+  fi
+
+  # ── Sudoers (systemctl + journalctl) ─────────────────────────────────────
+  log "checking sudoers rules..."
+  local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso"
+  local current_sudoers=""
+  [[ -f "$SUDOERS_FILE" ]] && current_sudoers="$(cat "$SUDOERS_FILE")"
+  if [[ "$current_sudoers" != "$expected_sudoers" ]]; then
+    printf '%s\n' "$expected_sudoers" > "$SUDOERS_FILE"
+    chmod 440 "$SUDOERS_FILE"
+    ok "updated sudoers rules"
+    fixed=1
+  else
+    ok "sudoers rules are correct"
   fi
 
   # ── Restart service to pick up any group/permission changes ──────────────

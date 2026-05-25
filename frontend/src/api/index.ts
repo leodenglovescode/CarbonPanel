@@ -99,6 +99,7 @@ export const systemApi = {
   version: () => api.get<SystemVersionResponse>('/system/version', { timeout: 10_000 }),
   checkUpdates: () => api.post<{ success: boolean; message: string }>('/system/check-updates', null, { timeout: 30_000 }),
   installUpdate: () => api.post<{ success: boolean; message: string }>('/system/install-update'),
+  serviceLogs: () => api.get<{ lines: string[] }>('/system/service-logs', { timeout: 12_000 }),
 }
 
 export interface SmartResult {

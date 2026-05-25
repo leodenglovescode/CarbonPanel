@@ -1,8 +1,12 @@
 import asyncio
+import os
+import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.services.update_runtime import (
+    CHECK_SERVICE,
+    UPDATE_SERVICE,
     get_system_version_status,
     require_authenticated_token,
     trigger_update_check,
@@ -66,3 +70,30 @@ async def install_update(_: dict = Depends(require_authenticated_token)):
         ) from exc
 
     return {"success": True, "message": "Update installation started."}
+
+
+@router.get("/service-logs")
+async def get_service_logs(_: dict = Depends(require_authenticated_token)):
+    def _fetch() -> list[str]:
+        cmd = [
+            "journalctl",
+            "-u", CHECK_SERVICE,
+            "-u", UPDATE_SERVICE,
+            "--no-pager",
+            "-n", "150",
+            "--output=short-iso",
+        ]
+        if os.geteuid() != 0:
+            cmd = ["/usr/bin/sudo", "-n"] + cmd
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10
+            )
+            output = result.stdout or result.stderr or ""
+            return [l for l in output.splitlines() if l.strip()]
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return []
+
+    loop = asyncio.get_event_loop()
+    lines = await loop.run_in_executor(None, _fetch)
+    return {"lines": lines}
