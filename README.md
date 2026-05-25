@@ -13,7 +13,9 @@
 
 A lightweight self-hosted server monitoring panel — live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, and JWT + TOTP authentication.
 
-<img width="960" height="479" alt="image" src="https://github.com/user-attachments/assets/5b713832-5792-4972-8675-0403242c5f69" />
+<img width="1279" height="634" alt="Screenshot Of CarbonPanel" src="https://github.com/user-attachments/assets/b37ce570-fb52-4935-8827-30ce5b3d1d16" />
+
+
 
 ---
 
