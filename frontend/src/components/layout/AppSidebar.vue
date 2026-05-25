@@ -1,9 +1,10 @@
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ 'mobile-open': mobileOpen }">
     <div class="sidebar-top">
       <div class="logo">
         <span class="bracket">[</span>carbon<span class="accent">panel</span><span class="bracket">]</span>
       </div>
+      <button class="mobile-close-btn" aria-label="Close menu" @click="$emit('close')">✕</button>
     </div>
 
     <nav class="nav">
@@ -13,6 +14,7 @@
         :to="item.to"
         class="nav-item"
         :class="{ active: isActive(item.to) }"
+        @click="$emit('close')"
       >
         <span class="nav-label">{{ item.label }}</span>
       </router-link>
@@ -36,7 +38,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useLocaleStore } from '@/stores/locale'
 import type { SystemMetrics } from '@/types/metrics'
 
-defineProps<{ system?: SystemMetrics; connected?: boolean }>()
+defineProps<{ system?: SystemMetrics; connected?: boolean; mobileOpen?: boolean }>()
+defineEmits<{ close: [] }>()
 
 const route = useRoute()
 const router = useRouter()
@@ -82,11 +85,27 @@ function handleLogout() {
 .sidebar-top {
   padding: 16px 14px 12px;
   border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .logo { font-size: 13px; font-weight: 700; letter-spacing: -0.02em; }
 .bracket { color: var(--fg-dim); }
 .accent { color: var(--accent); }
+
+.mobile-close-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  transition: color var(--transition);
+}
+.mobile-close-btn:hover { color: var(--fg); }
 
 .nav {
   flex: 1;
@@ -147,4 +166,23 @@ function handleLogout() {
   text-align: center;
 }
 .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+@media (max-width: 640px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform var(--transition-slow);
+    box-shadow: none;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+  .mobile-close-btn { display: block; }
+  .nav-item { padding: 12px 14px; font-size: 13px; }
+}
 </style>

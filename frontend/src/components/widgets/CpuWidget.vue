@@ -86,9 +86,9 @@ function loadColor(val: number) {
   transition: width var(--bar-transition), background var(--transition);
 }
 
-.load-row { display: flex; gap: 18px; align-items: flex-end; }
+.load-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 .load-item { display: flex; flex-direction: column; gap: 1px; }
-.load-sep { border-left: 1px solid var(--border); padding-left: 18px; }
+.load-sep { border-left: 1px solid var(--border); padding-left: 10px; }
 .load-val { font-size: 16px; font-weight: 700; color: var(--fg); letter-spacing: -0.02em; }
 .load-lbl { font-size: 9px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
 

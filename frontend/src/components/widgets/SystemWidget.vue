@@ -72,7 +72,7 @@ function loadColor(val: number) {
 
 .uptime-val { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
 
-.load-grid { display: flex; gap: 20px; }
+.load-grid { display: flex; gap: 12px; flex-wrap: wrap; }
 .load-item { display: flex; flex-direction: column; gap: 2px; }
 .load-num { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 .load-period { font-size: 9px; color: var(--fg-dim); text-transform: uppercase; }

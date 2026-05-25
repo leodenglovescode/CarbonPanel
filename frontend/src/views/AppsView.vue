@@ -341,6 +341,16 @@ onMounted(load)
   font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--fg-dim);
 }
 
+@media (max-width: 640px) {
+  .apps-page { padding: 12px; gap: 12px; }
+  .filter-row { flex-direction: column; align-items: stretch; }
+  .search-wrap { max-width: 100%; }
+  .table-head { grid-template-columns: 58px 50px 1fr 1fr 60px; padding: 6px 10px; }
+  .row-main { grid-template-columns: 58px 50px 1fr 1fr 60px; padding: 8px 10px; }
+  .col-user, .col-pid { display: none; }
+  .process-name { max-width: 100%; }
+}
+
 .app-row {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-sm); overflow: hidden;

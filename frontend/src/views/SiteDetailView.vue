@@ -262,4 +262,11 @@ onMounted(() => loadSite())
   cursor: pointer; transition: all var(--transition);
 }
 .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .detail-page { padding: 12px; gap: 10px; }
+  .status-bar { gap: 5px; }
+  .actions-row { flex-wrap: wrap; }
+  .action-btn { flex: 1; text-align: center; padding: 7px 8px; }
+}
 </style>

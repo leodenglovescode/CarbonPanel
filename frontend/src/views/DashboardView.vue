@@ -340,6 +340,27 @@ const sortedWidgets = computed(() =>
   .grid-item { grid-column: 1 / -1 !important; grid-row: auto !important; }
 }
 
+@media (max-width: 640px) {
+  .dashboard { padding: 8px; padding-bottom: 80px; }
+  .edit-fab { bottom: 16px; right: 16px; }
+  .edit-toolbar { padding: 8px 10px; gap: 8px; }
+  .edit-hint { font-size: 10px; }
+
+  /* Break the height:100% chain — let cards size to their own content */
+  .grid { grid-auto-rows: auto; }
+  .grid-item { overflow: visible; }
+  .widget-body { height: auto !important; overflow: visible; }
+  .widget-body :deep(.card) { height: auto !important; }
+  .widget-body :deep(.card-body) {
+    flex: none !important;
+    min-height: 120px !important;
+    overflow: auto !important;
+  }
+  /* Give sparklines and chart areas an explicit pixel height so charts render */
+  .widget-body :deep(.sparkline-wrap) { height: 48px !important; min-height: 48px !important; }
+  .widget-body :deep(.chart-area) { min-height: 80px !important; }
+}
+
 /* Edit mode overlay on the same grid */
 .grid-edit { user-select: none; }
 .grid-edit .grid-item {

@@ -105,6 +105,12 @@ function sparkMax(iface: string, dir: 'rx' | 'tx') {
 .tx-total { color: var(--fg-dim); }
 
 /* Hide progressively as the card body narrows */
-@container (max-width: 440px) { .sparklines { display: none; } }
-@container (max-width: 340px) { .totals    { display: none; } }
+@container (max-width: 440px) {
+  .sparklines { display: none; }
+  .net-row { grid-template-columns: minmax(0, 100px) auto minmax(0, 130px); }
+}
+@container (max-width: 340px) {
+  .totals { display: none; }
+  .net-row { grid-template-columns: minmax(0, 100px) auto; }
+}
 </style>
