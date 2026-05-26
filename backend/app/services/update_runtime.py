@@ -54,6 +54,21 @@ def _service_is_active(service_name: str) -> bool:
     return result.returncode == 0
 
 
+def _service_unit_exists(service_name: str) -> bool:
+    """Return True only if the systemd unit file is installed on this host."""
+    try:
+        result = subprocess.run(
+            ["/usr/bin/systemctl", "list-unit-files", "--no-pager", service_name],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return service_name in (result.stdout or "")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 def _run_systemctl_start(service_name: str) -> None:
     command = ["/usr/bin/systemctl", "start", service_name]
     if os.geteuid() != 0:
@@ -247,6 +262,9 @@ def require_authenticated_token(
 def trigger_update_check() -> None:
     if _is_docker_mode():
         # Docker mode: /system/version always fetches live from GitHub API — no daemon needed.
+        return
+    if not _service_unit_exists(CHECK_SERVICE):
+        # Service not installed (e.g. dev environment) — version check still works via GitHub API.
         return
     _run_systemctl_start(CHECK_SERVICE)
 

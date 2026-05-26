@@ -1,4 +1,7 @@
 <template>
+  <Teleport to="body">
+    <div v-if="bg.appBgLayerVisible" class="app-bg-layer" :style="bg.appBgLayerStyle" />
+  </Teleport>
   <router-view v-if="!isPublicRoute" v-slot="{ Component }">
     <AuthLayout>
       <Transition name="route-fade" mode="out-in">
@@ -28,7 +31,7 @@ import { useUserPrefsSync } from '@/composables/useUserPrefsSync'
 const UPDATE_PROMPT_STORAGE_KEY = 'cp_update_prompt_version'
 
 useThemeStore()
-useBackgroundStore()
+const bg = useBackgroundStore()
 
 const prefsSync = useUserPrefsSync()
 prefsSync.startWatching()
@@ -85,3 +88,12 @@ watch(
   { immediate: true },
 )
 </script>
+
+<style scoped>
+.app-bg-layer {
+  position: fixed;
+  inset: -30px;
+  z-index: 0;
+  pointer-events: none;
+}
+</style>

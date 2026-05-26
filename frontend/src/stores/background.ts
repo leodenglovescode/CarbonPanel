@@ -56,25 +56,34 @@ export const useBackgroundStore = defineStore('background', () => {
   const appBgImage = ref<string | null>(loadImage(APP_BG_IMG_KEY))
   const loginBgImage = ref<string | null>(loadImage(LOGIN_BG_IMG_KEY))
 
-  // ── App background (applied via body::before using CSS custom props) ──────
+  // ── App background (applied via a Vue-rendered fixed layer in App.vue) ──────
 
-  function applyAppBg() {
+  const appBgLayerVisible = computed(() => {
+    const cfg = appBg.value
+    if (cfg.type === 'gradient') return true
+    if (cfg.type === 'image' && appBgImage.value) return true
+    return false
+  })
+
+  const appBgLayerStyle = computed((): Record<string, string> => {
     const cfg = appBg.value
     const img = appBgImage.value
-    const root = document.documentElement
-
+    const blur = cfg.blur > 0 ? `blur(${cfg.blur}px)` : ''
     if (cfg.type === 'gradient') {
-      root.style.setProperty('--app-bg-image', gradientCss(cfg))
-      root.style.setProperty('--app-bg-blur', cfg.blur > 0 ? `${cfg.blur}px` : '0px')
-      document.body.style.background = 'transparent'
-    } else if (cfg.type === 'image' && img) {
-      root.style.setProperty('--app-bg-image', `url(${img})`)
-      root.style.setProperty('--app-bg-blur', cfg.blur > 0 ? `${cfg.blur}px` : '0px')
-      document.body.style.background = 'transparent'
+      return { backgroundImage: gradientCss(cfg), filter: blur }
+    }
+    if (cfg.type === 'image' && img) {
+      return { backgroundImage: `url("${img}")`, backgroundSize: 'cover', backgroundPosition: 'center', filter: blur }
+    }
+    return {}
+  })
+
+  function applyAppBg() {
+    // Make body transparent when a custom layer is active so the layer shows through
+    if (appBgLayerVisible.value) {
+      document.body.style.backgroundColor = 'transparent'
     } else {
-      root.style.setProperty('--app-bg-image', 'none')
-      root.style.setProperty('--app-bg-blur', '0px')
-      document.body.style.background = ''
+      document.body.style.backgroundColor = ''
     }
   }
 
@@ -189,6 +198,8 @@ export const useBackgroundStore = defineStore('background', () => {
     loginBg,
     appBgImage,
     loginBgImage,
+    appBgLayerVisible,
+    appBgLayerStyle,
     loginBgLayerVisible,
     loginBgLayerStyle,
     hasCustomBg,
