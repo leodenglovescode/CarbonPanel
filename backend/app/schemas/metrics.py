@@ -15,6 +15,7 @@ class CpuMetrics(BaseModel):
     load_avg: list[float]
     frequency_mhz: float
     temps: list[CpuTemp] = []
+    cpu_name: str = ""
 
 
 class MemoryMetrics(BaseModel):

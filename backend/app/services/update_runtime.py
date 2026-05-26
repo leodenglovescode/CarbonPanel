@@ -32,11 +32,11 @@ UPDATE_SERVICE = "carbonpanel-update.service"
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
     try:
+        if not path.exists():
+            return {}
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, PermissionError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
 

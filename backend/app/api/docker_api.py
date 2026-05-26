@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -14,6 +15,12 @@ _PERMISSION_HINT = (
     "Permission denied accessing Docker socket. "
     "Run: sudo usermod -aG docker $USER  then log out and back in."
 )
+
+_STATS_CACHE: dict[str, dict] = {}
+_STATS_CACHE_TS: float = 0.0
+_STATS_REFRESH_INTERVAL = 10.0
+_stats_lock = asyncio.Lock()
+_stats_task: asyncio.Task | None = None
 
 
 async def _exec(cmd: list[str]) -> tuple[int, str]:
@@ -84,6 +91,39 @@ class ActionResponse(BaseModel):
     output: str = ""
 
 
+async def _refresh_stats(running_ids: list[str]) -> None:
+    global _STATS_CACHE, _STATS_CACHE_TS
+    async with _stats_lock:
+        if not running_ids:
+            return
+        src, stats_out = await _run(
+            ["docker", "stats", "--no-stream", "--format", "{{json .}}", *running_ids]
+        )
+        if src != 0:
+            return
+        new_cache: dict[str, dict] = {}
+        for line in stats_out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                s = json.loads(line)
+                cid = s.get("ID", s.get("Container", ""))
+                new_cache[cid] = s
+            except Exception:
+                pass
+        _STATS_CACHE = new_cache
+        _STATS_CACHE_TS = time.monotonic()
+
+
+async def _ensure_stats_fresh(running_ids: list[str]) -> None:
+    global _stats_task
+    age = time.monotonic() - _STATS_CACHE_TS
+    if age > _STATS_REFRESH_INTERVAL:
+        if _stats_task is None or _stats_task.done():
+            _stats_task = asyncio.create_task(_refresh_stats(running_ids))
+
+
 @router.get("/containers", response_model=list[ContainerInfo])
 async def list_containers(_: User = Depends(get_current_user)):
     rc, out = await _run(["docker", "ps", "-a", "--format", "{{json .}}"])
@@ -101,27 +141,17 @@ async def list_containers(_: User = Depends(get_current_user)):
             continue
 
     running_ids = [d["ID"] for d in containers_raw if d.get("State") == "running"]
-    stats_map: dict[str, dict] = {}
 
-    if running_ids:
-        src, stats_out = await _run(
-            ["docker", "stats", "--no-stream", "--format", "{{json .}}", *running_ids]
-        )
-        if src == 0:
-            for line in stats_out.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    s = json.loads(line)
-                    cid = s.get("ID", s.get("Container", ""))
-                    stats_map[cid] = s
-                except Exception:
-                    pass
+    # On first load, block briefly to get initial stats; after that serve from cache.
+    if not _STATS_CACHE and running_ids:
+        await _refresh_stats(running_ids)
+    else:
+        asyncio.create_task(_ensure_stats_fresh(running_ids))
 
     result = []
     for d in containers_raw:
-        s = stats_map.get(d.get("ID", ""), {})
+        cid = d.get("ID", "")
+        s = _STATS_CACHE.get(cid, {})
         cpu_pct = mem_mb = mem_limit = mem_pct = 0.0
         if s:
             try:
@@ -138,7 +168,7 @@ async def list_containers(_: User = Depends(get_current_user)):
                 pass
 
         result.append(ContainerInfo(
-            id=d.get("ID", ""),
+            id=cid,
             name=d.get("Names", "").lstrip("/"),
             image=d.get("Image", ""),
             status=d.get("Status", ""),

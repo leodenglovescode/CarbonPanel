@@ -136,8 +136,8 @@ async def _scan_device(device: str) -> SmartResult:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-        # Exit code bits: bit0=parse error, bit1=device open failed, bit3=disk failing, etc.
         rc = proc.returncode or 0
+        # Exit code bits: bit0=parse error, bit1=device open failed, bit3=disk failing, etc.
         if rc & 3:  # bits 0+1: command line / device-open error
             try:
                 err_data = json.loads(stdout.decode(errors="replace"))
