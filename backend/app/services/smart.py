@@ -74,8 +74,13 @@ def _parse_json(data: dict, device: str) -> SmartResult:
     if "passed" in smart_status:
         health = "PASSED" if smart_status["passed"] else "FAILED"
     else:
-        # bits 4 (disk failing) in exit code means failed
-        health = "UNKNOWN"
+        # NVMe drives often omit smart_status.passed — use critical_warning instead.
+        # critical_warning == 0 means no issues reported.
+        nvme_log = data.get("nvme_smart_health_information_log")
+        if isinstance(nvme_log, dict):
+            health = "PASSED" if nvme_log.get("critical_warning", 0) == 0 else "FAILED"
+        else:
+            health = "UNKNOWN"
 
     result = SmartResult(
         device=device,
