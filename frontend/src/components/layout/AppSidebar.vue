@@ -74,7 +74,9 @@ function handleLogout() {
 .sidebar {
   width: 178px;
   flex-shrink: 0;
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -83,11 +85,13 @@ function handleLogout() {
 }
 
 .sidebar-top {
-  padding: 16px 14px 12px;
+  height: 42px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .logo { font-size: 13px; font-weight: 700; letter-spacing: -0.02em; }

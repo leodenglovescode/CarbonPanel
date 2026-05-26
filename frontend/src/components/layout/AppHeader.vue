@@ -48,7 +48,9 @@ function formatUptime(seconds: number): string {
   padding: 0 16px;
   height: 42px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   position: sticky;
   top: 0;
   z-index: 100;
