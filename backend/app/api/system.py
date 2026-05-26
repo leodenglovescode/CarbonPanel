@@ -1,6 +1,7 @@
 import asyncio
 import os
 import subprocess
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -16,6 +17,8 @@ from app.services.update_runtime import (
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
 _VERSION_TIMEOUT = 7.0  # seconds — covers DNS + connect + read
+_INSTALL_COOLDOWN = 5 * 60  # seconds between install-update triggers
+_last_install_ts: float = 0.0
 
 
 @router.get("/version")
@@ -60,10 +63,23 @@ async def check_updates(_: dict = Depends(require_authenticated_token)):
 
 @router.post("/install-update", status_code=status.HTTP_202_ACCEPTED)
 async def install_update(_: dict = Depends(require_authenticated_token)):
+    global _last_install_ts
+    now = time.monotonic()
+    elapsed = now - _last_install_ts
+    if elapsed < _INSTALL_COOLDOWN:
+        retry_after = int(_INSTALL_COOLDOWN - elapsed)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Update already triggered recently. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    _last_install_ts = now
+
     loop = asyncio.get_event_loop()
     try:
         await loop.run_in_executor(None, trigger_update_install)
     except RuntimeError as exc:
+        _last_install_ts = 0.0  # reset on failure so it can be retried
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),

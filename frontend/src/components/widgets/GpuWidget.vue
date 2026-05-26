@@ -7,7 +7,10 @@
 
     <div v-for="dev in gpu.devices" :key="dev.index" class="gpu-device">
       <div class="dev-header">
-        <span class="dev-name">{{ dev.name }}</span>
+        <div class="dev-name-row">
+          <BrandIcon :name="dev.name" :size="20" />
+          <span class="dev-name">{{ dev.name }}</span>
+        </div>
         <span :class="['badge', tempBadge(dev.temperature_c)]">{{ dev.temperature_c }}°C</span>
       </div>
 
@@ -44,6 +47,7 @@
 
 <script setup lang="ts">
 import BaseCard from '@/components/ui/BaseCard.vue'
+import BrandIcon from '@/components/ui/BrandIcon.vue'
 import RingChart from '@/components/charts/RingChart.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import type { GpuMetrics } from '@/types/metrics'
@@ -63,7 +67,8 @@ function fmt(mb: number) { return (mb / 1024).toFixed(1) + ' GB' }
 .gpu-device + .gpu-device { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
 
 .dev-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.dev-name { font-size: 11px; color: var(--fg); font-weight: 500; }
+.dev-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dev-name { font-size: 11px; color: var(--fg); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .dev-metrics { display: flex; gap: 14px; align-items: center; }
 .dev-stats { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }

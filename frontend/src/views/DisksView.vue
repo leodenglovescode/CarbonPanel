@@ -44,7 +44,10 @@
       >
         <div class="disk-main" @click="toggleExpand(disk)">
           <div class="disk-left">
-            <div class="disk-device">{{ disk.device }}</div>
+            <div class="disk-device-row">
+              <BrandIcon v-if="disk.smart?.model" :name="disk.smart.model" :size="22" />
+              <div class="disk-device">{{ disk.device }}</div>
+            </div>
             <div class="disk-meta">
               <span class="meta-badge">{{ disk.fstype }}</span>
               <span :class="['meta-badge', `badge-bus-${disk.bus_type}`]">{{ disk.bus_type }}</span>
@@ -231,6 +234,7 @@ import { disksApi } from '@/api/index'
 import { useMetricsStore } from '@/stores/metrics'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import type { DiskInfo } from '@/api/index'
+import BrandIcon from '@/components/ui/BrandIcon.vue'
 
 const metricsStore = useMetricsStore()
 const display = useDisplayPrefsStore()
@@ -443,7 +447,8 @@ onMounted(load)
 }
 
 .disk-left { min-width: 200px; }
-.disk-device { font-size: 13px; font-weight: 600; color: var(--fg); margin-bottom: 4px; }
+.disk-device-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+.disk-device { font-size: 13px; font-weight: 600; color: var(--fg); }
 .disk-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .meta-badge {
   font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;

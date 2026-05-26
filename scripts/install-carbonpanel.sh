@@ -370,6 +370,11 @@ ensure_service_account() {
   if getent group docker >/dev/null 2>&1; then
     usermod -aG docker "$SERVICE_USER" 2>/dev/null || true
   fi
+  # Add service user to the disk group so smartctl can read SMART data directly
+  # without any sudo — safer than a sudoers rule.
+  if getent group disk >/dev/null 2>&1; then
+    usermod -aG disk "$SERVICE_USER" 2>/dev/null || true
+  fi
 }
 
 ensure_layout() {
@@ -1011,6 +1016,20 @@ fix_carbonpanel() {
     else
       usermod -aG docker "$SERVICE_USER"
       ok "added ${BOLD}${SERVICE_USER}${NC} to the docker group"
+      fixed=1
+    fi
+  fi
+
+  # ── Disk group (smartctl SMART data) ─────────────────────────────────────
+  log "checking disk group membership (smartctl)..."
+  if ! getent group disk >/dev/null 2>&1; then
+    warn "disk group not found — skipping SMART fix."
+  else
+    if id -nG "$SERVICE_USER" | grep -qw disk; then
+      ok "${SERVICE_USER} is already in the disk group"
+    else
+      usermod -aG disk "$SERVICE_USER"
+      ok "added ${BOLD}${SERVICE_USER}${NC} to the disk group (enables SMART monitoring)"
       fixed=1
     fi
   fi

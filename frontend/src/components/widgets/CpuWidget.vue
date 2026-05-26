@@ -9,6 +9,11 @@
       </div>
     </template>
 
+    <div v-if="cpu.cpu_name" class="cpu-model">
+      <BrandIcon :name="cpu.cpu_name" :size="18" />
+      <span class="cpu-name">{{ cpu.cpu_name }}</span>
+    </div>
+
     <div class="cpu-layout">
       <RingChart :value="cpu.aggregate" :size="88" />
 
@@ -40,6 +45,7 @@
 
 <script setup lang="ts">
 import BaseCard from '@/components/ui/BaseCard.vue'
+import BrandIcon from '@/components/ui/BrandIcon.vue'
 import RingChart from '@/components/charts/RingChart.vue'
 import Sparkline from '@/components/charts/Sparkline.vue'
 import type { CpuMetrics } from '@/types/metrics'
@@ -66,6 +72,8 @@ function loadColor(val: number) {
 <style scoped>
 .card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
 .header-right { display: flex; align-items: center; gap: 5px; }
+.cpu-model { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.cpu-name { font-size: 11px; color: var(--fg); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .cpu-layout { display: flex; gap: 16px; align-items: center; }
 

@@ -12,6 +12,7 @@ export interface CpuMetrics {
   load_avg: number[]
   frequency_mhz: number
   temps: CpuTemp[]
+  cpu_name: string
 }
 
 export interface HistoryPoint {
