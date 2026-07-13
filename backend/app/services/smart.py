@@ -48,6 +48,10 @@ def physical_device(partition_device: str) -> str:
     m = re.match(r"^(nvme\d+n\d+)p\d+$", dev)
     if m:
         return f"/dev/{m.group(1)}"
+    # eMMC/SD: mmcblk0p1 → mmcblk0
+    m = re.match(r"^(mmcblk\d+)p\d+$", dev)
+    if m:
+        return f"/dev/{m.group(1)}"
     # SATA / SCSI: sda1 → sda, hda2 → hda
     m = re.match(r"^([a-z]+[a-z])\d+$", dev)
     if m:

@@ -17,6 +17,13 @@ router = APIRouter(prefix="/disks", tags=["disks"])
 _GB = 1024 ** 3
 _MB = 1024 ** 2
 
+# Real block-storage device names (bare metal + common VPS bus types) whose
+# partitions should be grouped under one physical-disk card. Deliberately
+# excludes loop/tmpfs/etc. so unrelated virtual mounts never get merged.
+_REAL_DISK_RE = re.compile(
+    r"^/dev/(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme\d+n\d+|mmcblk\d+)(p?\d+)?$"
+)
+
 _VIRTUAL_FSTYPES = {
     "squashfs", "tmpfs", "devtmpfs", "sysfs", "proc", "procfs",
     "cgroup", "cgroup2", "pstore", "bpf", "tracefs", "debugfs",
@@ -105,15 +112,17 @@ def _can_unmount(device: str, mountpoint: str) -> bool:
     return bus in ("usb", "mmc")
 
 
-def _is_removable(device: str, mountpoint: str) -> bool:
-    removable_prefixes = ("/media/", "/mnt/", "/run/media/")
-    if any(mountpoint.startswith(p) for p in removable_prefixes):
-        return True
-    removable_devices = ("sd", "hd", "nvme", "mmcblk")
-    dev = device.replace("/dev/", "")
-    not_standard = not any(dev.startswith(p) for p in removable_devices)
-    not_system_mount = mountpoint not in ("/", "/boot", "/home")
-    return not_standard and not_system_mount
+def _is_removable(device: str) -> bool:
+    # Ask the kernel rather than guess from the device name or mountpoint —
+    # SATA, USB, and virtio-SCSI disks can all show up as /dev/sd*, and /mnt/
+    # is a common convention for mounting *permanent* server data disks too.
+    # /sys/block/<dev>/removable is the actual hardware flag.
+    base = smart_svc.physical_device(device).replace("/dev/", "")
+    try:
+        with open(f"/sys/block/{base}/removable") as f:
+            return f.read().strip() == "1"
+    except OSError:
+        return False
 
 
 def _smart_response(phys: str) -> SmartResult | None:
@@ -141,6 +150,12 @@ def _primary_mount(mounts: list[str]) -> str:
     return min(mounts, key=len)
 
 
+def _group_key(device: str) -> str:
+    # Group sibling partitions (e.g. /boot, /boot/efi) of the same physical
+    # disk into one card instead of listing each as its own "disk".
+    return smart_svc.physical_device(device) if _REAL_DISK_RE.match(device) else device
+
+
 @router.get("", response_model=list[DiskInfo])
 async def list_disks(_: User = Depends(get_current_user)):
     loop = asyncio.get_event_loop()
@@ -154,17 +169,20 @@ async def list_disks(_: User = Depends(get_current_user)):
         except PermissionError:
             continue
 
-    # Deduplicate: same device can be bind-mounted at multiple paths
-    raw.sort(key=lambda t: t[0].device)
+    # Group by physical disk: same device bind-mounted at multiple paths, and
+    # sibling partitions (e.g. /boot, /boot/efi) of the same real disk, both
+    # collapse into one card instead of showing as separate disks.
+    raw.sort(key=lambda t: _group_key(t[0].device))
     results: list[DiskInfo] = []
 
-    for device, group in groupby(raw, key=lambda t: t[0].device):
+    for _key, group in groupby(raw, key=lambda t: _group_key(t[0].device)):
         group_list = list(group)
         mounts = [t[0].mountpoint for t in group_list]
         primary_mp = _primary_mount(mounts)
         extra_mounts = [m for m in mounts if m != primary_mp]
 
         primary_part, primary_usage = next(t for t in group_list if t[0].mountpoint == primary_mp)
+        device = primary_part.device
         fstype = primary_part.fstype or "unknown"
         phys = smart_svc.physical_device(device)
 
@@ -181,7 +199,7 @@ async def list_disks(_: User = Depends(get_current_user)):
             usage_percent=primary_usage.percent,
             read_mb_s=0.0,
             write_mb_s=0.0,
-            is_removable=_is_removable(device, primary_mp),
+            is_removable=_is_removable(device),
             is_virtual=_is_virtual(device, fstype),
             can_unmount=_can_unmount(device, primary_mp),
             bus_type=_get_bus_type(device),
