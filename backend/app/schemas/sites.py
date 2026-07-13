@@ -97,6 +97,23 @@ class SystemServiceResponse(BaseModel):
     starred: bool = False
 
 
+class TrafficBucket(BaseModel):
+    minute: str
+    count: int
+
+
+class SiteTrafficResponse(BaseModel):
+    site_id: str
+    window_minutes: int
+    total_requests: int
+    total_bytes: int
+    status_2xx: int
+    status_3xx: int
+    status_4xx: int
+    status_5xx: int
+    requests_per_minute: list[TrafficBucket]
+
+
 class NginxSiteCandidate(BaseModel):
     name: str
     config_file_path: str

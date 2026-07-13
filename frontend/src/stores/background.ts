@@ -7,6 +7,7 @@ export interface BgConfig {
   gradientStart: string
   gradientEnd: string
   blur: number
+  brightness: number
 }
 
 const DEFAULT_BG: BgConfig = {
@@ -15,6 +16,7 @@ const DEFAULT_BG: BgConfig = {
   gradientStart: '#0d0d0d',
   gradientEnd: '#1a1a3e',
   blur: 0,
+  brightness: 100,
 }
 
 const APP_BG_KEY = 'cp_bg_app'
@@ -31,6 +33,7 @@ function parseConfig(raw: unknown): BgConfig {
     gradientStart: typeof p.gradientStart === 'string' ? p.gradientStart : DEFAULT_BG.gradientStart,
     gradientEnd: typeof p.gradientEnd === 'string' ? p.gradientEnd : DEFAULT_BG.gradientEnd,
     blur: typeof p.blur === 'number' ? Math.min(20, Math.max(0, p.blur)) : DEFAULT_BG.blur,
+    brightness: typeof p.brightness === 'number' ? Math.min(150, Math.max(30, p.brightness)) : DEFAULT_BG.brightness,
   }
 }
 
@@ -68,12 +71,12 @@ export const useBackgroundStore = defineStore('background', () => {
   const appBgLayerStyle = computed((): Record<string, string> => {
     const cfg = appBg.value
     const img = appBgImage.value
-    const blur = cfg.blur > 0 ? `blur(${cfg.blur}px)` : ''
+    const filter = [cfg.blur > 0 ? `blur(${cfg.blur}px)` : '', cfg.brightness !== 100 ? `brightness(${cfg.brightness}%)` : ''].filter(Boolean).join(' ')
     if (cfg.type === 'gradient') {
-      return { backgroundImage: gradientCss(cfg), filter: blur }
+      return { backgroundImage: gradientCss(cfg), filter }
     }
     if (cfg.type === 'image' && img) {
-      return { backgroundImage: `url("${img}")`, backgroundSize: 'cover', backgroundPosition: 'center', filter: blur }
+      return { backgroundImage: `url("${img}")`, backgroundSize: 'cover', backgroundPosition: 'center', filter }
     }
     return {}
   })
@@ -128,7 +131,8 @@ export const useBackgroundStore = defineStore('background', () => {
       backgroundSize: 'cover',
       backgroundPosition: 'center',
     }
-    if (cfg.blur > 0) style.filter = `blur(${cfg.blur}px)`
+    const filter = [cfg.blur > 0 ? `blur(${cfg.blur}px)` : '', cfg.brightness !== 100 ? `brightness(${cfg.brightness}%)` : ''].filter(Boolean).join(' ')
+    if (filter) style.filter = filter
     return style
   })
 
@@ -153,7 +157,7 @@ export const useBackgroundStore = defineStore('background', () => {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function isCustom(cfg: BgConfig): boolean {
-    return cfg.type !== 'color' || cfg.blur > 0
+    return cfg.type !== 'color' || cfg.blur > 0 || cfg.brightness !== 100
   }
 
   const hasCustomBg = computed(() => isCustom(appBg.value) || isCustom(loginBg.value))

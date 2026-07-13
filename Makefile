@@ -6,7 +6,7 @@ PIP     := backend/.venv/bin/pip
 PYTHON  := backend/.venv/bin/python
 ALEMBIC := backend/.venv/bin/alembic
 RUFF    := backend/.venv/bin/ruff
-BACKEND_PORT := 8000
+BACKEND_PORT := 8010
 
 # Run both services in parallel
 dev:

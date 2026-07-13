@@ -7,22 +7,23 @@ export interface WidgetPos { col: number; row: number; w: number; h: number }
 export type WidgetId =
   | 'cpu' | 'ram' | 'gpu' | 'system'
   | 'disk' | 'network' | 'cpuTemp' | 'bandwidth'
-  | 'history' | 'processes' | 'bookmarks'
+  | 'history' | 'processes' | 'bookmarks' | 'siteTraffic'
 
 const STORAGE_KEY = 'cp_dashboard_layout'
 
 export const DEFAULT_LAYOUT: Record<WidgetId, WidgetPos> = {
-  bookmarks: { col: 0, row: 0,  w: 12, h: 5  },
-  cpu:       { col: 0, row: 6,  w: 6,  h: 9  },
-  ram:       { col: 6, row: 6,  w: 6,  h: 9  },
-  gpu:       { col: 0, row: 16, w: 6,  h: 9  },
-  system:    { col: 6, row: 16, w: 6,  h: 9  },
-  disk:      { col: 0, row: 26, w: 12, h: 5  },
-  network:   { col: 0, row: 32, w: 12, h: 6  },
-  cpuTemp:   { col: 0, row: 39, w: 6,  h: 6  },
-  bandwidth: { col: 6, row: 39, w: 6,  h: 6  },
-  history:   { col: 0, row: 46, w: 12, h: 6  },
-  processes: { col: 0, row: 53, w: 12, h: 11 },
+  bookmarks:    { col: 0, row: 0,  w: 12, h: 5  },
+  cpu:          { col: 0, row: 5,  w: 6,  h: 7  },
+  ram:          { col: 6, row: 5,  w: 6,  h: 7  },
+  gpu:          { col: 0, row: 12, w: 6,  h: 7  },
+  system:       { col: 6, row: 12, w: 6,  h: 7  },
+  disk:         { col: 0, row: 19, w: 12, h: 5  },
+  network:      { col: 0, row: 24, w: 12, h: 6  },
+  siteTraffic:  { col: 0, row: 30, w: 12, h: 6  },
+  cpuTemp:      { col: 0, row: 36, w: 6,  h: 6  },
+  bandwidth:    { col: 6, row: 36, w: 6,  h: 6  },
+  history:      { col: 0, row: 42, w: 12, h: 6  },
+  processes:    { col: 0, row: 48, w: 12, h: 11 },
 }
 
 function mergeWithDefaults(stored: Partial<Record<WidgetId, WidgetPos>>): Record<WidgetId, WidgetPos> {

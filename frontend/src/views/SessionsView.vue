@@ -72,7 +72,7 @@ onMounted(load)
 .state-msg.muted { color: var(--fg-dim); }
 
 .sessions-list { display: flex; flex-direction: column; gap: 8px; }
-.session-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.session-card { background: color-mix(in srgb, var(--bg-card) 72%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .session-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .session-user { font-size: 13px; font-weight: 600; color: var(--accent); }
 .session-tty { font-size: 11px; color: var(--fg-muted); font-family: monospace; }

@@ -325,6 +325,10 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   rootStyle.setProperty('--info', resolved.info)
   rootStyle.setProperty('--font', resolved.font)
   rootStyle.setProperty('--font-size', `${resolved.fontSize}px`)
+  // Most components hardcode their own px font-sizes rather than inheriting
+  // --font-size, so the setting is applied as an overall UI zoom instead —
+  // it scales every page's text (and spacing) uniformly, not just unstyled text.
+  rootStyle.setProperty('--ui-scale', String(resolved.fontSize / 12))
   rootStyle.setProperty('--accent-dim', toRgba(resolved.accent, 0.1))
   rootStyle.setProperty('--accent-border', toRgba(resolved.accent, effectiveDark ? 0.2 : 0.25))
   rootStyle.setProperty('--danger-dim', toRgba(resolved.danger, effectiveDark ? 0.1 : 0.08))

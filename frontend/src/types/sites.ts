@@ -63,6 +63,23 @@ export interface NginxImportResponse {
   sites: SiteResponse[]
 }
 
+export interface TrafficBucket {
+  minute: string
+  count: number
+}
+
+export interface SiteTrafficResponse {
+  site_id: string
+  window_minutes: number
+  total_requests: number
+  total_bytes: number
+  status_2xx: number
+  status_3xx: number
+  status_4xx: number
+  status_5xx: number
+  requests_per_minute: TrafficBucket[]
+}
+
 export interface SystemServiceResponse {
   service_name: string
   description: string | null

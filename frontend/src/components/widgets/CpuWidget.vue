@@ -38,7 +38,7 @@
     </div>
 
     <div class="sparkline-row">
-      <Sparkline :data="history" />
+      <Sparkline :data="history" :height="32" />
     </div>
   </BaseCard>
 </template>
@@ -100,7 +100,7 @@ function loadColor(val: number) {
 .load-val { font-size: 16px; font-weight: 700; color: var(--fg); letter-spacing: -0.02em; }
 .load-lbl { font-size: 9px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
 
-.sparkline-row { margin-top: 10px; flex: 1; min-height: 24px; }
+.sparkline-row { margin-top: 10px; }
 @container (max-width: 200px) { .cpu-layout { flex-direction: column; align-items: flex-start; } }
 @container (max-width: 160px) { .sparkline-row, .load-row { display: none; } }
 </style>

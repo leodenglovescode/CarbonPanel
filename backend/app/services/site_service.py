@@ -2,6 +2,7 @@ import asyncio
 import json
 import re
 import shutil
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -366,6 +367,72 @@ async def tail_log(path: str) -> AsyncIterator[str]:
             await asyncio.wait_for(proc.wait(), timeout=2.0)
         except asyncio.TimeoutError:
             proc.kill()
+
+
+_ACCESS_LOG_RE = re.compile(
+    r'^\S+ \S+ \S+ \[(?P<time>[^\]]+)\] '
+    r'"\S+ \S+ \S+" (?P<status>\d{3}) (?P<bytes>\d+|-)',
+)
+
+
+async def get_site_traffic(log_path: str, minutes: int = 30) -> dict:
+    """Parse the tail of an nginx combined-format access log into a traffic summary."""
+    proc = await asyncio.create_subprocess_exec(
+        "tail",
+        "-n",
+        "20000",
+        log_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    stdout, _ = await proc.communicate()
+    lines = stdout.decode(errors="replace").splitlines()
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=minutes)
+    buckets: dict[str, int] = {}
+    total_bytes = 0
+    status_counts = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0}
+
+    for line in lines:
+        m = _ACCESS_LOG_RE.match(line)
+        if not m:
+            continue
+        try:
+            ts = datetime.strptime(m.group("time"), "%d/%b/%Y:%H:%M:%S %z")
+        except ValueError:
+            continue
+        if ts < cutoff:
+            continue
+
+        minute_key = ts.astimezone(timezone.utc).strftime("%H:%M")
+        buckets[minute_key] = buckets.get(minute_key, 0) + 1
+
+        status = m.group("status")
+        bucket = f"{status[0]}xx"
+        if bucket in status_counts:
+            status_counts[bucket] += 1
+
+        raw_bytes = m.group("bytes")
+        if raw_bytes.isdigit():
+            total_bytes += int(raw_bytes)
+
+    requests_per_minute = []
+    for i in range(minutes - 1, -1, -1):
+        minute_dt = now - timedelta(minutes=i)
+        key = minute_dt.strftime("%H:%M")
+        requests_per_minute.append({"minute": key, "count": buckets.get(key, 0)})
+
+    return {
+        "window_minutes": minutes,
+        "total_requests": sum(buckets.values()),
+        "total_bytes": total_bytes,
+        "status_2xx": status_counts["2xx"],
+        "status_3xx": status_counts["3xx"],
+        "status_4xx": status_counts["4xx"],
+        "status_5xx": status_counts["5xx"],
+        "requests_per_minute": requests_per_minute,
+    }
 
 
 async def list_sites(db: AsyncSession) -> list[Site]:
