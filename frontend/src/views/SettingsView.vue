@@ -238,6 +238,13 @@
                 :value="bg.appBg.blur"
                 @input="bg.setAppBg({ blur: parseInt(($event.target as HTMLInputElement).value) })" />
             </label>
+
+            <label v-if="bg.appBg.type !== 'color'" class="style-field">
+              <span class="style-lbl">Background brightness — {{ bg.appBg.brightness }}%</span>
+              <input type="range" class="interval-slider" min="30" max="150" step="5"
+                :value="bg.appBg.brightness"
+                @input="bg.setAppBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })" />
+            </label>
           </div>
 
           <div class="bg-divider" />
@@ -305,6 +312,13 @@
               <input type="range" class="interval-slider" min="0" max="20" step="1"
                 :value="bg.loginBg.blur"
                 @input="bg.setLoginBg({ blur: parseInt(($event.target as HTMLInputElement).value) })" />
+            </label>
+
+            <label v-if="bg.loginBg.type !== 'color'" class="style-field">
+              <span class="style-lbl">Background brightness — {{ bg.loginBg.brightness }}%</span>
+              <input type="range" class="interval-slider" min="30" max="150" step="5"
+                :value="bg.loginBg.brightness"
+                @input="bg.setLoginBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })" />
             </label>
           </div>
         </div>
@@ -1530,7 +1544,9 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 6px;
   padding: 10px 14px;
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   position: sticky;
@@ -1556,7 +1572,9 @@ onMounted(() => {
 .back-link:hover { color: var(--accent); }
 
 .section {
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px 18px;

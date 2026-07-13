@@ -10,6 +10,7 @@ import type {
   SiteAction,
   NginxDiscoverResponse,
   NginxImportResponse,
+  SiteTrafficResponse,
 } from '@/types/sites'
 
 const api = axios.create({
@@ -302,6 +303,8 @@ export const sitesApi = {
   action: (id: string, action: SiteAction) =>
     api.post<SiteActionResponse>(`/sites/${id}/action`, { action }),
   getConfig: (id: string) => api.get<ConfigReadResponse>(`/sites/${id}/config`),
+  traffic: (id: string, minutes = 30) =>
+    api.get<SiteTrafficResponse>(`/sites/${id}/traffic`, { params: { minutes } }),
   saveConfig: (id: string, content: string) =>
     api.put(`/sites/${id}/config`, { content }),
   listSystemServices: (includeAll = false, starredOnly = false) =>

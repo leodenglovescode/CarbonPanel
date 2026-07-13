@@ -6,8 +6,8 @@
   --border: #222222;
   --border-subtle: #1a1a1a;
   --fg: #e0e0e0;
-  --fg-muted: #666666;
-  --fg-dim: #444444;
+  --fg-muted: #9a9a9a;
+  --fg-dim: #767676;
   --accent: #00ff88;
   --accent-dim: rgba(0, 255, 136, 0.1);
   --accent-border: rgba(0, 255, 136, 0.2);
@@ -17,7 +17,7 @@
   --warning-dim: rgba(255, 170, 0, 0.1);
   --info: #4488ff;
   --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --font-size: 12px;
+  --font-size: 14px;
   --radius: 6px;
   --radius-sm: 4px;
   --gap: 12px;
@@ -99,6 +99,7 @@ body {
   height: 100%;
   position: relative;
   z-index: 1;
+  zoom: var(--ui-scale, 1);
 }
 
 button,

@@ -82,7 +82,7 @@ onMounted(load)
 .state-msg.error { color: var(--danger); }
 .state-msg.muted { color: var(--fg-dim); }
 
-.table-wrap { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap { overflow-x: auto; background: color-mix(in srgb, var(--bg-card) 72%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--border); border-radius: var(--radius); }
 table { width: 100%; border-collapse: collapse; }
 thead th { font-size: 9px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-dim); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-subtle); }
 tbody tr:nth-child(even) { background: var(--bg-stripe); }

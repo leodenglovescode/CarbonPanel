@@ -546,7 +546,9 @@ onMounted(() => {
 }
 
 .service-card {
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;

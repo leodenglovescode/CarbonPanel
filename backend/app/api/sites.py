@@ -18,6 +18,7 @@ from app.schemas.sites import (
     SiteActionResponse,
     SiteCreate,
     SiteResponse,
+    SiteTrafficResponse,
     SiteUpdate,
     SystemServiceActionRequest,
     SystemServiceAutostartRequest,
@@ -270,6 +271,24 @@ async def write_config(
         site_service.write_config(site.config_file_path, body.content)
     except (FileNotFoundError, PermissionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{site_id}/traffic", response_model=SiteTrafficResponse)
+async def get_traffic(
+    site_id: str,
+    minutes: int = 30,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    site = await site_service.get_site(db, site_id)
+    if not site:
+        raise _404(site_id)
+    log_paths = json.loads(site.log_paths or "[]")
+    if not log_paths:
+        raise HTTPException(status_code=400, detail="No access log configured for this site")
+    minutes = max(5, min(120, minutes))
+    data = await site_service.get_site_traffic(log_paths[0], minutes)
+    return SiteTrafficResponse(site_id=site_id, **data)
 
 
 @router.websocket("/{site_id}/logs")

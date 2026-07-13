@@ -31,7 +31,7 @@
         v-for="w in sortedWidgets"
         :key="w.id"
         class="grid-item"
-        :class="{ 'edit-widget': editMode, 'is-active': editMode && drag?.id === w.id }"
+        :class="[w.id, { 'edit-widget': editMode, 'is-active': editMode && drag?.id === w.id }]"
         :style="gridItemStyle(w.id)"
         @mousedown.left="editMode ? (($event as MouseEvent).preventDefault(), startDrag(w.id, $event)) : undefined"
       >
@@ -63,6 +63,7 @@ import CpuTempWidget from '@/components/widgets/CpuTempWidget.vue'
 import HistoryWidget from '@/components/widgets/HistoryWidget.vue'
 import BandwidthWidget from '@/components/widgets/BandwidthWidget.vue'
 import BookmarksWidget from '@/components/widgets/BookmarksWidget.vue'
+import SiteTrafficWidget from '@/components/widgets/SiteTrafficWidget.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useLayoutStore, type WidgetId } from '@/stores/layout'
@@ -289,6 +290,7 @@ const visibleWidgets = computed(() => {
   const m = metrics.latest
   const always = [
     { id: 'bookmarks' as WidgetId, comp: BookmarksWidget, props: {}, show: true },
+    { id: 'siteTraffic' as WidgetId, comp: SiteTrafficWidget, props: {}, show: true },
   ]
   if (!m) return always.filter(w => w.show)
   return [
@@ -336,8 +338,37 @@ const sortedWidgets = computed(() =>
   gap: 6px;
 }
 .grid-item { min-width: 0; overflow: hidden; }
+
+/* Wide screens: repack the small stat widgets 3-per-row instead of 2 so they
+   don't just stretch wider. Only applies outside edit mode — edit mode always
+   shows your saved drag/resize positions, since a screen-width-only rule can't
+   participate in the resize interaction. */
+@media (min-width: 1900px) {
+  .grid:not(.grid-edit) .grid-item.cpu       { grid-column: 1 / span 4  !important; grid-row: 6 / span 7  !important; }
+  .grid:not(.grid-edit) .grid-item.ram       { grid-column: 5 / span 4  !important; grid-row: 6 / span 7  !important; }
+  .grid:not(.grid-edit) .grid-item.gpu       { grid-column: 9 / span 4  !important; grid-row: 6 / span 7  !important; }
+  .grid:not(.grid-edit) .grid-item.system    { grid-column: 1 / span 4  !important; grid-row: 13 / span 7 !important; }
+  .grid:not(.grid-edit) .grid-item.cpuTemp   { grid-column: 5 / span 4  !important; grid-row: 13 / span 7 !important; }
+  .grid:not(.grid-edit) .grid-item.bandwidth { grid-column: 9 / span 4  !important; grid-row: 13 / span 7 !important; }
+  .grid:not(.grid-edit) .grid-item.disk        { grid-column: 1 / span 4 !important; grid-row: 20 / span 6  !important; }
+  .grid:not(.grid-edit) .grid-item.network     { grid-column: 5 / span 4 !important; grid-row: 20 / span 6  !important; }
+  .grid:not(.grid-edit) .grid-item.siteTraffic { grid-column: 9 / span 4 !important; grid-row: 20 / span 6  !important; }
+  .grid:not(.grid-edit) .grid-item.history     { grid-row: 26 / span 6  !important; }
+  .grid:not(.grid-edit) .grid-item.processes   { grid-row: 32 / span 11 !important; }
+}
+
+/* Below 900px the drag/resize grid gives way to a natural single-column stack.
+   Each widget sizes to its own content (via its own flex/min-height + container
+   queries) instead of a fixed pixel grid cell — no per-widget overrides needed here. */
 @media (max-width: 900px) {
-  .grid-item { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .grid { grid-auto-rows: auto; }
+  .grid-item { grid-column: 1 / -1 !important; grid-row: auto !important; overflow: visible; }
+  .widget-body { height: auto !important; overflow: visible; }
+  .widget-body :deep(.card) { height: auto !important; }
+  .widget-body :deep(.card-body) {
+    flex: none !important;
+    overflow: auto !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -345,20 +376,6 @@ const sortedWidgets = computed(() =>
   .edit-fab { bottom: 16px; right: 16px; }
   .edit-toolbar { padding: 8px 10px; gap: 8px; }
   .edit-hint { font-size: 10px; }
-
-  /* Break the height:100% chain — let cards size to their own content */
-  .grid { grid-auto-rows: auto; }
-  .grid-item { overflow: visible; }
-  .widget-body { height: auto !important; overflow: visible; }
-  .widget-body :deep(.card) { height: auto !important; }
-  .widget-body :deep(.card-body) {
-    flex: none !important;
-    min-height: 120px !important;
-    overflow: auto !important;
-  }
-  /* Give sparklines and chart areas an explicit pixel height so charts render */
-  .widget-body :deep(.sparkline-wrap) { height: 48px !important; min-height: 48px !important; }
-  .widget-body :deep(.chart-area) { min-height: 80px !important; }
 }
 
 /* Edit mode overlay on the same grid */
@@ -456,7 +473,7 @@ const sortedWidgets = computed(() =>
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
 }
 

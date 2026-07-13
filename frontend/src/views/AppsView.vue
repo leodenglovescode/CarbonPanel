@@ -352,7 +352,9 @@ onMounted(load)
 }
 
 .app-row {
-  background: var(--bg-card); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm); overflow: hidden;
   transition: border-color var(--transition);
 }
@@ -362,7 +364,7 @@ onMounted(load)
 .row-main {
   display: grid;
   grid-template-columns: 60px 54px 1fr 140px 100px 60px 70px;
-  align-items: center; padding: 9px 12px; cursor: pointer;
+  align-items: center; padding: 6px 12px; cursor: pointer;
   transition: background var(--transition);
 }
 .row-main:hover { background: var(--bg-hover); }
