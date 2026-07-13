@@ -903,7 +903,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -953,6 +954,13 @@ function scrollTo(id: string) {
   const delta = target.getBoundingClientRect().top - container.getBoundingClientRect().top
   container.scrollBy({ top: delta - 16, behavior: 'smooth' })
 }
+
+// Lets the command palette (or any external link) jump straight to a section via #section-id
+const route = useRoute()
+watch(() => route.hash, (hash) => {
+  if (!hash) return
+  nextTick(() => scrollTo(hash.slice(1)))
+}, { immediate: true })
 
 const bgTypes = [
   { key: 'color' as const, label: 'Color' },
