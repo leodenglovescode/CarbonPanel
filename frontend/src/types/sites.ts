@@ -68,6 +68,11 @@ export interface TrafficBucket {
   count: number
 }
 
+export interface TrafficTopEntry {
+  value: string
+  count: number
+}
+
 export interface SiteTrafficResponse {
   site_id: string
   window_minutes: number
@@ -78,6 +83,8 @@ export interface SiteTrafficResponse {
   status_4xx: number
   status_5xx: number
   requests_per_minute: TrafficBucket[]
+  top_paths: TrafficTopEntry[]
+  top_ips: TrafficTopEntry[]
 }
 
 export interface SystemServiceResponse {

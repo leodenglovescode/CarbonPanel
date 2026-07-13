@@ -34,6 +34,19 @@
       <div class="sparkline-row">
         <Sparkline :data="counts" :height="40" :max-y="sparkMax" color="var(--accent)" />
       </div>
+
+      <div v-if="traffic.top_paths.length" class="top-row">
+        <span class="top-lbl">Top paths</span>
+        <span v-for="p in traffic.top_paths.slice(0, 3)" :key="p.value" class="top-chip" :title="p.value">
+          {{ p.value }} <b>{{ p.count }}</b>
+        </span>
+      </div>
+      <div v-if="traffic.top_ips.length" class="top-row">
+        <span class="top-lbl">Top IPs</span>
+        <span v-for="ip in traffic.top_ips.slice(0, 3)" :key="ip.value" class="top-chip">
+          {{ ip.value }} <b>{{ ip.count }}</b>
+        </span>
+      </div>
     </template>
   </BaseCard>
 </template>
@@ -45,9 +58,16 @@ import Sparkline from '@/components/charts/Sparkline.vue'
 import { sitesApi } from '@/api'
 import type { SiteResponse, SiteTrafficResponse } from '@/types/sites'
 import { useSiteTrafficStore } from '@/stores/siteTraffic'
+import { useMetricsStore } from '@/stores/metrics'
+import { useAlertsStore } from '@/stores/alerts'
 
-const POLL_MS = 15000
+// ponytail: fixed threshold instead of a new settings slider — bump to a
+// configurable one if a per-site error-rate control is actually requested
+const ERROR_RATE_ALERT_PERCENT = 25
+const ERROR_RATE_ALERT_MIN_REQUESTS = 20
 
+const metrics = useMetricsStore()
+const alerts = useAlertsStore()
 const trafficStore = useSiteTrafficStore()
 const sites = ref<SiteResponse[]>([])
 const selectedId = ref(trafficStore.selectedSiteId || '')
@@ -73,9 +93,23 @@ async function loadTraffic() {
     const { data } = await sitesApi.traffic(selectedId.value)
     traffic.value = data
     error.value = ''
+    checkErrorRate(data)
   } catch (e: any) {
     error.value = e.response?.data?.detail || 'Failed to load traffic'
   }
+}
+
+function checkErrorRate(data: SiteTrafficResponse) {
+  if (data.total_requests < ERROR_RATE_ALERT_MIN_REQUESTS) return
+  const rate = (data.status_5xx / data.total_requests) * 100
+  if (rate < ERROR_RATE_ALERT_PERCENT) return
+  const name = sites.value.find(s => s.id === data.site_id)?.name || data.site_id
+  alerts.fire(
+    `site_5xx_${data.site_id}`,
+    `${name}: ${rate.toFixed(0)}% of requests are 5xx (${data.status_5xx}/${data.total_requests})`,
+    'danger',
+    { event: 'alert.site_5xx', metric: `site:${data.site_id}:5xx_rate`, value: rate, threshold: ERROR_RATE_ALERT_PERCENT },
+  )
 }
 
 function onSiteChange() {
@@ -88,6 +122,14 @@ watch(() => trafficStore.selectedSiteId, (id) => {
   if (id !== selectedId.value) selectedId.value = id || ''
 })
 
+function restartPolling() {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(loadTraffic, metrics.updateInterval * 1000)
+}
+
+// Same update-interval slider that drives the live metrics WS — one setting for all "live" widgets
+watch(() => metrics.updateInterval, restartPolling)
+
 onMounted(async () => {
   try {
     const { data } = await sitesApi.list()
@@ -95,7 +137,7 @@ onMounted(async () => {
     if (selectedId.value && !data.some(s => s.id === selectedId.value)) selectedId.value = ''
   } catch { /* silent */ }
   void loadTraffic()
-  pollTimer = setInterval(loadTraffic, POLL_MS)
+  restartPolling()
 })
 
 onUnmounted(() => {
@@ -129,5 +171,15 @@ onUnmounted(() => {
 .s5xx { background: var(--danger-dim); color: var(--danger); }
 
 .sparkline-row { margin-top: 4px; }
-@container (max-width: 200px) { .status-row, .sparkline-row { display: none; } }
+
+.top-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.top-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); flex-shrink: 0; }
+.top-chip {
+  font-size: 10px; color: var(--fg-muted); background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1px 6px;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.top-chip b { color: var(--fg); font-weight: 600; }
+
+@container (max-width: 200px) { .status-row, .sparkline-row, .top-row { display: none; } }
 </style>
