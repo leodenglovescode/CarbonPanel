@@ -1,7 +1,10 @@
 import asyncio
 import json
+import os
 import re
 import shutil
+import time
+from collections import Counter, OrderedDict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import AsyncIterator
@@ -370,68 +373,170 @@ async def tail_log(path: str) -> AsyncIterator[str]:
 
 
 _ACCESS_LOG_RE = re.compile(
-    r'^\S+ \S+ \S+ \[(?P<time>[^\]]+)\] '
-    r'"\S+ \S+ \S+" (?P<status>\d{3}) (?P<bytes>\d+|-)',
+    r'^(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
+    r'"\S+ (?P<path>\S+) \S+" (?P<status>\d{3}) (?P<bytes>\d+|-)',
 )
 
+_TRAFFIC_TOP_N = 5
+_TRAFFIC_TOP_CAP = 200  # prune path/ip counters back to this once cardinality grows past it
 
-async def get_site_traffic(log_path: str, minutes: int = 30) -> dict:
-    """Parse the tail of an nginx combined-format access log into a traffic summary."""
-    proc = await asyncio.create_subprocess_exec(
-        "tail",
-        "-n",
-        "20000",
-        log_path,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
+# ponytail: per-site incremental tail buffer instead of re-parsing the whole
+# log every poll. Bucket count is capped so memory stays flat regardless of
+# traffic volume; a stale buffer's first catch-up read is capped too, so a
+# site nobody's watched for hours can't pull a huge backlog into memory at once.
+_TRAFFIC_BUCKET_MAX = 130  # >2h of minute buckets, covers the 120min max window
+_TRAFFIC_CATCHUP_CAP = 5 * 1024 * 1024  # 5MB max read per catch-up
+_TRAFFIC_IDLE_EVICT_SECONDS = 900  # drop buffers for sites nobody's polled in 15min
+
+_traffic_buffers: dict[str, "_TrafficBuffer"] = {}
+_traffic_locks: dict[str, asyncio.Lock] = {}
+
+
+class _TrafficBuffer:
+    __slots__ = (
+        "path", "offset", "inode", "minute_buckets", "path_counts", "ip_counts", "last_access",
     )
-    stdout, _ = await proc.communicate()
-    lines = stdout.decode(errors="replace").splitlines()
 
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(minutes=minutes)
-    buckets: dict[str, int] = {}
-    total_bytes = 0
-    status_counts = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0}
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.offset = 0
+        self.inode: int | None = None
+        self.minute_buckets: OrderedDict[str, dict[str, int]] = OrderedDict()
+        self.path_counts: Counter[str] = Counter()
+        self.ip_counts: Counter[str] = Counter()
+        self.last_access = time.monotonic()
 
-    for line in lines:
-        m = _ACCESS_LOG_RE.match(line)
+
+def _evict_idle_traffic_buffers() -> None:
+    # ponytail: many-sites-on-one-VPS is the real long-uptime memory risk here,
+    # not a single traffic spike (that's bounded by _TRAFFIC_CATCHUP_CAP already)
+    cutoff = time.monotonic() - _TRAFFIC_IDLE_EVICT_SECONDS
+    for site_id in [sid for sid, b in _traffic_buffers.items() if b.last_access < cutoff]:
+        _traffic_buffers.pop(site_id, None)
+        _traffic_locks.pop(site_id, None)
+
+
+def _get_traffic_lock(site_id: str) -> asyncio.Lock:
+    lock = _traffic_locks.get(site_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _traffic_locks[site_id] = lock
+    return lock
+
+
+def _read_new_traffic_bytes(path: str, offset: int, size: int) -> tuple[bytes, int]:
+    start = offset if size - offset <= _TRAFFIC_CATCHUP_CAP else size - _TRAFFIC_CATCHUP_CAP
+    with open(path, "rb") as f:
+        f.seek(start)
+        data = f.read()
+        return data, f.tell()
+
+
+async def _update_traffic_buffer(site_id: str, log_path: str) -> _TrafficBuffer:
+    buf = _traffic_buffers.get(site_id)
+    if buf is None or buf.path != log_path:
+        buf = _TrafficBuffer(log_path)
+        _traffic_buffers[site_id] = buf
+
+    try:
+        stat = await asyncio.to_thread(os.stat, log_path)
+    except OSError:
+        return buf
+
+    if buf.inode is not None and stat.st_ino != buf.inode:
+        buf.offset = 0  # log rotated
+    buf.inode = stat.st_ino
+
+    if stat.st_size < buf.offset:
+        buf.offset = 0  # log truncated
+
+    if stat.st_size == buf.offset:
+        return buf
+
+    data, new_offset = await asyncio.to_thread(
+        _read_new_traffic_bytes, log_path, buf.offset, stat.st_size,
+    )
+    buf.offset = new_offset
+
+    for raw_line in data.split(b"\n"):
+        m = _ACCESS_LOG_RE.match(raw_line.decode(errors="replace"))
         if not m:
             continue
         try:
             ts = datetime.strptime(m.group("time"), "%d/%b/%Y:%H:%M:%S %z")
         except ValueError:
             continue
-        if ts < cutoff:
-            continue
 
-        minute_key = ts.astimezone(timezone.utc).strftime("%H:%M")
-        buckets[minute_key] = buckets.get(minute_key, 0) + 1
+        minute_key = ts.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        bucket = buf.minute_buckets.get(minute_key)
+        if bucket is None:
+            bucket = {"count": 0, "bytes": 0, "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0}
+            buf.minute_buckets[minute_key] = bucket
 
-        status = m.group("status")
-        bucket = f"{status[0]}xx"
-        if bucket in status_counts:
-            status_counts[bucket] += 1
-
+        bucket["count"] += 1
+        status_bucket = f"{m.group('status')[0]}xx"
+        if status_bucket in bucket:
+            bucket[status_bucket] += 1
         raw_bytes = m.group("bytes")
         if raw_bytes.isdigit():
-            total_bytes += int(raw_bytes)
+            bucket["bytes"] += int(raw_bytes)
 
+        buf.path_counts[m.group("path").split("?", 1)[0]] += 1
+        buf.ip_counts[m.group("ip")] += 1
+
+    while len(buf.minute_buckets) > _TRAFFIC_BUCKET_MAX:
+        buf.minute_buckets.popitem(last=False)
+
+    # ponytail: cap tracked cardinality so unique-path/IP floods (scans, cache
+    # busting query strings) can't grow these unboundedly between evictions
+    if len(buf.path_counts) > _TRAFFIC_TOP_CAP:
+        buf.path_counts = Counter(dict(buf.path_counts.most_common(_TRAFFIC_TOP_CAP // 2)))
+    if len(buf.ip_counts) > _TRAFFIC_TOP_CAP:
+        buf.ip_counts = Counter(dict(buf.ip_counts.most_common(_TRAFFIC_TOP_CAP // 2)))
+
+    return buf
+
+
+async def get_site_traffic(site_id: str, log_path: str, minutes: int = 30) -> dict:
+    """Return a traffic summary built from an incrementally-updated per-site buffer."""
+    _evict_idle_traffic_buffers()
+    async with _get_traffic_lock(site_id):
+        buf = await _update_traffic_buffer(site_id, log_path)
+        buf.last_access = time.monotonic()
+
+    now = datetime.now(timezone.utc)
+    total_requests = total_bytes = 0
+    status_counts = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0}
     requests_per_minute = []
+
     for i in range(minutes - 1, -1, -1):
         minute_dt = now - timedelta(minutes=i)
-        key = minute_dt.strftime("%H:%M")
-        requests_per_minute.append({"minute": key, "count": buckets.get(key, 0)})
+        bucket = buf.minute_buckets.get(minute_dt.strftime("%Y-%m-%d %H:%M"))
+        count = bucket["count"] if bucket else 0
+        requests_per_minute.append({"minute": minute_dt.strftime("%H:%M"), "count": count})
+        if bucket:
+            total_requests += bucket["count"]
+            total_bytes += bucket["bytes"]
+            for key in status_counts:
+                status_counts[key] += bucket[key]
 
     return {
         "window_minutes": minutes,
-        "total_requests": sum(buckets.values()),
+        "total_requests": total_requests,
         "total_bytes": total_bytes,
         "status_2xx": status_counts["2xx"],
         "status_3xx": status_counts["3xx"],
         "status_4xx": status_counts["4xx"],
         "status_5xx": status_counts["5xx"],
         "requests_per_minute": requests_per_minute,
+        "top_paths": [
+            {"value": path, "count": count}
+            for path, count in buf.path_counts.most_common(_TRAFFIC_TOP_N)
+        ],
+        "top_ips": [
+            {"value": ip, "count": count}
+            for ip, count in buf.ip_counts.most_common(_TRAFFIC_TOP_N)
+        ],
     }
 
 

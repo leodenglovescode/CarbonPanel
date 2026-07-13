@@ -287,7 +287,7 @@ async def get_traffic(
     if not log_paths:
         raise HTTPException(status_code=400, detail="No access log configured for this site")
     minutes = max(5, min(120, minutes))
-    data = await site_service.get_site_traffic(log_paths[0], minutes)
+    data = await site_service.get_site_traffic(site_id, log_paths[0], minutes)
     return SiteTrafficResponse(site_id=site_id, **data)
 
 

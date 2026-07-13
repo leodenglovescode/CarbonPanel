@@ -10,6 +10,7 @@ export type WidgetId =
   | 'history' | 'processes' | 'bookmarks' | 'siteTraffic'
 
 const STORAGE_KEY = 'cp_dashboard_layout'
+const HIDDEN_STORAGE_KEY = 'cp_dashboard_hidden'
 
 export const DEFAULT_LAYOUT: Record<WidgetId, WidgetPos> = {
   bookmarks:    { col: 0, row: 0,  w: 12, h: 5  },
@@ -24,6 +25,16 @@ export const DEFAULT_LAYOUT: Record<WidgetId, WidgetPos> = {
   bandwidth:    { col: 6, row: 36, w: 6,  h: 6  },
   history:      { col: 0, row: 42, w: 12, h: 6  },
   processes:    { col: 0, row: 48, w: 12, h: 11 },
+}
+
+function loadHidden(): Set<WidgetId> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HIDDEN_STORAGE_KEY) || '[]')
+    const known = new Set(Object.keys(DEFAULT_LAYOUT))
+    return new Set(Array.isArray(raw) ? raw.filter((id) => known.has(id)) : [])
+  } catch {
+    return new Set()
+  }
 }
 
 function mergeWithDefaults(stored: Partial<Record<WidgetId, WidgetPos>>): Record<WidgetId, WidgetPos> {
@@ -42,13 +53,22 @@ export const useLayoutStore = defineStore('layout', () => {
       catch { return {} }
     })()),
   )
+  const hidden = ref<Set<WidgetId>>(loadHidden())
 
   async function loadRemote() {
     try {
       const { data } = await dashboardApi.getLayout()
       if (data?.layout) {
-        layout.value = mergeWithDefaults(data.layout as Partial<Record<WidgetId, WidgetPos>>)
+        const raw = data.layout as Record<string, unknown>
+        layout.value = mergeWithDefaults(raw as Partial<Record<WidgetId, WidgetPos>>)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(layout.value))
+
+        const known = new Set(Object.keys(DEFAULT_LAYOUT))
+        const hiddenIds = Array.isArray(raw.hiddenWidgets)
+          ? (raw.hiddenWidgets as string[]).filter((id) => known.has(id))
+          : []
+        hidden.value = new Set(hiddenIds as WidgetId[])
+        localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(hiddenIds))
       }
     } catch { /* keep localStorage fallback */ }
   }
@@ -57,17 +77,28 @@ export const useLayoutStore = defineStore('layout', () => {
     layout.value[id] = { ...layout.value[id], ...pos }
   }
 
+  function toggleHidden(id: WidgetId) {
+    const next = new Set(hidden.value)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    hidden.value = next
+    save()
+  }
+
   async function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout.value))
+    const hiddenIds = Array.from(hidden.value)
+    localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(hiddenIds))
     try {
-      await dashboardApi.saveLayout(layout.value as Record<string, object>)
+      await dashboardApi.saveLayout({ ...layout.value, hiddenWidgets: hiddenIds } as Record<string, object>)
     } catch { /* local save succeeded */ }
   }
 
   function reset() {
     layout.value = { ...DEFAULT_LAYOUT }
+    hidden.value = new Set()
     save()
   }
 
-  return { layout, loadRemote, update, save, reset }
+  return { layout, hidden, loadRemote, update, save, reset, toggleHidden }
 })

@@ -102,6 +102,11 @@ class TrafficBucket(BaseModel):
     count: int
 
 
+class TrafficTopEntry(BaseModel):
+    value: str
+    count: int
+
+
 class SiteTrafficResponse(BaseModel):
     site_id: str
     window_minutes: int
@@ -112,6 +117,8 @@ class SiteTrafficResponse(BaseModel):
     status_4xx: int
     status_5xx: int
     requests_per_minute: list[TrafficBucket]
+    top_paths: list[TrafficTopEntry]
+    top_ips: list[TrafficTopEntry]
 
 
 class NginxSiteCandidate(BaseModel):

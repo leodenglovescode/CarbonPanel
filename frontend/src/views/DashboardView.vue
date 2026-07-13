@@ -4,7 +4,11 @@
     <!-- Edit toolbar -->
     <Transition name="toolbar">
       <div v-if="editMode" class="edit-toolbar">
-        <span class="edit-hint">Drag to move · corners to resize</span>
+        <span class="edit-hint">Drag to move · corners to resize · × to remove</span>
+        <select v-if="hiddenWidgets.length" class="tb-add" @change="onAddWidget($event)">
+          <option value="">+ Add widget…</option>
+          <option v-for="w in hiddenWidgets" :key="w.id" :value="w.id">{{ WIDGET_LABELS[w.id] }}</option>
+        </select>
         <button class="tb-btn" @click="resetLayout">Reset</button>
         <button class="tb-btn tb-done" @click="exitEdit">Done</button>
       </div>
@@ -43,6 +47,12 @@
           <div class="handle tr" @mousedown.left.stop.prevent="startResize(w.id, 'tr', $event)" />
           <div class="handle bl" @mousedown.left.stop.prevent="startResize(w.id, 'bl', $event)" />
           <div class="handle br" @mousedown.left.stop.prevent="startResize(w.id, 'br', $event)" />
+          <button
+            class="widget-remove"
+            title="Remove from dashboard"
+            @mousedown.stop.prevent
+            @click.stop="layoutStore.toggleHidden(w.id)"
+          >×</button>
         </template>
       </div>
     </div>
@@ -286,7 +296,14 @@ watchEffect(() => {
 
 // ── Widget configs for edit mode ───────────────────────────────────────────────
 
-const visibleWidgets = computed(() => {
+const WIDGET_LABELS: Record<WidgetId, string> = {
+  bookmarks: 'Bookmarks', siteTraffic: 'Site Traffic', cpu: 'CPU', ram: 'RAM', gpu: 'GPU',
+  system: 'System', disk: 'Disk', network: 'Network', cpuTemp: 'CPU Temp', bandwidth: 'Bandwidth',
+  history: 'History', processes: 'Processes',
+}
+
+// Widgets whose data is currently available, regardless of user show/hide choice
+const eligibleWidgets = computed(() => {
   const m = metrics.latest
   const always = [
     { id: 'bookmarks' as WidgetId, comp: BookmarksWidget, props: {}, show: true },
@@ -307,6 +324,21 @@ const visibleWidgets = computed(() => {
     { id: 'processes' as WidgetId, comp: ProcessListWidget, props: { processes: m.processes, onSortChange },                                                  show: true },
   ].filter(w => w.show)
 })
+
+const visibleWidgets = computed(() =>
+  eligibleWidgets.value.filter(w => !layoutStore.hidden.has(w.id)),
+)
+
+const hiddenWidgets = computed(() =>
+  eligibleWidgets.value.filter(w => layoutStore.hidden.has(w.id)),
+)
+
+function onAddWidget(e: Event) {
+  const select = e.target as HTMLSelectElement
+  const id = select.value as WidgetId
+  if (id) layoutStore.toggleHidden(id)
+  select.value = ''
+}
 
 // Sort by row then col so tab order matches visual order
 const sortedWidgets = computed(() =>
@@ -449,6 +481,12 @@ const sortedWidgets = computed(() =>
 .tb-btn:hover { border-color: var(--fg-dim); color: var(--fg); }
 .tb-done { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .tb-done:hover { background: var(--accent-dim); filter: brightness(1.1); }
+.tb-add {
+  background: var(--bg-input); border: 1px solid var(--border); color: var(--fg);
+  font-family: var(--font); font-size: 11px; padding: 4px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; outline: none;
+}
+.tb-add:hover { border-color: var(--fg-dim); }
 
 .toolbar-enter-active, .toolbar-leave-active { transition: opacity 150ms, transform 150ms; }
 .toolbar-enter-from, .toolbar-leave-to { opacity: 0; transform: translateY(-6px); }
@@ -496,4 +534,30 @@ const sortedWidgets = computed(() =>
 .handle.bl { bottom: -6px; left: -6px;    cursor: nesw-resize; }
 .handle.br { bottom: -6px; right: -6px;   cursor: nwse-resize; }
 .handle:hover { transform: scale(1.3); }
+
+/* Remove-widget button */
+.widget-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 11;
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition), border-color var(--transition);
+}
+.grid-edit .grid-item:hover .widget-remove,
+.grid-edit .grid-item.is-active .widget-remove { opacity: 1; }
+.widget-remove:hover { color: var(--danger); border-color: var(--danger); }
 </style>
