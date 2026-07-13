@@ -15,6 +15,7 @@
     </Transition>
   </router-view>
   <ToastContainer />
+  <CommandPalette v-if="!isPublicRoute" />
 </template>
 
 <script setup lang="ts">
@@ -22,6 +23,7 @@ import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import CommandPalette from '@/components/layout/CommandPalette.vue'
 import { systemApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
