@@ -22,6 +22,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -45,7 +46,8 @@ DANGER = (255, 70, 70)
 BORDER = (40, 48, 44)
 
 TAB_H = 34
-PAGES = ["overview", "disks"]
+PAGES = ["overview", "disks", "procs"]
+PAGE_DRAW = {}  # filled in after the draw_* functions are defined below
 
 
 def font(size, bold=False):
@@ -86,6 +88,7 @@ class Touch:
     def __init__(self):
         self.device = None
         self.x_min = self.x_max = self.y_min = self.y_max = None
+        self.last_x = self.last_y = None
         self._find_device()
 
     def _find_device(self):
@@ -118,25 +121,26 @@ class Touch:
             return None
         sel.close()
 
-        raw_x = raw_y = None
         released = False
         try:
             for event in self.device.read():
                 if event.type == evdev.ecodes.EV_ABS:
+                    # cache position as it streams in — a release event often
+                    # arrives in its own batch with no fresh X/Y alongside it
                     if event.code == evdev.ecodes.ABS_X:
-                        raw_x = event.value
+                        self.last_x = event.value
                     elif event.code == evdev.ecodes.ABS_Y:
-                        raw_y = event.value
+                        self.last_y = event.value
                 elif event.type == evdev.ecodes.EV_KEY and event.code == evdev.ecodes.BTN_TOUCH:
                     if event.value == 0:
                         released = True
         except BlockingIOError:
             return None
 
-        if not released or raw_x is None or raw_y is None:
+        if not released or self.last_x is None or self.last_y is None:
             return None
-        sx = int((raw_x - self.x_min) / (self.x_max - self.x_min) * FB_W)
-        sy = int((raw_y - self.y_min) / (self.y_max - self.y_min) * FB_H)
+        sx = int((self.last_x - self.x_min) / (self.x_max - self.x_min) * FB_W)
+        sy = int((self.last_y - self.y_min) / (self.y_max - self.y_min) * FB_H)
         return max(0, min(FB_W - 1, sx)), max(0, min(FB_H - 1, sy))
 
 
@@ -145,21 +149,33 @@ class Touch:
 # frontend uses, re-authenticating whenever the socket drops.
 # ---------------------------------------------------------------------------
 
+HISTORY_LEN = 60  # sparkline window, in samples (60 * 0.5s interval = 30s)
+
+
 class MetricsFeed:
-    def __init__(self, base_url, username, password):
+    def __init__(self, base_url, username, password, interval=0.5):
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.password = password
+        self.interval = interval
         self.latest = None
+        self.cpu_hist = deque(maxlen=HISTORY_LEN)
+        self.mem_hist = deque(maxlen=HISTORY_LEN)
         self._lock = threading.Lock()
 
     def get(self):
         with self._lock:
             return self.latest
 
+    def get_history(self):
+        with self._lock:
+            return list(self.cpu_hist), list(self.mem_hist)
+
     def _set(self, snapshot):
         with self._lock:
             self.latest = snapshot
+            self.cpu_hist.append(snapshot["cpu"]["aggregate"])
+            self.mem_hist.append(snapshot["memory"]["percent"])
 
     def _login(self) -> str:
         body = json.dumps({"username": self.username, "password": self.password}).encode()
@@ -181,6 +197,7 @@ class MetricsFeed:
             try:
                 token = await asyncio.to_thread(self._login)
                 async with websockets.connect(f"{ws_base}/ws?token={token}") as ws:
+                    await ws.send(json.dumps({"type": "set_interval", "seconds": self.interval}))
                     async for raw in ws:
                         msg = json.loads(raw)
                         if msg.get("type") == "metrics":
@@ -212,6 +229,18 @@ def pct_color(pct):
     return ACCENT
 
 
+def sparkline(draw, x, y, w, h, values, color=ACCENT, max_val=100):
+    draw.rectangle([x, y, x + w, y + h], outline=BORDER, width=1)
+    if len(values) < 2:
+        return
+    step = w / (len(values) - 1)
+    pts = [
+        (x + i * step, y + h - (max(0, min(max_val, v)) / max_val) * h)
+        for i, v in enumerate(values)
+    ]
+    draw.line(pts, fill=color, width=2)
+
+
 def draw_tabs(draw, active):
     y0 = FB_H - TAB_H
     draw.line([0, y0, FB_W, y0], fill=BORDER, width=1)
@@ -226,8 +255,8 @@ def draw_tabs(draw, active):
         draw.text((x0 + tab_w // 2, y0 + TAB_H // 2), name.upper(), font=f, fill=color, anchor="mm")
 
 
-def draw_overview(draw, snap):
-    f_big = font(28, bold=True)
+def draw_overview(draw, snap, hist):
+    f_big = font(26, bold=True)
     f_lbl = font(13)
     f_sm = font(12)
 
@@ -236,54 +265,86 @@ def draw_overview(draw, snap):
     temps = snap["cpu"].get("temps") or []
     temp = temps[0]["temp_c"] if temps else None
     host = snap["system"]["hostname"]
+    load1 = (snap["cpu"].get("load_avg") or [None])[0]
+    cpu_hist, mem_hist = hist
 
-    draw.text((10, 6), host, font=f_lbl, fill=FG_MUTED)
+    draw.text((10, 4), host, font=f_lbl, fill=FG_MUTED)
+    uptime_s = snap["system"]["uptime_seconds"]
+    draw.text((FB_W - 10, 4), f"up {int(uptime_s // 3600)}h", font=f_lbl, fill=FG_MUTED, anchor="ra")
 
-    draw.text((10, 24), "CPU", font=f_lbl, fill=FG_MUTED)
-    draw.text((10, 40), f"{cpu:4.0f}%", font=f_big, fill=pct_color(cpu))
-    bar(draw, 100, 55, 180, 10, cpu, pct_color(cpu))
+    draw.text((10, 22), "CPU", font=f_lbl, fill=FG_MUTED)
+    draw.text((10, 36), f"{cpu:3.0f}%", font=f_big, fill=pct_color(cpu))
+    sparkline(draw, 95, 26, 145, 34, cpu_hist, pct_color(cpu))
 
-    draw.text((300, 24), "MEM", font=f_lbl, fill=FG_MUTED)
-    draw.text((300, 40), f"{mem:4.0f}%", font=f_big, fill=pct_color(mem))
-    bar(draw, 300, 75, 170, 10, mem, pct_color(mem))
+    draw.text((250, 22), "MEM", font=f_lbl, fill=FG_MUTED)
+    draw.text((250, 36), f"{mem:3.0f}%", font=f_big, fill=pct_color(mem))
+    sparkline(draw, 335, 26, 135, 34, mem_hist, pct_color(mem))
 
+    info_y = 68
+    bits = []
     if temp is not None:
-        draw.text((10, 95), f"temp  {temp:.1f}C", font=f_sm, fill=FG_MUTED)
+        bits.append(f"{temp:.1f}C")
+    if load1 is not None:
+        bits.append(f"load {load1:.2f}")
+    if snap["gpu"]["available"] and snap["gpu"]["devices"]:
+        gpu = snap["gpu"]["devices"][0]
+        bits.append(f"gpu {gpu['utilization_percent']:.0f}%")
+    draw.text((10, info_y), "  ".join(bits), font=f_sm, fill=FG_MUTED)
 
     cores = snap["cpu"].get("per_core") or []
-    core_y = 120
+    core_y = 90
+    core_h = 70
     core_w = (FB_W - 20) / max(1, len(cores))
     for i, c in enumerate(cores):
         cx = 10 + int(i * core_w)
-        h = int(c / 100 * 60)
-        draw.rectangle([cx, core_y + 60 - h, cx + max(2, int(core_w) - 2), core_y + 60],
+        h = int(c / 100 * core_h)
+        draw.rectangle([cx, core_y + core_h - h, cx + max(2, int(core_w) - 2), core_y + core_h],
                        fill=pct_color(c))
-    draw.line([10, core_y + 61, FB_W - 10, core_y + 61], fill=BORDER, width=1)
+    draw.line([10, core_y + core_h + 1, FB_W - 10, core_y + core_h + 1], fill=BORDER, width=1)
 
-    uptime_s = snap["system"]["uptime_seconds"]
-    hrs = int(uptime_s // 3600)
-    draw.text((10, 195), f"uptime {hrs}h", font=f_sm, fill=FG_MUTED)
+    procs = sorted(snap.get("processes", []), key=lambda p: p["cpu_percent"], reverse=True)[:4]
+    py = core_y + core_h + 10
+    for p in procs:
+        draw.text((10, py), p["name"][:20], font=f_sm, fill=FG)
+        draw.text((FB_W - 10, py), f"{p['cpu_percent']:.0f}%", font=f_sm,
+                   fill=pct_color(p["cpu_percent"]), anchor="ra")
+        py += 16
 
 
-def draw_disks(draw, snap):
+def draw_disks(draw, snap, hist):
     f_lbl = font(13, bold=True)
     f_sm = font(12)
     draw.text((10, 6), "DISKS", font=f_lbl, fill=FG_MUTED)
     y = 26
     for d in snap.get("disks", [])[:4]:
         pct = d["usage_percent"]
-        draw.text((10, y), d["mountpoint"][:14], font=f_sm, fill=FG)
-        bar(draw, 120, y + 2, 200, 10, pct, pct_color(pct))
-        draw.text((330, y), f"{pct:.0f}%", font=f_sm, fill=FG_MUTED)
-        y += 22
+        draw.text((10, y), d["mountpoint"][:12], font=f_sm, fill=FG)
+        bar(draw, 105, y + 2, 140, 10, pct, pct_color(pct))
+        draw.text((250, y), f"{pct:.0f}%", font=f_sm, fill=FG_MUTED)
+        draw.text((300, y), f"r{d['read_mb_s']:.0f}/w{d['write_mb_s']:.0f} MB/s", font=f_sm, fill=FG_MUTED)
+        y += 20
 
-    y += 10
+    y += 8
     draw.text((10, y), "NETWORK", font=f_lbl, fill=FG_MUTED)
     y += 20
-    for n in snap.get("network", [])[:3]:
+    for n in snap.get("network", [])[:4]:
         draw.text((10, y), n["interface"][:10], font=f_sm, fill=FG)
         draw.text((120, y), f"down {n['rx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
         draw.text((300, y), f"up {n['tx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
+        y += 18
+
+
+def draw_procs(draw, snap, hist):
+    f_lbl = font(13, bold=True)
+    f_sm = font(12)
+    draw.text((10, 6), "PROCESSES", font=f_lbl, fill=FG_MUTED)
+    y = 26
+    procs = sorted(snap.get("processes", []), key=lambda p: p["cpu_percent"], reverse=True)
+    for p in procs[:14]:
+        draw.text((10, y), p["name"][:18], font=f_sm, fill=FG)
+        draw.text((260, y), f"{p['cpu_percent']:.0f}%", font=f_sm,
+                   fill=pct_color(p["cpu_percent"]), anchor="ra")
+        draw.text((340, y), f"{p['memory_mb']:.0f}MB", font=f_sm, fill=FG_MUTED, anchor="ra")
         y += 18
 
 
@@ -292,13 +353,17 @@ def draw_waiting(draw):
     draw.text((FB_W // 2, FB_H // 2), "connecting...", font=f, fill=FG_MUTED, anchor="mm")
 
 
+PAGE_DRAW.update({"overview": draw_overview, "disks": draw_disks, "procs": draw_procs})
+
+
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 
 def main(config_path):
     cfg = json.loads(Path(config_path).read_text())
-    feed = MetricsFeed(cfg["base_url"], cfg["username"], cfg["password"])
+    feed = MetricsFeed(cfg["base_url"], cfg["username"], cfg["password"],
+                        interval=cfg.get("interval", 0.5))
     feed.start_background()
     touch = Touch()
 
@@ -321,10 +386,8 @@ def main(config_path):
             snap = feed.get()
             if snap is None:
                 draw_waiting(draw)
-            elif PAGES[page] == "overview":
-                draw_overview(draw, snap)
             else:
-                draw_disks(draw, snap)
+                PAGE_DRAW[PAGES[page]](draw, snap, feed.get_history())
             draw_tabs(draw, page)
 
             write_frame(img, fb)
