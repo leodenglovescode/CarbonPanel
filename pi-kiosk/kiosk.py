@@ -164,7 +164,7 @@ class MetricsFeed:
     def _login(self) -> str:
         body = json.dumps({"username": self.username, "password": self.password}).encode()
         req = urllib.request.Request(
-            f"{self.base_url}/auth/login", data=body,
+            f"{self.base_url}/api/v1/auth/login", data=body,
             headers={"Content-Type": "application/json"}, method="POST",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
