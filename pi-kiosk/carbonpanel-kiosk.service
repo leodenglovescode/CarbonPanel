@@ -5,11 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/leodeng/CarbonPanel/pi-kiosk
-ExecStart=/home/leodeng/CarbonPanel/pi-kiosk/.venv/bin/python kiosk.py config.json
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/.venv/bin/python __DIR__/kiosk.py __DIR__/config.json
 Restart=always
 RestartSec=3
-User=leodeng
+User=__USER__
 
 [Install]
 WantedBy=multi-user.target

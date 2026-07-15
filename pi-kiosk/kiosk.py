@@ -5,14 +5,20 @@ with Pillow straight into the fb device node and reads the resistive
 touchscreen straight off its evdev node. Targets the fb's native refresh
 budget (~30fps) instead of a browser's DOM/animation overhead.
 
-Setup on the Pi:
+Setup on the Pi — one-shot installer (clones this repo, sets up the venv,
+prompts for CarbonPanel base_url/username/password, installs the systemd
+service; safe to re-run for updates):
+    curl -fsSL https://raw.githubusercontent.com/leodenglovescode/CarbonPanel/master/pi-kiosk/install.sh | bash
+
+Or by hand:
     cd pi-kiosk
     python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
     cp config.example.json config.json   # fill in base_url/username/password
     .venv/bin/python kiosk.py config.json
 
 Run `python3 kiosk.py --selftest` to sanity-check the framebuffer pixel
-packing without touching real hardware.
+packing without touching real hardware, or `--touch-debug` to find the
+right "touch_rotate" value for config.json if taps land in the wrong spot.
 """
 import asyncio
 import json
