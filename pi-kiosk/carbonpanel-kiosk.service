@@ -1,0 +1,15 @@
+[Unit]
+Description=CarbonPanel SPI display kiosk
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/leodeng/CarbonPanel/pi-kiosk
+ExecStart=/home/leodeng/CarbonPanel/pi-kiosk/.venv/bin/python kiosk.py config.json
+Restart=always
+RestartSec=3
+User=leodeng
+
+[Install]
+WantedBy=multi-user.target

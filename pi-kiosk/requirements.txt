@@ -1,0 +1,4 @@
+Pillow
+numpy
+evdev
+websockets
