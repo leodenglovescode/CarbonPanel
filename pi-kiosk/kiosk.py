@@ -38,14 +38,18 @@ FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
 FONT_PATH_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 
 BG = (10, 12, 11)
+CARD_BG = (17, 19, 18)
 FG = (230, 240, 235)
 FG_MUTED = (130, 145, 138)
 ACCENT = (0, 255, 136)
 WARNING = (255, 180, 40)
 DANGER = (255, 70, 70)
 BORDER = (40, 48, 44)
+CARD_RADIUS = 6
 
 TAB_H = 34
+MARGIN = 4
+GAP = 4
 PAGES = ["overview", "disks", "procs"]
 PAGE_DRAW = {}  # filled in after the draw_* functions are defined below
 
@@ -84,11 +88,27 @@ def write_frame(img: Image.Image, fb=None):
 # from its reported ABS_X/ABS_Y range instead of hardcoding raw ADC bounds.
 # ---------------------------------------------------------------------------
 
+def _rotate_norm(fx, fy, rotate):
+    """Map a touch-native normalized (fx,fy) in [0,1]^2 to screen-native
+    normalized (gx,gy). The ili9486 dtoverlay's rotate= only rotates the
+    *display* — the ADS7846 touch chip's raw axes are independent of it, so
+    without this the touch position is very likely off by a 90/180/270
+    rotation relative to what's on screen even though the tap itself works."""
+    if rotate == 90:
+        return fy, 1 - fx
+    if rotate == 180:
+        return 1 - fx, 1 - fy
+    if rotate == 270:
+        return 1 - fy, fx
+    return fx, fy
+
+
 class Touch:
-    def __init__(self):
+    def __init__(self, rotate=90):
         self.device = None
         self.x_min = self.x_max = self.y_min = self.y_max = None
         self.last_x = self.last_y = None
+        self.rotate = rotate
         self._find_device()
 
     def _find_device(self):
@@ -139,8 +159,10 @@ class Touch:
 
         if not released or self.last_x is None or self.last_y is None:
             return None
-        sx = int((self.last_x - self.x_min) / (self.x_max - self.x_min) * FB_W)
-        sy = int((self.last_y - self.y_min) / (self.y_max - self.y_min) * FB_H)
+        fx = (self.last_x - self.x_min) / (self.x_max - self.x_min)
+        fy = (self.last_y - self.y_min) / (self.y_max - self.y_min)
+        gx, gy = _rotate_norm(fx, fy, self.rotate)
+        sx, sy = int(gx * FB_W), int(gy * FB_H)
         return max(0, min(FB_W - 1, sx)), max(0, min(FB_H - 1, sy))
 
 
@@ -215,10 +237,11 @@ class MetricsFeed:
 # ---------------------------------------------------------------------------
 
 def bar(draw, x, y, w, h, pct, color=ACCENT):
-    draw.rectangle([x, y, x + w, y + h], outline=BORDER, width=1)
+    r = h / 2
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=r, outline=BORDER, width=1)
     fill_w = int((w - 2) * max(0, min(100, pct)) / 100)
-    if fill_w > 0:
-        draw.rectangle([x + 1, y + 1, x + 1 + fill_w, y + h - 1], fill=color)
+    if fill_w > 2:
+        draw.rounded_rectangle([x + 1, y + 1, x + 1 + fill_w, y + h - 1], radius=max(1, r - 1), fill=color)
 
 
 def pct_color(pct):
@@ -230,7 +253,7 @@ def pct_color(pct):
 
 
 def sparkline(draw, x, y, w, h, values, color=ACCENT, max_val=100):
-    draw.rectangle([x, y, x + w, y + h], outline=BORDER, width=1)
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=4, outline=BORDER, width=1)
     if len(values) < 2:
         return
     step = w / (len(values) - 1)
@@ -239,6 +262,16 @@ def sparkline(draw, x, y, w, h, values, color=ACCENT, max_val=100):
         for i, v in enumerate(values)
     ]
     draw.line(pts, fill=color, width=2)
+
+
+def card(draw, x, y, w, h, title):
+    """Rounded container matching the real dashboard's widget cards
+    (--bg-card/--border/--radius in main.css). Returns the inner content
+    origin (x, y) below the title, for callers to draw into."""
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=CARD_RADIUS, fill=CARD_BG, outline=BORDER, width=1)
+    f = font(11, bold=True)
+    draw.text((x + 8, y + 6), title.upper(), font=f, fill=FG_MUTED)
+    return x + 8, y + 22
 
 
 def draw_tabs(draw, active):
@@ -255,96 +288,102 @@ def draw_tabs(draw, active):
         draw.text((x0 + tab_w // 2, y0 + TAB_H // 2), name.upper(), font=f, fill=color, anchor="mm")
 
 
-def draw_overview(draw, snap, hist):
-    f_big = font(26, bold=True)
-    f_lbl = font(13)
-    f_sm = font(12)
+# Overview/disks page grid: 2 cols x 2 rows + 1 full-width row, mirroring
+# the real dashboard's separate CpuWidget/RamWidget/SystemWidget/etc cards
+# (frontend/src/components/widgets/) rather than one wall of numbers.
+COL_W = (FB_W - 2 * MARGIN - GAP) / 2
+ROW_H = 90
+COL1_X = MARGIN
+COL2_X = MARGIN + COL_W + GAP
+ROW1_Y = MARGIN
+ROW2_Y = ROW1_Y + ROW_H + GAP
+ROW3_Y = ROW2_Y + ROW_H + GAP
+FULL_W = FB_W - 2 * MARGIN
 
-    cpu = snap["cpu"]["aggregate"]
-    mem = snap["memory"]["percent"]
-    temps = snap["cpu"].get("temps") or []
-    temp = temps[0]["temp_c"] if temps else None
-    host = snap["system"]["hostname"]
-    load1 = (snap["cpu"].get("load_avg") or [None])[0]
+
+def draw_overview(draw, snap, hist):
+    f_big = font(24, bold=True)
+    f_sm = font(12)
     cpu_hist, mem_hist = hist
 
-    draw.text((10, 4), host, font=f_lbl, fill=FG_MUTED)
+    cpu = snap["cpu"]["aggregate"]
+    cx, cy = card(draw, COL1_X, ROW1_Y, COL_W, ROW_H, "CPU")
+    draw.text((cx, cy), f"{cpu:3.0f}%", font=f_big, fill=pct_color(cpu))
+    sparkline(draw, cx, cy + 32, COL_W - 16, 28, cpu_hist, pct_color(cpu))
+
+    mem = snap["memory"]["percent"]
+    cx, cy = card(draw, COL2_X, ROW1_Y, COL_W, ROW_H, "MEM")
+    draw.text((cx, cy), f"{mem:3.0f}%", font=f_big, fill=pct_color(mem))
+    sparkline(draw, cx, cy + 32, COL_W - 16, 28, mem_hist, pct_color(mem))
+
+    cx, cy = card(draw, COL1_X, ROW2_Y, COL_W, ROW_H, "System")
+    temps = snap["cpu"].get("temps") or []
+    temp = temps[0]["temp_c"] if temps else None
+    load1 = (snap["cpu"].get("load_avg") or [None])[0]
     uptime_s = snap["system"]["uptime_seconds"]
-    draw.text((FB_W - 10, 4), f"up {int(uptime_s // 3600)}h", font=f_lbl, fill=FG_MUTED, anchor="ra")
-
-    draw.text((10, 22), "CPU", font=f_lbl, fill=FG_MUTED)
-    draw.text((10, 36), f"{cpu:3.0f}%", font=f_big, fill=pct_color(cpu))
-    sparkline(draw, 95, 26, 145, 34, cpu_hist, pct_color(cpu))
-
-    draw.text((250, 22), "MEM", font=f_lbl, fill=FG_MUTED)
-    draw.text((250, 36), f"{mem:3.0f}%", font=f_big, fill=pct_color(mem))
-    sparkline(draw, 335, 26, 135, 34, mem_hist, pct_color(mem))
-
-    info_y = 68
-    bits = []
+    draw.text((cx, cy), snap["system"]["hostname"][:18], font=f_sm, fill=FG)
     if temp is not None:
-        bits.append(f"{temp:.1f}C")
+        draw.text((cx, cy + 16), f"temp   {temp:.1f}C", font=f_sm, fill=FG_MUTED)
     if load1 is not None:
-        bits.append(f"load {load1:.2f}")
+        draw.text((cx, cy + 32), f"load   {load1:.2f}", font=f_sm, fill=FG_MUTED)
+    draw.text((cx, cy + 48), f"uptime {int(uptime_s // 3600)}h", font=f_sm, fill=FG_MUTED)
+
+    cx, cy = card(draw, COL2_X, ROW2_Y, COL_W, ROW_H, "Network")
+    nets = snap.get("network", [])[:2]
+    if not nets:
+        draw.text((cx, cy), "no interfaces", font=f_sm, fill=FG_MUTED)
+    for i, n in enumerate(nets):
+        yy = cy + i * 32
+        draw.text((cx, yy), n["interface"][:12], font=f_sm, fill=FG)
+        draw.text((cx, yy + 16), f"d {n['rx_mb_s']:.1f}  u {n['tx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
+
+    cx, cy = card(draw, COL1_X, ROW3_Y, FULL_W, ROW_H, "Cores")
+    cores = snap["cpu"].get("per_core") or []
+    core_h = 46
+    core_w = (FULL_W - 16) / max(1, len(cores))
+    for i, c in enumerate(cores):
+        bx = cx + int(i * core_w)
+        h = int(c / 100 * core_h)
+        draw.rectangle([bx, cy + core_h - h, bx + max(2, int(core_w) - 2), cy + core_h],
+                       fill=pct_color(c))
     if snap["gpu"]["available"] and snap["gpu"]["devices"]:
         gpu = snap["gpu"]["devices"][0]
-        bits.append(f"gpu {gpu['utilization_percent']:.0f}%")
-    draw.text((10, info_y), "  ".join(bits), font=f_sm, fill=FG_MUTED)
-
-    cores = snap["cpu"].get("per_core") or []
-    core_y = 90
-    core_h = 70
-    core_w = (FB_W - 20) / max(1, len(cores))
-    for i, c in enumerate(cores):
-        cx = 10 + int(i * core_w)
-        h = int(c / 100 * core_h)
-        draw.rectangle([cx, core_y + core_h - h, cx + max(2, int(core_w) - 2), core_y + core_h],
-                       fill=pct_color(c))
-    draw.line([10, core_y + core_h + 1, FB_W - 10, core_y + core_h + 1], fill=BORDER, width=1)
-
-    procs = sorted(snap.get("processes", []), key=lambda p: p["cpu_percent"], reverse=True)[:4]
-    py = core_y + core_h + 10
-    for p in procs:
-        draw.text((10, py), p["name"][:20], font=f_sm, fill=FG)
-        draw.text((FB_W - 10, py), f"{p['cpu_percent']:.0f}%", font=f_sm,
-                   fill=pct_color(p["cpu_percent"]), anchor="ra")
-        py += 16
+        draw.text((cx, cy + core_h + 4), f"gpu {gpu['utilization_percent']:.0f}%", font=f_sm, fill=FG_MUTED)
 
 
 def draw_disks(draw, snap, hist):
-    f_lbl = font(13, bold=True)
     f_sm = font(12)
-    draw.text((10, 6), "DISKS", font=f_lbl, fill=FG_MUTED)
-    y = 26
+    disk_h = 134
+    cx, cy = card(draw, COL1_X, MARGIN, FULL_W, disk_h, "Disks")
+    y = cy
     for d in snap.get("disks", [])[:4]:
         pct = d["usage_percent"]
-        draw.text((10, y), d["mountpoint"][:12], font=f_sm, fill=FG)
-        bar(draw, 105, y + 2, 140, 10, pct, pct_color(pct))
-        draw.text((250, y), f"{pct:.0f}%", font=f_sm, fill=FG_MUTED)
-        draw.text((300, y), f"r{d['read_mb_s']:.0f}/w{d['write_mb_s']:.0f} MB/s", font=f_sm, fill=FG_MUTED)
-        y += 20
+        draw.text((cx, y), d["mountpoint"][:12], font=f_sm, fill=FG)
+        bar(draw, cx + 100, y + 2, 140, 10, pct, pct_color(pct))
+        draw.text((cx + 250, y), f"{pct:.0f}%", font=f_sm, fill=FG_MUTED)
+        draw.text((cx + 300, y), f"r{d['read_mb_s']:.0f}/w{d['write_mb_s']:.0f} MB/s", font=f_sm, fill=FG_MUTED)
+        y += 22
 
-    y += 8
-    draw.text((10, y), "NETWORK", font=f_lbl, fill=FG_MUTED)
-    y += 20
+    net_y = MARGIN + disk_h + GAP
+    cx, cy = card(draw, COL1_X, net_y, FULL_W, FB_H - TAB_H - net_y - MARGIN, "Network")
+    y = cy
     for n in snap.get("network", [])[:4]:
-        draw.text((10, y), n["interface"][:10], font=f_sm, fill=FG)
-        draw.text((120, y), f"down {n['rx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
-        draw.text((300, y), f"up {n['tx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
+        draw.text((cx, y), n["interface"][:10], font=f_sm, fill=FG)
+        draw.text((cx + 110, y), f"down {n['rx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
+        draw.text((cx + 290, y), f"up {n['tx_mb_s']:.1f} MB/s", font=f_sm, fill=FG_MUTED)
         y += 18
 
 
 def draw_procs(draw, snap, hist):
-    f_lbl = font(13, bold=True)
     f_sm = font(12)
-    draw.text((10, 6), "PROCESSES", font=f_lbl, fill=FG_MUTED)
-    y = 26
+    cx, cy = card(draw, COL1_X, MARGIN, FULL_W, FB_H - TAB_H - 2 * MARGIN, "Processes")
+    y = cy
     procs = sorted(snap.get("processes", []), key=lambda p: p["cpu_percent"], reverse=True)
     for p in procs[:14]:
-        draw.text((10, y), p["name"][:18], font=f_sm, fill=FG)
-        draw.text((260, y), f"{p['cpu_percent']:.0f}%", font=f_sm,
+        draw.text((cx, y), p["name"][:18], font=f_sm, fill=FG)
+        draw.text((cx + 250, y), f"{p['cpu_percent']:.0f}%", font=f_sm,
                    fill=pct_color(p["cpu_percent"]), anchor="ra")
-        draw.text((340, y), f"{p['memory_mb']:.0f}MB", font=f_sm, fill=FG_MUTED, anchor="ra")
+        draw.text((cx + 330, y), f"{p['memory_mb']:.0f}MB", font=f_sm, fill=FG_MUTED, anchor="ra")
         y += 18
 
 
@@ -365,7 +404,7 @@ def main(config_path):
     feed = MetricsFeed(cfg["base_url"], cfg["username"], cfg["password"],
                         interval=cfg.get("interval", 0.5))
     feed.start_background()
-    touch = Touch()
+    touch = Touch(rotate=cfg.get("touch_rotate", 90))
 
     page = 0
     fb = open(FB_DEVICE, "r+b")
@@ -400,6 +439,34 @@ def main(config_path):
         fb.close()
 
 
+def _touch_debug():
+    """Prints raw touch position + the screen coords each touch_rotate value
+    would produce. Tap each corner of the actual displayed screen and note
+    which `rotate=` column matches reality — put that number in config.json
+    as "touch_rotate". No config.json / network needed for this."""
+    touch = Touch(rotate=0)
+    if touch.device is None:
+        print("no touchscreen device found", file=sys.stderr)
+        return
+    print("tap the screen (Ctrl-C to quit)...")
+    while True:
+        import evdev
+        for event in touch.device.read_loop():
+            if event.type == evdev.ecodes.EV_ABS:
+                if event.code == evdev.ecodes.ABS_X:
+                    touch.last_x = event.value
+                elif event.code == evdev.ecodes.ABS_Y:
+                    touch.last_y = event.value
+            elif event.type == evdev.ecodes.EV_KEY and event.code == evdev.ecodes.BTN_TOUCH and event.value == 0:
+                if touch.last_x is None or touch.last_y is None:
+                    continue
+                fx = (touch.last_x - touch.x_min) / (touch.x_max - touch.x_min)
+                fy = (touch.last_y - touch.y_min) / (touch.y_max - touch.y_min)
+                results = {r: _rotate_norm(fx, fy, r) for r in (0, 90, 180, 270)}
+                print(f"raw=({touch.last_x},{touch.last_y}) " +
+                      "  ".join(f"rot{r}=({int(g[0]*FB_W)},{int(g[1]*FB_H)})" for r, g in results.items()))
+
+
 def _selftest():
     img = Image.new("RGB", (2, 1), (0, 0, 0))
     img.putpixel((0, 0), (255, 0, 0))   # pure red   -> 0xF800
@@ -414,6 +481,8 @@ def _selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         _selftest()
+    elif "--touch-debug" in sys.argv:
+        _touch_debug()
     elif len(sys.argv) != 2:
         print(f"usage: {sys.argv[0]} config.json", file=sys.stderr)
         sys.exit(1)
