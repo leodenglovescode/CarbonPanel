@@ -437,7 +437,10 @@ clone_release() {
   local ref="$1"
   local destination="$RELEASES_DIR/$2"
 
-  run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$destination" || \
+  # --progress forces git's real progress meter (%, speed) to stderr even when
+  # not run silently — stdout stays clean so the `$(clone_release ...)` capture
+  # below still only picks up the destination path.
+  git clone --progress --depth 1 --branch "$ref" "$REPO_URL" "$destination" || \
     die "Failed to clone $REPO_URL at ref $ref. If you are behind a firewall, set your proxy first: export https_proxy=http://host:port"
 
   printf '%s\n' "$destination"
@@ -447,17 +450,18 @@ build_release() {
   local release_dir="$1"
 
   log "teaching python what's what..."
-  note "spinning up a venv and pip installing — grab a coffee ☕"
-  run_silent python3 -m venv "$release_dir/backend/.venv"
-  run_silent "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
-  run_silent "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
+  # Not run_silent: pip already prints a real per-package progress bar with
+  # % and speed on a tty — silencing it just replaced real progress with a
+  # fake "grab a coffee" placeholder. Let it stream.
+  python3 -m venv "$release_dir/backend/.venv"
+  "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
+  "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
 
   log "bundling the frontend heat..."
-  note "npm doing npm things — this one takes a sec 🌀"
   (
     cd "$release_dir/frontend"
-    run_silent npm ci
-    run_silent npm run build
+    npm ci
+    npm run build
   )
 
   run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
@@ -778,9 +782,12 @@ check_for_updates() {
   current_commit="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" commit)"
   current_source_type="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" source_type)"
 
-  latest_dir="$TMP_DIR/check-$(safe_name "$ref")"
-  rm -rf "$latest_dir"
-  run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$latest_dir" || die "Unable to fetch latest version metadata."
+  # Unique per invocation — the daily timer and an interactive `update` run
+  # (which calls check_for_updates itself at the end) can land at the same
+  # time and would otherwise both clone into the same fixed path and corrupt
+  # each other's checkout.
+  latest_dir="$(mktemp -d "$TMP_DIR/check-$(safe_name "$ref").XXXXXX")"
+  run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$latest_dir" || { rm -rf "$latest_dir"; die "Unable to fetch latest version metadata."; }
   latest_commit="$(git -C "$latest_dir" rev-parse HEAD)"
   rm -rf "$latest_dir"
 
