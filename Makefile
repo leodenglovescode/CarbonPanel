@@ -42,6 +42,17 @@ setup:
 	@echo "--- Setting up backend ---"
 	python3 -m venv backend/.venv
 	$(PIP) install -q -e "backend/.[dev]"
+	@if [ ! -f backend/.env ]; then \
+		echo "--- Generating backend/.env with random secrets (no well-known defaults) ---"; \
+		secret=$$(python3 -c "import secrets; print(secrets.token_urlsafe(48))"); \
+		admin_pw=$$(python3 -c "import secrets; print(secrets.token_urlsafe(18))"); \
+		printf 'SECRET_KEY=%s\nADMIN_USERNAME=admin\nADMIN_PASSWORD=%s\n' "$$secret" "$$admin_pw" > backend/.env; \
+		echo ""; \
+		echo ">>> Generated admin login (save this — it will not be shown again):"; \
+		echo ">>>   username: admin"; \
+		echo ">>>   password: $$admin_pw"; \
+		echo ""; \
+	fi
 	cd backend && ../$(ALEMBIC) upgrade head
 	cd backend && ../$(PYTHON) -m app.scripts.seed_admin
 	@echo "--- Setting up frontend ---"

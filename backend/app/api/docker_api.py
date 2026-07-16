@@ -12,8 +12,9 @@ from app.models.user import User
 router = APIRouter(prefix="/docker", tags=["docker"])
 
 _PERMISSION_HINT = (
-    "Permission denied accessing Docker socket. "
-    "Run: sudo usermod -aG docker $USER  then log out and back in."
+    "Permission denied accessing Docker. The carbonpanel service account uses a "
+    "scoped sudo rule (not docker-group membership) for container start/stop/"
+    "restart. Run: sudo carbonpanel fix"
 )
 
 _STATS_CACHE: dict[str, dict] = {}
@@ -34,20 +35,28 @@ async def _exec(cmd: list[str]) -> tuple[int, str]:
 
 
 async def _run(cmd: list[str]) -> tuple[int, str]:
-    rc, out = await _exec(cmd)
-    # Retry with sudo if the socket is inaccessible and we're not already root
-    if rc != 0 and "permission denied" in out.lower() and os.geteuid() != 0:
+    # The service account is not in the docker group (scoped sudo instead, see
+    # install script) — go straight to sudo. Fall back to a bare call for
+    # deployments still on the older docker-group model (pre-upgrade, or a
+    # manual non-standard setup) so this doesn't regress them.
+    if os.geteuid() != 0:
         sudo_cmd = ["/usr/bin/sudo", "-n", *cmd]
-        rc2, out2 = await _exec(sudo_cmd)
+        rc, out = await _exec(sudo_cmd)
+        if rc == 0:
+            return rc, out
+        rc2, out2 = await _exec(cmd)
         if rc2 == 0:
             return rc2, out2
-        # Both failed — return a helpful message instead of the raw kernel error
-        return rc, _PERMISSION_HINT
-    return rc, out
+        if "permission denied" in (out + out2).lower():
+            return rc, _PERMISSION_HINT
+        return rc2, out2
+    return await _exec(cmd)
 
 
 def _safe_id(s: str) -> bool:
-    return bool(s) and len(s) <= 128 and all(c.isalnum() or c in "-_." for c in s)
+    if not s or len(s) > 128 or s.startswith("-"):
+        return False
+    return all(c.isalnum() or c in "-_." for c in s)
 
 
 def _parse_mem_mb(s: str) -> float:

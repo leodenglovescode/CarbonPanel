@@ -18,13 +18,20 @@ _PRESET_SOURCES: dict[str, list[str]] = {
 _MAX_CUSTOM_PATH_LEN = 256
 
 
+_ALLOWED_LOG_ROOT = "/var/log"  # matches the log-viewer UI's own "/var/log/..." hint
+
+
 def _resolve_source(source: str) -> list[str] | None:
     if source in _PRESET_SOURCES:
         return _PRESET_SOURCES[source]
-    # Custom absolute file path — basic safety check
-    if source.startswith("/") and ".." not in source and len(source) <= _MAX_CUSTOM_PATH_LEN:
-        if os.path.isfile(source):
-            return ["tail", "-n", "100", "-f", source]
+    # Custom absolute file path — must resolve under /var/log, not just look
+    # like an absolute path (a bare ".." check doesn't stop e.g. symlinks or
+    # already-absolute sensitive paths like /etc/shadow).
+    if source.startswith("/") and len(source) <= _MAX_CUSTOM_PATH_LEN:
+        resolved = os.path.realpath(source)
+        if resolved == _ALLOWED_LOG_ROOT or resolved.startswith(_ALLOWED_LOG_ROOT + os.sep):
+            if os.path.isfile(resolved):
+                return ["tail", "-n", "100", "-f", resolved]
     return None
 
 

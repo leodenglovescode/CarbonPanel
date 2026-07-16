@@ -1,9 +1,15 @@
 """
-IP-based brute-force protection.
+Brute-force protection, keyed by IP and by username independently.
 
-Tracks failed login attempts per IP. After MAX_ATTEMPTS failures within
-WINDOW_SECONDS the IP is banned for BAN_SECONDS. A successful login clears
-the counter for that IP.
+Tracks failed login attempts per key. After MAX_ATTEMPTS failures within
+WINDOW_SECONDS that key is banned for BAN_SECONDS. A successful login clears
+the counter for that key.
+
+Two keyspaces are tracked (call both check/record functions with "ip:<addr>"
+and "user:<username>"): per-IP alone is trivially bypassed by rotating source
+IPs (proxies, botnets), and per-username alone would let an attacker with many
+IPs still grind one account — the pair closes both gaps without either one
+alone being a single point of failure.
 """
 
 import time
@@ -15,63 +21,72 @@ BAN_SECONDS = 15 * 60       # 15 minutes
 WINDOW_SECONDS = 15 * 60    # rolling window over which failures are counted
 
 _lock = Lock()
-_attempts: dict[str, list[float]] = defaultdict(list)  # ip -> failure timestamps
-_banned: dict[str, float] = {}                          # ip -> ban_until (monotonic)
+_attempts: dict[str, list[float]] = defaultdict(list)  # key -> failure timestamps
+_banned: dict[str, float] = {}                          # key -> ban_until (monotonic)
 
 
-def _cleanup(ip: str, now: float) -> None:
+def _cleanup(key: str, now: float) -> None:
     """Drop attempt timestamps outside the rolling window. Must hold _lock."""
-    _attempts[ip] = [t for t in _attempts[ip] if now - t < WINDOW_SECONDS]
-    if not _attempts[ip]:
-        del _attempts[ip]
+    _attempts[key] = [t for t in _attempts[key] if now - t < WINDOW_SECONDS]
+    if not _attempts[key]:
+        del _attempts[key]
 
 
-def is_banned(ip: str | None) -> bool:
-    if not ip:
-        return False
+def _keys(ip: str | None, username: str | None) -> list[str]:
+    keys = []
+    if ip:
+        keys.append(f"ip:{ip}")
+    if username:
+        keys.append(f"user:{username.strip().lower()}")
+    return keys
+
+
+def is_banned(ip: str | None, username: str | None = None) -> bool:
     now = time.monotonic()
     with _lock:
-        until = _banned.get(ip)
-        if until is None:
-            return False
-        if now >= until:
-            _banned.pop(ip, None)
-            _attempts.pop(ip, None)
-            return False
-        return True
+        for key in _keys(ip, username):
+            until = _banned.get(key)
+            if until is None:
+                continue
+            if now >= until:
+                _banned.pop(key, None)
+                _attempts.pop(key, None)
+                continue
+            return True
+    return False
 
 
-def retry_after(ip: str | None) -> int:
-    """Seconds remaining in the ban (0 if not banned)."""
-    if not ip:
-        return 0
+def retry_after(ip: str | None, username: str | None = None) -> int:
+    """Seconds remaining in the longest active ban among the given keys (0 if none)."""
     now = time.monotonic()
+    remaining = 0
     with _lock:
-        until = _banned.get(ip)
-        if until is None:
-            return 0
-        remaining = until - now
-        return max(0, int(remaining))
+        for key in _keys(ip, username):
+            until = _banned.get(key)
+            if until is not None:
+                remaining = max(remaining, int(until - now))
+    return max(0, remaining)
 
 
-def record_failure(ip: str | None) -> int:
-    """Record a failed attempt. Returns how many attempts remain before ban."""
-    if not ip:
-        return MAX_ATTEMPTS
+def record_failure(ip: str | None, username: str | None = None) -> int:
+    """Record a failed attempt against both keys. Returns the fewest attempts
+    remaining before ban, across keys (i.e. however close the closer one is)."""
     now = time.monotonic()
+    min_remaining = MAX_ATTEMPTS
     with _lock:
-        _cleanup(ip, now)
-        _attempts[ip].append(now)
-        count = len(_attempts[ip])
-        if count >= MAX_ATTEMPTS:
-            _banned[ip] = now + BAN_SECONDS
-        return max(0, MAX_ATTEMPTS - count)
+        for key in _keys(ip, username):
+            _cleanup(key, now)
+            _attempts[key].append(now)
+            count = len(_attempts[key])
+            if count >= MAX_ATTEMPTS:
+                _banned[key] = now + BAN_SECONDS
+            min_remaining = min(min_remaining, max(0, MAX_ATTEMPTS - count))
+    return min_remaining
 
 
-def record_success(ip: str | None) -> None:
-    """Clear the failure counter after a successful login."""
-    if not ip:
-        return
+def record_success(ip: str | None, username: str | None = None) -> None:
+    """Clear the failure counter for both keys after a successful login."""
     with _lock:
-        _attempts.pop(ip, None)
-        _banned.pop(ip, None)
+        for key in _keys(ip, username):
+            _attempts.pop(key, None)
+            _banned.pop(key, None)

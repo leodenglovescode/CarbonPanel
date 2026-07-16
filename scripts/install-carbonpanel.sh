@@ -24,6 +24,10 @@ UPDATE_CHECK_SERVICE="carbonpanel-update-check.service"
 UPDATE_CHECK_TIMER="carbonpanel-update-check.timer"
 UPDATE_SERVICE="carbonpanel-update.service"
 SUDOERS_FILE="/etc/sudoers.d/carbonpanel-updater"
+# Read-only listing + start/stop/restart of an already-existing container only —
+# deliberately no `docker run` / bind mounts, which is what docker-group
+# membership would otherwise hand out for free (root-equivalent).
+DOCKER_SUDOERS_CMDS="/usr/bin/docker ps -a --format {{json .}}, /usr/bin/docker stats --no-stream --format {{json .}} *, /usr/bin/docker start *, /usr/bin/docker stop *, /usr/bin/docker restart *"
 
 COMMAND="${1:-}"
 shift || true
@@ -365,10 +369,13 @@ ensure_service_account() {
   if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
     run_silent useradd --system --home "$INSTALL_ROOT" --shell /usr/sbin/nologin "$SERVICE_USER"
   fi
-  # Add service user to the docker group so the Docker API works without sudo.
-  # The group may not exist if Docker isn't installed yet — skip silently in that case.
-  if getent group docker >/dev/null 2>&1; then
-    usermod -aG docker "$SERVICE_USER" 2>/dev/null || true
+  # Deliberately NOT in the docker group: docker-group membership is a
+  # well-known root-equivalent privilege (bind-mount / into a container).
+  # The Docker feature instead uses a narrowly-scoped sudoers rule (see
+  # write_sudoers) limited to ps/stats (read-only) and start/stop/restart of
+  # an already-existing container — no `docker run`, no bind mounts.
+  if getent group docker >/dev/null 2>&1 && id -nG "$SERVICE_USER" | grep -qw docker; then
+    gpasswd -d "$SERVICE_USER" docker >/dev/null 2>&1 || true
   fi
   # Add service user to the disk group so smartctl can read SMART data directly
   # without any sudo — safer than a sudoers rule.
@@ -466,6 +473,14 @@ server {
     root $CURRENT_LINK/frontend/dist;
     index index.html;
 
+    client_max_body_size 10m;
+
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+
     location /api/ {
         proxy_pass http://127.0.0.1:$BACKEND_PORT;
         proxy_http_version 1.1;
@@ -482,6 +497,10 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        # The auth token travels in the WS URL query string (?token=...) —
+        # keep it out of the access log rather than writing 8h bearer tokens
+        # to disk in plaintext on every connection.
+        access_log off;
     }
 
     location / {
@@ -561,7 +580,7 @@ ExecStart=$CONTROL_SCRIPT update
 EOF
 
   cat > "$SUDOERS_FILE" <<EOF
-$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start $UPDATE_SERVICE, /usr/bin/journalctl -u $UPDATE_CHECK_SERVICE -u $UPDATE_SERVICE --no-pager -n * --output=short-iso
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start $UPDATE_SERVICE, /usr/bin/journalctl -u $UPDATE_CHECK_SERVICE -u $UPDATE_SERVICE --no-pager -n * --output=short-iso, $DOCKER_SUDOERS_CMDS
 EOF
   chmod 440 "$SUDOERS_FILE"
 }
@@ -1006,18 +1025,17 @@ fix_carbonpanel() {
   printf "  ${CYAN}${BOLD}⚡  carbonpanel fix${NC}  ${DIM}— repairing common issues${NC}\n"
   printf "\n"
 
-  # ── Docker socket permissions ─────────────────────────────────────────────
-  log "checking Docker socket permissions..."
-  if ! getent group docker >/dev/null 2>&1; then
-    warn "docker group not found — is Docker installed? skipping docker fix."
+  # ── Docker access (scoped sudo, not docker-group) ─────────────────────────
+  # docker-group membership is root-equivalent (bind-mount escape), so it's
+  # removed here rather than granted — Docker access comes from the sudoers
+  # rule checked below instead.
+  log "checking Docker access model..."
+  if getent group docker >/dev/null 2>&1 && id -nG "$SERVICE_USER" | grep -qw docker; then
+    gpasswd -d "$SERVICE_USER" docker >/dev/null 2>&1 || true
+    ok "removed ${BOLD}${SERVICE_USER}${NC} from the docker group (now uses scoped sudo instead)"
+    fixed=1
   else
-    if id -nG "$SERVICE_USER" | grep -qw docker; then
-      ok "${SERVICE_USER} is already in the docker group"
-    else
-      usermod -aG docker "$SERVICE_USER"
-      ok "added ${BOLD}${SERVICE_USER}${NC} to the docker group"
-      fixed=1
-    fi
+    ok "${SERVICE_USER} is not in the docker group"
   fi
 
   # ── Disk group (smartctl SMART data) ─────────────────────────────────────
@@ -1044,9 +1062,9 @@ fix_carbonpanel() {
     ok "shared directory ownership is correct"
   fi
 
-  # ── Sudoers (systemctl + journalctl) ─────────────────────────────────────
+  # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
   log "checking sudoers rules..."
-  local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso"
+  local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso, ${DOCKER_SUDOERS_CMDS}"
   local current_sudoers=""
   [[ -f "$SUDOERS_FILE" ]] && current_sudoers="$(cat "$SUDOERS_FILE")"
   if [[ "$current_sudoers" != "$expected_sudoers" ]]; then

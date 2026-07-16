@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 SiteType = Literal["nginx", "python", "wordpress", "nodejs"]
 ServiceManager = Literal["systemd", "pm2"]
@@ -65,7 +65,7 @@ class ConfigReadResponse(BaseModel):
 
 
 class ConfigWriteRequest(BaseModel):
-    content: str
+    content: str = Field(max_length=5_000_000)  # 5MB — generous for a text config file
 
 
 class SystemServiceActionRequest(BaseModel):
