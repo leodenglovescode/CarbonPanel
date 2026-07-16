@@ -596,7 +596,7 @@ ExecStart=$CONTROL_SCRIPT update
 EOF
 
   cat > "$SUDOERS_FILE" <<EOF
-$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start $UPDATE_SERVICE, /usr/bin/journalctl -u $UPDATE_CHECK_SERVICE -u $UPDATE_SERVICE --no-pager -n * --output=short-iso, $DOCKER_SUDOERS_CMDS
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start --no-block $UPDATE_SERVICE, /usr/bin/journalctl -u $UPDATE_CHECK_SERVICE -u $UPDATE_SERVICE --no-pager -n * --output=short-iso, $DOCKER_SUDOERS_CMDS
 EOF
   chmod 440 "$SUDOERS_FILE"
 }
@@ -1106,7 +1106,7 @@ fix_carbonpanel() {
 
   # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
   log "checking sudoers rules..."
-  local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso, ${DOCKER_SUDOERS_CMDS}"
+  local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso, ${DOCKER_SUDOERS_CMDS}"
   local current_sudoers=""
   [[ -f "$SUDOERS_FILE" ]] && current_sudoers="$(cat "$SUDOERS_FILE")"
   if [[ "$current_sudoers" != "$expected_sudoers" ]]; then
