@@ -795,6 +795,12 @@ check_for_updates() {
     fi
   elif [[ -z "$current_version" ]]; then
     status_value="not_installed"
+  elif [[ "$current_commit" != "$latest_commit" ]]; then
+    # Untagged (branch) installs — the repo has no releases/tags, so the only
+    # signal is a raw commit comparison (same approach update_runtime.py's
+    # docker-mode status already uses).
+    update_available="true"
+    status_value="update_available"
   fi
 
   CP_STATUS_REPO_URL="$REPO_URL" \
