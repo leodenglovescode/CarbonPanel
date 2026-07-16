@@ -338,7 +338,8 @@ install_os_prerequisites() {
     python3-pip \
     python3-venv \
     build-essential \
-    sudo
+    sudo \
+    acl
 
   # nginx — skip if already present (nginx.org repo, BunkerWeb, OpenResty, etc. all conflict
   # with Ubuntu's nginx package but provide a compatible binary).
@@ -382,6 +383,17 @@ ensure_service_account() {
   if getent group disk >/dev/null 2>&1; then
     usermod -aG disk "$SERVICE_USER" 2>/dev/null || true
   fi
+}
+
+ensure_nginx_log_access() {
+  # nginx logs are root:adm 640 by default — the adm group would also read
+  # auth.log/syslog/every other adm-owned log, so grant access with a POSIX
+  # ACL scoped to just /var/log/nginx instead. -d sets a default ACL on the
+  # directory so files logrotate recreates (create 0640 www-data adm) keep it.
+  command_exists setfacl || return 0
+  [[ -d /var/log/nginx ]] || return 0
+  setfacl -R -m "u:$SERVICE_USER:rX" /var/log/nginx 2>/dev/null || true
+  setfacl -d -m "u:$SERVICE_USER:rX" /var/log/nginx 2>/dev/null || true
 }
 
 ensure_layout() {
@@ -844,6 +856,7 @@ install_or_update() {
   install_os_prerequisites
   log "conjuring the carbonpanel service account..."
   ensure_service_account
+  ensure_nginx_log_access
   log "staking out territory on disk..."
   ensure_layout
   log "locking in your secrets and config..."
@@ -1061,6 +1074,22 @@ fix_carbonpanel() {
     else
       usermod -aG disk "$SERVICE_USER"
       ok "added ${BOLD}${SERVICE_USER}${NC} to the disk group (enables SMART monitoring)"
+      fixed=1
+    fi
+  fi
+
+  # ── nginx log access (ACL, scoped — not the adm group) ────────────────────
+  log "checking nginx log access..."
+  if ! command_exists setfacl; then
+    warn "setfacl not found (install the 'acl' package) — skipping nginx log-access fix."
+  elif [[ ! -d /var/log/nginx ]]; then
+    ok "no /var/log/nginx on this host — skipping"
+  else
+    if getfacl -p /var/log/nginx 2>/dev/null | grep -q "^user:${SERVICE_USER}:r"; then
+      ok "${SERVICE_USER} already has ACL read access to /var/log/nginx"
+    else
+      ensure_nginx_log_access
+      ok "granted ${BOLD}${SERVICE_USER}${NC} ACL read access to /var/log/nginx (site logs), scoped — not the broader adm group"
       fixed=1
     fi
   fi
