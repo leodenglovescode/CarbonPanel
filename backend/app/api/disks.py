@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import shutil
+import time
 from itertools import groupby
 
 import psutil
@@ -16,6 +17,9 @@ router = APIRouter(prefix="/disks", tags=["disks"])
 
 _GB = 1024 ** 3
 _MB = 1024 ** 2
+
+_SMART_REFRESH_COOLDOWN = 60  # seconds — smartctl spawns a subprocess per physical disk
+_last_smart_refresh_ts: float = 0.0
 
 # Real block-storage device names (bare metal + common VPS bus types) whose
 # partitions should be grouped under one physical-disk card. Deliberately
@@ -212,6 +216,17 @@ async def list_disks(_: User = Depends(get_current_user)):
 @router.post("/smart/refresh", response_model=list[SmartResult])
 async def refresh_smart(_: User = Depends(get_current_user)):
     """Trigger an immediate SMART scan of all physical drives."""
+    global _last_smart_refresh_ts
+    now = time.monotonic()
+    elapsed = now - _last_smart_refresh_ts
+    if elapsed < _SMART_REFRESH_COOLDOWN:
+        retry_after = int(_SMART_REFRESH_COOLDOWN - elapsed)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"SMART scan already triggered recently. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    _last_smart_refresh_ts = now
     await smart_svc.scan_all()
     return [
         SmartResult(

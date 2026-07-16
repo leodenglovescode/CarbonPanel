@@ -336,24 +336,55 @@ async def run_action(site: Site, action: str) -> tuple[bool, str]:
     return rc == 0, out
 
 
+# Sites' config_file_path / log_paths are free-form strings set by whoever
+# creates the site — with no restriction, the config read/write endpoints
+# would let any authenticated user touch any file the backend process can
+# reach (/etc/shadow, SSH keys, ...). Config edits are restricted to where
+# site configs actually live; log reads get the same set plus /var/log,
+# since that's where nginx/apache/syslog-based app logs live by convention
+# (and is what the log-viewer UI's own "/var/log/..." custom-path hint implies).
+_ALLOWED_CONFIG_DIRS = (
+    Path("/etc/nginx"),
+    Path("/etc/apache2"),
+    Path("/etc/systemd/system"),
+    Path("/etc/supervisor"),
+    Path("/etc/uwsgi"),
+)
+_ALLOWED_LOG_DIRS = _ALLOWED_CONFIG_DIRS + (Path("/var/log"),)
+
+
+def _resolve_allowed(path: str, allowed_dirs: tuple[Path, ...]) -> Path:
+    resolved = Path(path).resolve()
+    for base in allowed_dirs:
+        base_resolved = base.resolve()
+        if resolved == base_resolved or base_resolved in resolved.parents:
+            return resolved
+    raise PermissionError(
+        f"'{path}' is outside the allowed directories "
+        f"({', '.join(str(d) for d in allowed_dirs)})"
+    )
+
+
 def read_config(path: str) -> str:
-    return Path(path).read_text(errors="replace")
+    resolved = _resolve_allowed(path, _ALLOWED_CONFIG_DIRS)
+    return resolved.read_text(errors="replace")
 
 
 def write_config(path: str, content: str) -> None:
-    p = Path(path)
-    if p.exists():
-        shutil.copy2(p, p.with_suffix(p.suffix + ".bak"))
-    p.write_text(content)
+    resolved = _resolve_allowed(path, _ALLOWED_CONFIG_DIRS)
+    if resolved.exists():
+        shutil.copy2(resolved, resolved.with_suffix(resolved.suffix + ".bak"))
+    resolved.write_text(content)
 
 
 async def tail_log(path: str) -> AsyncIterator[str]:
+    resolved = _resolve_allowed(path, _ALLOWED_LOG_DIRS)
     proc = await asyncio.create_subprocess_exec(
         "tail",
         "-n",
         "100",
         "-f",
-        path,
+        str(resolved),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
@@ -499,6 +530,7 @@ async def _update_traffic_buffer(site_id: str, log_path: str) -> _TrafficBuffer:
 
 async def get_site_traffic(site_id: str, log_path: str, minutes: int = 30) -> dict:
     """Return a traffic summary built from an incrementally-updated per-site buffer."""
+    _resolve_allowed(log_path, _ALLOWED_LOG_DIRS)
     _evict_idle_traffic_buffers()
     async with _get_traffic_lock(site_id):
         buf = await _update_traffic_buffer(site_id, log_path)

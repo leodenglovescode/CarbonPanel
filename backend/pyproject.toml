@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "psutil>=6.0",
     "python-jose[cryptography]>=3.3",
+    "cryptography>=42.0",
     "bcrypt>=4.0",
     "pyotp>=2.9",
     "qrcode[pil]>=7.4",
