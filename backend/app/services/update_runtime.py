@@ -70,7 +70,10 @@ def _service_unit_exists(service_name: str) -> bool:
 
 
 def _run_systemctl_start(service_name: str) -> None:
-    command = ["/usr/bin/systemctl", "start", service_name]
+    # --no-block: these are Type=oneshot units that can run for minutes (a full
+    # update rebuilds the venv + frontend). Without it, `systemctl start` blocks
+    # until the unit finishes, which blew right through the timeout below.
+    command = ["/usr/bin/systemctl", "start", "--no-block", service_name]
     if os.geteuid() != 0:
         command = ["/usr/bin/sudo", "-n", *command]
     try:
