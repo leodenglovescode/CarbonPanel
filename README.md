@@ -69,7 +69,7 @@ docker compose up -d
 Installs as a native systemd service with nginx. Requires root, Ubuntu/Debian.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/leodenglovescode/CarbonPanel/master/scripts/install-carbonpanel.sh | sudo bash
+curl -fsSL https://carbonpanel.leodeng.dev/install.sh | sudo bash
 ```
 
 Initial credentials are saved to `/opt/carbonpanel/shared/first-install.txt` after install.
