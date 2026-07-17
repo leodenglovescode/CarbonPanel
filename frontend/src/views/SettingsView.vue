@@ -1198,9 +1198,18 @@ async function checkForUpdates() {
     }
     await fetchServiceLogs()
 
-    if (versionInfo.value?.update_available) {
+    if (versionInfo.value?.check_in_progress) {
+      // deadline hit while still running — leave the "Checking…" message as-is
+    } else if (versionInfo.value?.status === 'check_failed') {
+      // The check itself failed (e.g. GitHub unreachable) — say so plainly
+      // instead of falling through to "Already up to date", which would
+      // otherwise just restate whatever the last successful check found,
+      // possibly hours old, with no hint that this attempt didn't work.
+      versionSuccess.value = ''
+      versionError.value = versionInfo.value.error || 'Check failed — GitHub was unreachable.'
+    } else if (versionInfo.value?.update_available) {
       versionSuccess.value = 'Update available!'
-    } else if (!versionInfo.value?.check_in_progress) {
+    } else {
       versionSuccess.value = 'Already up to date.'
     }
   } catch (e: any) {
