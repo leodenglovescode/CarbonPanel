@@ -36,7 +36,7 @@
           :key="act"
           :class="['action-btn', `action-${act}`]"
           :disabled="actionLoading === act"
-          @click="runAction(act)"
+          @click="confirmAction(act)"
         >{{ actionLoading === act ? '…' : act }}</button>
 
         <span v-if="actionOutput" class="action-output">{{ actionOutput }}</span>
@@ -87,6 +87,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { sitesApi } from '@/api'
 import { useSitesStore } from '@/stores/sites'
+import { useDialogStore } from '@/stores/dialog'
 import LogViewer from '@/components/sites/LogViewer.vue'
 import ConfigEditor from '@/components/sites/ConfigEditor.vue'
 import type { SiteResponse } from '@/types/sites'
@@ -94,6 +95,7 @@ import type { SiteResponse } from '@/types/sites'
 const route = useRoute()
 const router = useRouter()
 const store = useSitesStore()
+const dialog = useDialogStore()
 
 const site = ref<SiteResponse | null>(null)
 const loading = ref(true)
@@ -114,6 +116,25 @@ async function loadSite() {
   } finally {
     loading.value = false
   }
+}
+
+const ACTION_CONFIRM: Record<'start' | 'stop' | 'restart', { title: string; message: (name: string) => string; confirmLabel: string; variant: 'primary' | 'danger' }> = {
+  start: { title: 'Start site', message: (name) => `Start "${name}"?`, confirmLabel: 'Start', variant: 'primary' },
+  stop: { title: 'Stop site', message: (name) => `Stop "${name}"? This will take the site offline.`, confirmLabel: 'Stop', variant: 'danger' },
+  restart: { title: 'Restart site', message: (name) => `Restart "${name}"? This will briefly take it offline.`, confirmLabel: 'Restart', variant: 'primary' },
+}
+
+async function confirmAction(act: string) {
+  if (!site.value) return
+  const cfg = ACTION_CONFIRM[act as 'start' | 'stop' | 'restart']
+  const confirmed = await dialog.confirm({
+    title: cfg.title,
+    message: cfg.message(site.value.name),
+    confirmLabel: cfg.confirmLabel,
+    variant: cfg.variant,
+  })
+  if (!confirmed) return
+  await runAction(act)
 }
 
 async function runAction(act: string) {

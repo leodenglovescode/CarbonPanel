@@ -26,7 +26,7 @@
         :key="act"
         :class="['action-btn', `action-${act}`]"
         :disabled="actionLoading === act"
-        @click="runAction(act)"
+        @click="confirmAction(act)"
       >{{ actionLoading === act ? '…' : act }}</button>
     </div>
   </div>
@@ -35,12 +35,32 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useSitesStore } from '@/stores/sites'
+import { useDialogStore } from '@/stores/dialog'
 import type { SiteResponse } from '@/types/sites'
 
 const props = defineProps<{ site: SiteResponse }>()
 const store = useSitesStore()
+const dialog = useDialogStore()
 const actionLoading = ref<string | null>(null)
 const actions = ['start', 'stop', 'restart'] as const
+
+const ACTION_CONFIRM: Record<'start' | 'stop' | 'restart', { title: string; message: (name: string) => string; confirmLabel: string; variant: 'primary' | 'danger' }> = {
+  start: { title: 'Start site', message: (name) => `Start "${name}"?`, confirmLabel: 'Start', variant: 'primary' },
+  stop: { title: 'Stop site', message: (name) => `Stop "${name}"? This will take the site offline.`, confirmLabel: 'Stop', variant: 'danger' },
+  restart: { title: 'Restart site', message: (name) => `Restart "${name}"? This will briefly take it offline.`, confirmLabel: 'Restart', variant: 'primary' },
+}
+
+async function confirmAction(act: string) {
+  const cfg = ACTION_CONFIRM[act as 'start' | 'stop' | 'restart']
+  const confirmed = await dialog.confirm({
+    title: cfg.title,
+    message: cfg.message(props.site.name),
+    confirmLabel: cfg.confirmLabel,
+    variant: cfg.variant,
+  })
+  if (!confirmed) return
+  await runAction(act)
+}
 
 async function runAction(act: string) {
   actionLoading.value = act

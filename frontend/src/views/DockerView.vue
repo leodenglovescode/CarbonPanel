@@ -50,39 +50,20 @@
             v-if="c.state !== 'running'"
             class="act-btn act-start"
             :disabled="busy === c.id"
-            @click="action(c, 'start')"
+            @click="confirmAction(c, 'start')"
           >{{ t('docker.start') }}</button>
           <button
             v-if="c.state === 'running'"
             class="act-btn act-stop"
             :disabled="busy === c.id"
-            @click="confirmStop(c)"
+            @click="confirmAction(c, 'stop')"
           >{{ t('docker.stop') }}</button>
           <button
             class="act-btn act-restart"
             :disabled="busy === c.id"
-            @click="action(c, 'restart')"
+            @click="confirmAction(c, 'restart')"
           >{{ t('docker.restart') }}</button>
           <span v-if="actionMsg[c.id]" class="act-msg" :class="{ 'act-err': actionErr[c.id] }">{{ actionMsg[c.id] }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Confirm stop modal -->
-    <div v-if="confirmTarget" class="modal-overlay" @click.self="confirmTarget = null">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">{{ t('docker.confirmStop') }}</span>
-          <button class="close-btn" @click="confirmTarget = null">✕</button>
-        </div>
-        <div class="modal-body">
-          <p class="confirm-msg">{{ t('docker.confirmStopMsg', { name: confirmTarget.name }) }}</p>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="confirmTarget = null">{{ t('common.cancel') }}</button>
-            <button class="btn-danger" :disabled="busy === confirmTarget.id" @click="doStop">
-              {{ busy === confirmTarget?.id ? '…' : t('docker.stop') }}
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -93,8 +74,10 @@
 import { onMounted, ref } from 'vue'
 import { dockerApi, type ContainerInfo } from '@/api/index'
 import { useLocaleStore } from '@/stores/locale'
+import { useDialogStore } from '@/stores/dialog'
 
 const { t } = useLocaleStore()
+const dialog = useDialogStore()
 
 const containers = ref<ContainerInfo[]>([])
 const loading = ref(false)
@@ -102,7 +85,6 @@ const error = ref('')
 const busy = ref<string | null>(null)
 const actionMsg = ref<Record<string, string>>({})
 const actionErr = ref<Record<string, boolean>>({})
-const confirmTarget = ref<ContainerInfo | null>(null)
 
 async function load() {
   loading.value = true
@@ -135,12 +117,22 @@ async function action(c: ContainerInfo, act: 'start' | 'stop' | 'restart') {
   }
 }
 
-function confirmStop(c: ContainerInfo) { confirmTarget.value = c }
-async function doStop() {
-  if (!confirmTarget.value) return
-  const c = confirmTarget.value
-  confirmTarget.value = null
-  await action(c, 'stop')
+const ACTION_CONFIRM: Record<'start' | 'stop' | 'restart', { title: string; message: (name: string) => string; confirmLabel: string; variant: 'primary' | 'danger' }> = {
+  start: { title: 'Start container', message: (name) => `Start "${name}"?`, confirmLabel: 'Start', variant: 'primary' },
+  stop: { title: 'Stop container', message: (name) => `Stop "${name}"? This will interrupt anything currently running inside it.`, confirmLabel: 'Stop', variant: 'danger' },
+  restart: { title: 'Restart container', message: (name) => `Restart "${name}"? This will briefly interrupt it.`, confirmLabel: 'Restart', variant: 'primary' },
+}
+
+async function confirmAction(c: ContainerInfo, act: 'start' | 'stop' | 'restart') {
+  const cfg = ACTION_CONFIRM[act]
+  const confirmed = await dialog.confirm({
+    title: cfg.title,
+    message: cfg.message(c.name),
+    confirmLabel: cfg.confirmLabel,
+    variant: cfg.variant,
+  })
+  if (!confirmed) return
+  await action(c, act)
 }
 
 function stateBadge(state: string) {
@@ -227,17 +219,4 @@ onMounted(load)
   .container-list { grid-template-columns: 1fr; }
   .stats-row { gap: 12px; }
 }
-
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; box-sizing: border-box; }
-.modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0; width: 100%; max-width: 440px; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); }
-.modal-title { font-size: 13px; font-weight: 600; }
-.close-btn { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: 14px; padding: 2px 6px; }
-.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.confirm-msg { font-size: 12px; color: var(--fg-muted); line-height: 1.5; }
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.btn-ghost { background: none; border: 1px solid var(--border); color: var(--fg-muted); font-family: var(--font); font-size: 11px; padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); }
-.btn-ghost:hover { border-color: var(--fg-dim); color: var(--fg); }
-.btn-danger { background: var(--danger-dim); border: 1px solid rgba(255,68,68,0.4); color: var(--danger); font-family: var(--font); font-size: 11px; padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); }
-.btn-danger:disabled { opacity: 0.5; cursor: default; }
 </style>

@@ -148,7 +148,7 @@
               busyKey === `${svc.service_name}:${act}` ||
               toggleBusyId === svc.service_name
             "
-            @click="runAction(svc.service_name, act)"
+            @click="confirmAction(svc.service_name, act)"
           >
             {{ busyKey === `${svc.service_name}:${act}` ? '...' : act }}
           </button>
@@ -183,6 +183,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { sitesApi } from '@/api'
+import { useDialogStore } from '@/stores/dialog'
 import type { SiteAction, SystemServiceResponse } from '@/types/sites'
 
 const AUTOSTART_READONLY_STATES = new Set([
@@ -217,6 +218,7 @@ const draggedServiceName = ref<string | null>(null)
 const dragOverServiceName = ref<string | null>(null)
 const messages = ref<Record<string, string>>({})
 const actions: SiteAction[] = ['start', 'stop', 'restart']
+const dialog = useDialogStore()
 
 function filterServicesForTab(items: SystemServiceResponse[], tab: ServiceTab) {
   if (tab === 'timers') {
@@ -360,6 +362,24 @@ function emptyStateMessage() {
   return activeTab.value === 'all'
     ? 'No systemd services found'
     : 'No admin/user-created systemd services found'
+}
+
+const ACTION_CONFIRM: Record<SiteAction, { title: string; message: (name: string) => string; confirmLabel: string; variant: 'primary' | 'danger' }> = {
+  start: { title: 'Start service', message: (name) => `Start "${name}"?`, confirmLabel: 'Start', variant: 'primary' },
+  stop: { title: 'Stop service', message: (name) => `Stop "${name}"? This may affect anything depending on it.`, confirmLabel: 'Stop', variant: 'danger' },
+  restart: { title: 'Restart service', message: (name) => `Restart "${name}"? This will briefly interrupt it.`, confirmLabel: 'Restart', variant: 'primary' },
+}
+
+async function confirmAction(serviceName: string, action: SiteAction) {
+  const cfg = ACTION_CONFIRM[action]
+  const confirmed = await dialog.confirm({
+    title: cfg.title,
+    message: cfg.message(serviceName),
+    confirmLabel: cfg.confirmLabel,
+    variant: cfg.variant,
+  })
+  if (!confirmed) return
+  await runAction(serviceName, action)
 }
 
 async function runAction(serviceName: string, action: SiteAction) {
