@@ -175,6 +175,11 @@ onMounted(load)
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
   display: flex; flex-direction: column; gap: 6px; transition: border-color var(--transition);
+  /* Grid items default to min-width:auto, same trap as flex items — without
+     this, .ports-txt's white-space:nowrap content (arbitrarily long port
+     mappings) forces its min-content width onto the whole card, growing it
+     past the 1fr track instead of letting the inner ellipsis rules clip it. */
+  min-width: 0;
 }
 .container-card:hover { border-color: var(--border-hover, var(--fg-dim)); }
 
