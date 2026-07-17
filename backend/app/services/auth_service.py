@@ -1,6 +1,7 @@
 import base64
 import io
 import uuid
+from datetime import datetime
 
 import pyotp
 import qrcode
@@ -63,14 +64,37 @@ async def _record_device(
     user_agent: str | None,
     db: AsyncSession,
     name_prefix: str = "",
+    device_id: str | None = None,
 ) -> None:
-    name = (name_prefix + " " if name_prefix else "") + _device_name(user_agent)
+    name = ((name_prefix + " " if name_prefix else "") + _device_name(user_agent)).strip()
+
+    # Same browser fingerprint re-authenticating (session expired, logged out and
+    # back in, etc.) — update its existing row instead of piling up duplicates.
+    if device_id:
+        result = await db.execute(
+            select(Device).where(
+                Device.user_id == user_id,
+                Device.device_id == device_id,
+                Device.revoked == False,  # noqa: E712
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.jti = jti
+            existing.name = name
+            existing.ip_address = ip_address
+            existing.user_agent = user_agent
+            existing.last_seen = datetime.utcnow()
+            db.add(existing)
+            return
+
     device = Device(
         user_id=user_id,
         jti=jti,
-        name=name.strip(),
+        name=name,
         ip_address=ip_address,
         user_agent=user_agent,
+        device_id=device_id,
     )
     db.add(device)
 
@@ -80,6 +104,7 @@ async def login(
     db: AsyncSession,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    device_id: str | None = None,
 ) -> TokenResponse | TOTPRequiredResponse:
     result = await db.execute(select(User).where(User.username == request.username))
     user = result.scalar_one_or_none()
@@ -98,7 +123,7 @@ async def login(
 
     jti = str(uuid.uuid4())
     token = create_access_token(user_id=user.id, username=user.username, jti=jti)
-    await _record_device(user.id, jti, ip_address, user_agent, db)
+    await _record_device(user.id, jti, ip_address, user_agent, db, device_id=device_id)
     await db.commit()
     return TokenResponse(access_token=token)
 
@@ -109,6 +134,7 @@ async def login_totp(
     db: AsyncSession,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    device_id: str | None = None,
 ) -> TokenResponse:
     try:
         payload = decode_token(session_token)
@@ -131,7 +157,7 @@ async def login_totp(
 
     jti = str(uuid.uuid4())
     token = create_access_token(user_id=user.id, username=user.username, jti=jti)
-    await _record_device(user.id, jti, ip_address, user_agent, db)
+    await _record_device(user.id, jti, ip_address, user_agent, db, device_id=device_id)
     await db.commit()
     return TokenResponse(access_token=token)
 

@@ -44,8 +44,11 @@ async def login(
     ip = _get_ip(request)
     _check_banned(ip, request_data.username)
     ua = request.headers.get("user-agent")
+    device_id = request.headers.get("x-device-id")
     try:
-        result = await auth_service.login(request_data, db, ip_address=ip, user_agent=ua)
+        result = await auth_service.login(
+            request_data, db, ip_address=ip, user_agent=ua, device_id=device_id
+        )
         brute_force.record_success(ip, request_data.username)
         return result
     except ValueError as exc:
@@ -65,6 +68,7 @@ async def login_totp(
     ip = _get_ip(request)
     _check_banned(ip)
     ua = request.headers.get("user-agent")
+    device_id = request.headers.get("x-device-id")
     try:
         result = await auth_service.login_totp(
             request_data.session_token,
@@ -72,6 +76,7 @@ async def login_totp(
             db,
             ip_address=ip,
             user_agent=ua,
+            device_id=device_id,
         )
         brute_force.record_success(ip)
         return result
