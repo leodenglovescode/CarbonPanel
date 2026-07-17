@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 480  # 8 hours
     totp_session_expire_minutes: int = 5
+    # The default install serves plain HTTP (no TLS termination baked in), so the
+    # session cookie can't be marked Secure by default or logins would silently
+    # break. Flip to true in .env once you've put TLS in front of the panel.
+    cookie_secure: bool = False
 
     admin_username: str = "admin"
     admin_password: str = "changeme"

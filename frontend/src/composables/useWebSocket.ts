@@ -17,9 +17,11 @@ export function useWebSocket() {
   let stopped = false
 
   function connect() {
-    if (!auth.token) return
+    if (!auth.isAuthenticated) return
     const wsBase = WS_BASE || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
-    ws = new WebSocket(`${wsBase}/ws?token=${auth.token}`)
+    // No token in the URL — the browser attaches the httpOnly session cookie
+    // to the WS handshake automatically.
+    ws = new WebSocket(`${wsBase}/ws`)
 
     ws.onopen = () => {
       metrics.setConnected(true)

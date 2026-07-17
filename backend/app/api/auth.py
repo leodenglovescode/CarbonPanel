@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import brute_force
-from app.core.dependencies import get_current_user, oauth2_scheme
+from app.core.dependencies import clear_auth_cookie, COOKIE_NAME, get_current_user, set_auth_cookie
 from app.core.security import decode_token
 from app.database import get_db
 from app.models.device import Device
@@ -11,7 +11,6 @@ from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     SuccessResponse,
-    TokenResponse,
     TOTPLoginRequest,
     TOTPRequiredResponse,
     UserInfo,
@@ -35,10 +34,11 @@ def _check_banned(ip: str | None, username: str | None = None) -> None:
         )
 
 
-@router.post("/login", response_model=TokenResponse | TOTPRequiredResponse)
+@router.post("/login", response_model=SuccessResponse | TOTPRequiredResponse)
 async def login(
     request_data: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     ip = _get_ip(request)
@@ -50,7 +50,10 @@ async def login(
             request_data, db, ip_address=ip, user_agent=ua, device_id=device_id
         )
         brute_force.record_success(ip, request_data.username)
-        return result
+        if isinstance(result, TOTPRequiredResponse):
+            return result
+        set_auth_cookie(response, result)
+        return SuccessResponse()
     except ValueError as exc:
         brute_force.record_failure(ip, request_data.username)
         raise HTTPException(
@@ -59,10 +62,11 @@ async def login(
         )
 
 
-@router.post("/login/totp", response_model=TokenResponse)
+@router.post("/login/totp", response_model=SuccessResponse)
 async def login_totp(
     request_data: TOTPLoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     ip = _get_ip(request)
@@ -70,7 +74,7 @@ async def login_totp(
     ua = request.headers.get("user-agent")
     device_id = request.headers.get("x-device-id")
     try:
-        result = await auth_service.login_totp(
+        token = await auth_service.login_totp(
             request_data.session_token,
             request_data.totp_code,
             db,
@@ -79,7 +83,8 @@ async def login_totp(
             device_id=device_id,
         )
         brute_force.record_success(ip)
-        return result
+        set_auth_cookie(response, token)
+        return SuccessResponse()
     except ValueError as exc:
         brute_force.record_failure(ip)
         raise HTTPException(
@@ -99,14 +104,16 @@ async def me(current_user: User = Depends(get_current_user)):
 
 @router.post("/logout", response_model=SuccessResponse)
 async def logout(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    response: Response,
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # Revoke this session's device/jti so a stolen token can't be replayed
     # after the legitimate user logs out — not just a client-side discard.
+    token = request.cookies.get(COOKIE_NAME)
     try:
-        jti = decode_token(token).get("jti")
+        jti = decode_token(token).get("jti") if token else None
     except ValueError:
         jti = None
     if jti:
@@ -115,4 +122,5 @@ async def logout(
         if device:
             device.revoked = True
             await db.commit()
+    clear_auth_cookie(response)
     return SuccessResponse()

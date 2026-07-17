@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,11 +25,12 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, set_auth_cookie
 from app.core.security import create_access_token
 from app.database import get_db
 from app.models.user import User
 from app.models.webauthn_credential import WebAuthnCredential
+from app.schemas.auth import SuccessResponse
 from app.services.auth_service import _record_device
 
 router = APIRouter(prefix="/auth/passkey", tags=["passkeys"])
@@ -220,6 +221,7 @@ class PasskeyLoginCompleteRequest(BaseModel):
 async def passkey_login_complete(
     body: PasskeyLoginCompleteRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     stored = _challenges.pop(f"auth:{body.session_id}", None)
@@ -286,4 +288,5 @@ async def passkey_login_complete(
     await db.commit()
 
     token = create_access_token(user_id=user_id, username=user.username, jti=jti)
-    return {"access_token": token, "token_type": "bearer"}
+    set_auth_cookie(response, token)
+    return SuccessResponse()
