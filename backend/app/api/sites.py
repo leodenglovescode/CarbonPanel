@@ -4,7 +4,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import COOKIE_NAME, get_current_user
 from app.core.security import decode_token
 from app.database import get_db
 from app.models.user import User
@@ -295,9 +295,9 @@ async def get_traffic(
 
 
 @router.websocket("/{site_id}/logs")
-async def stream_logs(site_id: str, ws: WebSocket, token: str = ""):
+async def stream_logs(site_id: str, ws: WebSocket):
     try:
-        payload = decode_token(token)
+        payload = decode_token(ws.cookies.get(COOKIE_NAME, ""))
         if payload.get("scope") != "full":
             await ws.close(code=4001)
             return

@@ -27,11 +27,9 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ siteId: string; logPath: string | null }>()
 
-const auth = useAuthStore()
 const lines = ref<string[]>([])
 const follow = ref(true)
 const wsConnected = ref(false)
@@ -44,7 +42,7 @@ function connect() {
   if (ws) ws.close()
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${proto}//${location.host}/api/v1/sites/${props.siteId}/logs?token=${auth.token}`
+  const url = `${proto}//${location.host}/api/v1/sites/${props.siteId}/logs`
   ws = new WebSocket(url)
 
   ws.onopen = () => { wsConnected.value = true }

@@ -68,8 +68,13 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  // The session lives in an httpOnly cookie the client can't read directly,
+  // so the first navigation has to ask the backend whether it's still valid.
+  if (!auth.authChecked) {
+    await auth.loadUser()
+  }
   if (!to.meta.public && !auth.isAuthenticated) {
     return { name: 'login' }
   }

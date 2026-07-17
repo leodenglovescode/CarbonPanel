@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.broadcast import connection_manager
+from app.core.dependencies import COOKIE_NAME
 from app.core.security import decode_token
 from app.services.metrics.collector import metrics_collector
 
@@ -10,10 +11,11 @@ router = APIRouter(tags=["websocket"])
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, token: str = ""):
-    # Authenticate via query param token
+async def websocket_endpoint(ws: WebSocket):
+    # Authenticate via the httpOnly session cookie — the browser sends it
+    # automatically on the WS handshake, no token in the URL/query string.
     try:
-        payload = decode_token(token)
+        payload = decode_token(ws.cookies.get(COOKIE_NAME, ""))
         if payload.get("scope") != "full":
             await ws.close(code=4001)
             return

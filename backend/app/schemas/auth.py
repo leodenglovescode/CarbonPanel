@@ -11,11 +11,6 @@ class TOTPLoginRequest(BaseModel):
     totp_code: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
 class TOTPRequiredResponse(BaseModel):
     totp_required: bool = True
     session_token: str
