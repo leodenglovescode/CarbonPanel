@@ -275,6 +275,41 @@ print("")
 PY
 }
 
+# Reads Settings → Proxy from the panel's own config (if enabled) and exports
+# https_proxy/http_proxy/all_proxy for the rest of this process. This is the
+# same proxy the backend already uses for webhooks — hosts that need it for
+# outbound HTTPS (e.g. GitHub blocked/unreachable directly) need it here too,
+# and unlike a shell profile's proxy vars, this survives sudo/systemd since
+# it's read from CarbonPanel's own settings file, not inherited environment.
+apply_configured_proxy() {
+  local settings_file="$SHARED_DIR/settings.json"
+  [[ -f "$settings_file" ]] || return 0
+
+  local proxy_url
+  proxy_url="$(python3 - "$settings_file" <<'PY' 2>/dev/null
+import json, sys
+
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(0)
+
+proxy = data.get("proxy") or {}
+if not proxy.get("enabled"):
+    raise SystemExit(0)
+
+host = proxy.get("host", "127.0.0.1")
+port = proxy.get("port", 7890)
+scheme = "socks5" if proxy.get("type") == "socks5" else "http"
+print(f"{scheme}://{host}:{port}")
+PY
+)"
+
+  [[ -n "$proxy_url" ]] || return 0
+  export https_proxy="$proxy_url" http_proxy="$proxy_url" all_proxy="$proxy_url"
+  note "Using the configured proxy for GitHub access: ${DIM}${proxy_url}${NC}"
+}
+
 github_api_get() {
   curl -fsSL --connect-timeout 10 --max-time 30 -H "Accept: application/vnd.github+json" "$1"
 }
@@ -1342,6 +1377,8 @@ if [[ -z "$COMMAND" ]]; then
   exec </dev/tty || true
   show_menu
 fi
+
+apply_configured_proxy
 
 case "$COMMAND" in
   install)
