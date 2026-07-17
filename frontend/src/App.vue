@@ -47,7 +47,7 @@ const auth = useAuthStore()
 const isPublicRoute = computed(() => !!route.meta.public)
 
 async function maybePromptForUpdate() {
-  if (!auth.token || isPublicRoute.value) return
+  if (!auth.isAuthenticated || isPublicRoute.value) return
 
   try {
     const { data } = await systemApi.version()
@@ -81,17 +81,17 @@ async function maybePromptForUpdate() {
 }
 
 watch(
-  () => auth.token,
-  (token) => {
-    if (token) void prefsSync.load()
+  () => auth.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) void prefsSync.load()
   },
   { immediate: true },
 )
 
 watch(
-  [() => auth.token, () => route.fullPath],
-  ([token]) => {
-    if (token && !isPublicRoute.value) {
+  [() => auth.isAuthenticated, () => route.fullPath],
+  ([authenticated]) => {
+    if (authenticated && !isPublicRoute.value) {
       void maybePromptForUpdate()
     }
   },

@@ -16,6 +16,9 @@ import type {
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  // Session lives in an httpOnly cookie now, not a header we attach — the
+  // browser only sends it automatically if we opt in to credentialed requests.
+  withCredentials: true,
 })
 
 // Persistent per-browser fingerprint so re-logging in (session expiry, logout,
@@ -32,10 +35,6 @@ function getDeviceId(): string {
 }
 
 api.interceptors.request.use((config) => {
-  const auth = useAuthStore()
-  if (auth.token) {
-    config.headers.Authorization = `Bearer ${auth.token}`
-  }
   config.headers['X-Device-Id'] = getDeviceId()
   return config
 })
@@ -57,8 +56,7 @@ api.interceptors.response.use(
 export default api
 
 export interface LoginResponse {
-  access_token?: string
-  token_type?: string
+  success?: boolean
   totp_required?: boolean
   session_token?: string
 }
@@ -79,7 +77,7 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post<LoginResponse>('/auth/login', { username, password }),
   loginTotp: (session_token: string, totp_code: string) =>
-    api.post<{ access_token: string }>('/auth/login/totp', { session_token, totp_code }),
+    api.post<{ success: boolean }>('/auth/login/totp', { session_token, totp_code }),
   me: () => api.get<UserInfo>('/auth/me'),
   logout: () => api.post('/auth/logout'),
 }
@@ -304,7 +302,7 @@ export const passkeysApi = {
   loginBegin: (username: string) =>
     api.post<Record<string, unknown>>('/auth/passkey/login/begin', { username }),
   loginComplete: (session_id: string, credential: object) =>
-    api.post<{ access_token: string }>('/auth/passkey/login/complete', { session_id, credential }),
+    api.post<{ success: boolean }>('/auth/passkey/login/complete', { session_id, credential }),
 }
 
 export const userPrefsApi = {

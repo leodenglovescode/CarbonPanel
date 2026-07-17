@@ -20,7 +20,6 @@ from app.models.user import User
 from app.schemas.auth import (
     ChangeProfileRequest,
     LoginRequest,
-    TokenResponse,
     TOTPRequiredResponse,
     TOTPSetupResponse,
 )
@@ -105,7 +104,7 @@ async def login(
     ip_address: str | None = None,
     user_agent: str | None = None,
     device_id: str | None = None,
-) -> TokenResponse | TOTPRequiredResponse:
+) -> str | TOTPRequiredResponse:
     result = await db.execute(select(User).where(User.username == request.username))
     user = result.scalar_one_or_none()
 
@@ -125,7 +124,7 @@ async def login(
     token = create_access_token(user_id=user.id, username=user.username, jti=jti)
     await _record_device(user.id, jti, ip_address, user_agent, db, device_id=device_id)
     await db.commit()
-    return TokenResponse(access_token=token)
+    return token
 
 
 async def login_totp(
@@ -135,7 +134,7 @@ async def login_totp(
     ip_address: str | None = None,
     user_agent: str | None = None,
     device_id: str | None = None,
-) -> TokenResponse:
+) -> str:
     try:
         payload = decode_token(session_token)
     except ValueError:
@@ -159,7 +158,7 @@ async def login_totp(
     token = create_access_token(user_id=user.id, username=user.username, jti=jti)
     await _record_device(user.id, jti, ip_address, user_agent, db, device_id=device_id)
     await db.commit()
-    return TokenResponse(access_token=token)
+    return token
 
 
 async def setup_2fa(user: User, db: AsyncSession) -> TOTPSetupResponse:

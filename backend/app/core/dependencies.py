@@ -1,25 +1,64 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, Response, WebSocket, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.security import decode_token
 from app.database import get_db
 from app.models.device import Device
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+COOKIE_NAME = "cp_session"
+
+
+def is_allowed_ws_origin(ws: WebSocket) -> bool:
+    """Reject cross-site WebSocket handshakes (CSWSH).
+
+    Unlike normal HTTP requests, the browser does not apply CORS to
+    WebSocket handshakes and cookie SameSite enforcement on them is
+    inconsistent across browsers — so with auth now living in a cookie,
+    any other origin's page can do `new WebSocket(".../ws")` and have the
+    browser attach it automatically unless the server checks Origin itself.
+    """
+    origin = ws.headers.get("origin")
+    if not origin:
+        return False
+    if origin in settings.cors_origins:
+        return True
+    # Same-origin deployment (prod: frontend + backend behind one nginx
+    # origin; dev: vite's proxy forwards the original Host untouched) —
+    # Origin should match the Host the handshake actually arrived on.
+    origin_host = origin.split("://", 1)[-1]
+    return origin_host == ws.headers.get("host", "")
+
+
+def set_auth_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=settings.access_token_expire_minutes * 60,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(key=COOKIE_NAME, path="/")
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
     )
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise credentials_error
     try:
         payload = decode_token(token)
     except ValueError:

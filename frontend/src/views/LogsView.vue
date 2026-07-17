@@ -35,11 +35,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import { useLocaleStore } from '@/stores/locale'
 
 const { t } = useLocaleStore()
-const auth = useAuthStore()
 
 const sourcesMap: Record<string, string> = {
   journalctl: t('logs.sources.journalctl'),
@@ -64,7 +62,7 @@ const activeSource = computed(() =>
 
 function buildUrl(): string {
   const base = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/^http/, 'ws').replace('/api/v1', '')
-  return `${base}/ws/logs?token=${auth.token}&source=${encodeURIComponent(activeSource.value)}`
+  return `${base}/ws/logs?source=${encodeURIComponent(activeSource.value)}`
 }
 
 function connect() {

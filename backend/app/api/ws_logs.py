@@ -4,6 +4,7 @@ import os
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.core.dependencies import COOKIE_NAME, is_allowed_ws_origin
 from app.core.security import decode_token
 
 router = APIRouter(tags=["websocket"])
@@ -36,9 +37,13 @@ def _resolve_source(source: str) -> list[str] | None:
 
 
 @router.websocket("/ws/logs")
-async def logs_ws(ws: WebSocket, token: str = "", source: str = "journalctl"):
+async def logs_ws(ws: WebSocket, source: str = "journalctl"):
+    if not is_allowed_ws_origin(ws):
+        await ws.close(code=4003)
+        return
+
     try:
-        payload = decode_token(token)
+        payload = decode_token(ws.cookies.get(COOKIE_NAME, ""))
         if payload.get("scope") != "full":
             await ws.close(code=4001)
             return

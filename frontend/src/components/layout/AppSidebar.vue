@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useLocaleStore } from '@/stores/locale'
 import type { SystemMetrics } from '@/types/metrics'
@@ -64,7 +65,12 @@ function isActive(to: string) {
   return route.path.startsWith(to)
 }
 
-function handleLogout() {
+async function handleLogout() {
+  try {
+    await authApi.logout()
+  } catch {
+    // best-effort — clear local state and redirect either way
+  }
   auth.logout()
   router.push('/login')
 }

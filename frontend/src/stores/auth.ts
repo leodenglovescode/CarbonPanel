@@ -9,31 +9,28 @@ export interface UserInfo {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('cp_token'))
   const user = ref<UserInfo | null>(null)
+  // Whether we've asked the backend (via /auth/me) whether the session cookie
+  // is valid yet — the router guard uses this to bootstrap auth state once
+  // per page load instead of on every navigation.
+  const authChecked = ref(false)
 
-  const isAuthenticated = computed(() => !!token.value)
-
-  function setToken(t: string) {
-    token.value = t
-    localStorage.setItem('cp_token', t)
-  }
+  const isAuthenticated = computed(() => !!user.value)
 
   async function loadUser() {
-    if (!token.value) return
     try {
       const res = await authApi.me()
       user.value = res.data
     } catch {
-      logout()
+      user.value = null
+    } finally {
+      authChecked.value = true
     }
   }
 
   function logout() {
-    token.value = null
     user.value = null
-    localStorage.removeItem('cp_token')
   }
 
-  return { token, user, isAuthenticated, setToken, loadUser, logout }
+  return { user, isAuthenticated, authChecked, loadUser, logout }
 })

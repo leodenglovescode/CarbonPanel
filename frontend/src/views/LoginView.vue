@@ -99,7 +99,6 @@ async function handleLogin() {
       sessionToken.value = res.data.session_token!
       step.value = 2
     } else {
-      auth.setToken(res.data.access_token!)
       await auth.loadUser()
       router.push('/')
     }
@@ -162,8 +161,7 @@ async function handlePasskey() {
         userHandle: response.userHandle ? bufferToB64url(response.userHandle) : null,
       },
     }
-    const { data } = await passkeysApi.loginComplete(sessionId, credJson)
-    auth.setToken(data.access_token)
+    await passkeysApi.loginComplete(sessionId, credJson)
     await auth.loadUser()
     router.push('/')
   } catch (e: any) {
@@ -178,8 +176,7 @@ async function handleTotp() {
   error.value = ''
   loading.value = true
   try {
-    const res = await authApi.loginTotp(sessionToken.value, totpCode.value)
-    auth.setToken(res.data.access_token)
+    await authApi.loginTotp(sessionToken.value, totpCode.value)
     await auth.loadUser()
     router.push('/')
   } catch (e: any) {
