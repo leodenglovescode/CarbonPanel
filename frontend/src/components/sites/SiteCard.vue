@@ -69,6 +69,10 @@ function statusClass(s?: string) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Grid items default to min-width:auto — without this, unbroken content a
+     couple levels deep (e.g. a long service name) can force this whole card
+     wider than its 1fr track instead of letting inner ellipsis rules clip it. */
+  min-width: 0;
 }
 .site-card:hover { border-color: var(--accent-border); background: var(--bg-card-hover); }
 
