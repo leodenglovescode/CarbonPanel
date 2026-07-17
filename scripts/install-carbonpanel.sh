@@ -458,23 +458,50 @@ clone_release() {
   printf '%s\n' "$destination"
 }
 
+BUILD_STEP_TOTAL=5
+BUILD_STEP_CURRENT=0
+
+# Render a "[####------] 40%  <label>" bar in place (on a tty) or a plain
+# "[2/5] <label>" line (piped/journald), then run the command with its
+# output captured to a temp file — dumped only on failure. Replaces raw
+# pip/npm streaming, which is unreadable noise once captured non-interactively.
+build_step() {
+  local label="$1"; shift
+  BUILD_STEP_CURRENT=$((BUILD_STEP_CURRENT + 1))
+  if [[ -t 1 ]]; then
+    local pct=$((BUILD_STEP_CURRENT * 100 / BUILD_STEP_TOTAL))
+    local width=24
+    local filled=$((pct * width / 100))
+    local bar
+    bar="$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' $((width - filled)) '')"
+    printf "\r\033[K  ${CYAN}[%s]${NC} %3d%%  %s" "$bar" "$pct" "$label"
+  else
+    log "[$BUILD_STEP_CURRENT/$BUILD_STEP_TOTAL] $label"
+  fi
+
+  local _tmp _rc=0
+  _tmp=$(mktemp)
+  "$@" >"$_tmp" 2>&1 || _rc=$?
+  if [[ $_rc -ne 0 ]]; then
+    printf '\n' >&2
+    cat "$_tmp" >&2
+    printf '\n' >&2
+    rm -f "$_tmp"
+    return $_rc
+  fi
+  rm -f "$_tmp"
+}
+
 build_release() {
   local release_dir="$1"
+  BUILD_STEP_CURRENT=0
 
-  log "teaching python what's what..."
-  # Not run_silent: pip already prints a real per-package progress bar with
-  # % and speed on a tty — silencing it just replaced real progress with a
-  # fake "grab a coffee" placeholder. Let it stream.
-  python3 -m venv "$release_dir/backend/.venv"
-  "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
-  "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
-
-  log "bundling the frontend heat..."
-  (
-    cd "$release_dir/frontend"
-    npm ci
-    npm run build
-  )
+  build_step "creating backend virtualenv..." python3 -m venv "$release_dir/backend/.venv"
+  build_step "upgrading pip tooling..." "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
+  build_step "installing backend dependencies..." "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
+  build_step "installing frontend dependencies..." npm --prefix "$release_dir/frontend" ci
+  build_step "building frontend..." npm --prefix "$release_dir/frontend" run build
+  [[ -t 1 ]] && printf '\n'
 
   run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
   # $BIN_DIR isn't on PATH by default — symlink onto it so `carbonpanelctl`
