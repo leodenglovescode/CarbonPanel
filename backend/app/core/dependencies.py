@@ -29,7 +29,19 @@ def is_allowed_ws_origin(ws: WebSocket) -> bool:
     # origin; dev: vite's proxy forwards the original Host untouched) —
     # Origin should match the Host the handshake actually arrived on.
     origin_host = origin.split("://", 1)[-1]
-    return origin_host == ws.headers.get("host", "")
+    host_header = ws.headers.get("host", "")
+    if origin_host == host_header:
+        return True
+    # Some reverse proxies forward Host without the port even when the
+    # client's Origin includes one (nginx's $host variable strips it, unlike
+    # $http_host — an easy config mistake that silently rejected every
+    # WebSocket on any deployment using a non-default port). Compare
+    # hostnames alone as a fallback rather than failing closed on that; the
+    # hostname still has to match exactly, so this doesn't weaken the
+    # cross-origin check itself.
+    origin_hostname = origin_host.rsplit(":", 1)[0]
+    host_hostname = host_header.rsplit(":", 1)[0]
+    return bool(origin_hostname) and origin_hostname == host_hostname
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
