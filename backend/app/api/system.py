@@ -5,11 +5,12 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.core.dependencies import get_current_user
+from app.models.user import User
 from app.services.update_runtime import (
     CHECK_SERVICE,
     UPDATE_SERVICE,
     get_system_version_status,
-    require_authenticated_token,
     trigger_update_check,
     trigger_update_install,
 )
@@ -22,7 +23,7 @@ _last_install_ts: float = 0.0
 
 
 @router.get("/version")
-async def get_version_status(_: dict = Depends(require_authenticated_token)):
+async def get_version_status(_: User = Depends(get_current_user)):
     loop = asyncio.get_event_loop()
     try:
         return await asyncio.wait_for(
@@ -35,16 +36,14 @@ async def get_version_status(_: dict = Depends(require_authenticated_token)):
             "update_available": False,
             "update_in_progress": False,
             "error": "GitHub API timed out — check network connectivity",
-            "deployment_type": None,
             "current_version": None,
             "latest_version": None,
             "checked_at": None,
-            "docker_pull_cmd": None,
         }
 
 
 @router.post("/check-updates", status_code=status.HTTP_202_ACCEPTED)
-async def check_updates(_: dict = Depends(require_authenticated_token)):
+async def check_updates(_: User = Depends(get_current_user)):
     loop = asyncio.get_event_loop()
     note: str | None = None
     try:
@@ -62,7 +61,7 @@ async def check_updates(_: dict = Depends(require_authenticated_token)):
 
 
 @router.post("/install-update", status_code=status.HTTP_202_ACCEPTED)
-async def install_update(_: dict = Depends(require_authenticated_token)):
+async def install_update(_: User = Depends(get_current_user)):
     global _last_install_ts
     now = time.monotonic()
     elapsed = now - _last_install_ts
@@ -89,7 +88,7 @@ async def install_update(_: dict = Depends(require_authenticated_token)):
 
 
 @router.get("/service-logs")
-async def get_service_logs(_: dict = Depends(require_authenticated_token)):
+async def get_service_logs(_: User = Depends(get_current_user)):
     def _fetch() -> list[str]:
         cmd = [
             "journalctl",

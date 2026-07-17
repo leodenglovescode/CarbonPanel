@@ -3,13 +3,11 @@
 ![Project Status](https://img.shields.io/badge/status-active-00C853?style=for-the-badge)
 ![GitHub License](https://img.shields.io/github/license/leodenglovescode/CarbonPanel?style=for-the-badge)
 ![GitHub last commit](https://img.shields.io/github/last-commit/leodenglovescode/CarbonPanel?style=for-the-badge)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/leodenglovescode/CarbonPanel/publish-docker.yml?style=for-the-badge)
 <br/><br/>
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
 A lightweight self-hosted server monitoring panel — live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, and JWT + TOTP authentication.
 
@@ -21,51 +19,6 @@ A lightweight self-hosted server monitoring panel — live CPU, RAM, GPU, disk, 
 
 ## Install
 
-### Docker
-
-```bash
-docker run -d \
-  --name carbonpanel \
-  --network host \
-  --restart unless-stopped \
-  -v carbonpanel_data:/app \
-  -e SECRET_KEY=$(openssl rand -hex 32) \
-  -e ADMIN_PASSWORD=yourpassword \
-  ghcr.io/leodenglovescode/carbonpanel:latest
-```
-
-Open **http://localhost:8787**. Default username is `admin`.
-
-> `--network host` is required so the panel can read host-level metrics (network interfaces, processes, etc.).
-> The `-v carbonpanel_data:/app` volume keeps your database across container restarts.
-
-**Docker Compose alternative:**
-
-```yaml
-services:
-  carbonpanel:
-    image: ghcr.io/leodenglovescode/carbonpanel:latest
-    network_mode: host
-    restart: unless-stopped
-    volumes:
-      - carbonpanel_data:/app
-    environment:
-      APP_PORT: 8787
-      SECRET_KEY: your-secret-key-here
-      ADMIN_PASSWORD: yourpassword
-
-volumes:
-  carbonpanel_data:
-```
-
-```bash
-docker compose up -d
-```
-
----
-
-### Self-hosted (Linux — systemd/apt)
-
 Installs as a native systemd service with nginx. Requires root, Ubuntu/Debian.
 
 ```bash
@@ -74,23 +27,13 @@ curl -fsSL https://carbonpanel.leodeng.dev/install.sh | sudo bash
 
 Initial credentials are saved to `/opt/carbonpanel/shared/first-install.txt` after install.
 
+> CarbonPanel manages the host it runs on — systemd services, real process/disk access,
+> nginx sites — so it runs as a native systemd service rather than in a container. A prior
+> Docker deployment path has been removed for this reason.
+
 ---
 
 ## Updating
-
-### Docker
-
-```bash
-docker pull ghcr.io/leodenglovescode/carbonpanel:latest
-docker stop carbonpanel && docker rm carbonpanel
-docker run -d ... # same command as above — the volume keeps your data
-```
-
-Or with Compose: `docker compose pull && docker compose up -d`
-
-The Settings page shows available updates and provides a ready-to-copy pull command.
-
-### Self-hosted
 
 Use the **Settings → Install Update** button in the panel, or SSH in and run:
 
@@ -104,7 +47,7 @@ Updates clone the new release, run DB migrations, health-check, and auto-rollbac
 
 ## Configuration
 
-All settings are environment variables (Docker) or written to `backend/.env` (local dev / install script).
+All settings are written to `backend/.env` (local dev / install script).
 
 | Variable | Default | Description |
 |---|---|---|
@@ -127,7 +70,7 @@ All settings are environment variables (Docker) or written to `backend/.env` (lo
 - **Sites** — manage tracked services with log streaming and config file editing
 - **Customizable UI** — dark/light/auto theme, custom colors, fonts, gradients, background images
 - **JWT auth** with optional **TOTP 2FA**
-- **In-panel updates** — version check via GitHub API, one-click update (self-hosted) or pull command (Docker)
+- **In-panel updates** — version check via GitHub API, one-click update from the Settings page
 
 ---
 
