@@ -18,11 +18,19 @@ def _images_dir() -> Path:
     # Mirrors the resolution order used for other shared runtime state
     # (see proxy_service._default_settings_path) so installs keep every
     # piece of mutable config under the same root.
+    #
+    # os.access(W_OK) matters, not just is_dir(): a dev checkout running as
+    # a regular user on the same host as a real install (or any host where
+    # /opt/carbonpanel exists but is owned by the carbonpanel service user)
+    # would otherwise "successfully" pick a shared/ directory it has no
+    # permission to actually write into, and only find out via a 500 on the
+    # first upload.
     if override := os.getenv("CARBONPANEL_DATA_DIR"):
         base = Path(override)
     else:
         shared = Path(os.getenv("CARBONPANEL_INSTALL_ROOT", "/opt/carbonpanel")) / "shared"
-        base = shared if shared.is_dir() else Path.home() / ".config" / "carbonpanel"
+        writable = shared.is_dir() and os.access(shared, os.W_OK)
+        base = shared if writable else Path.home() / ".config" / "carbonpanel"
     directory = base / "background-images"
     directory.mkdir(parents=True, exist_ok=True)
     return directory

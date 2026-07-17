@@ -11,8 +11,11 @@ def _default_settings_path() -> Path:
     if override := os.getenv("CARBONPANEL_SETTINGS_FILE"):
         return Path(override)
     # In a production install, write alongside the other shared state files.
+    # os.access(W_OK) matters, not just is_dir(): a dev checkout running as a
+    # regular user on the same host as a real install would otherwise pick a
+    # shared/ directory it has no permission to actually write into.
     shared = Path(os.getenv("CARBONPANEL_INSTALL_ROOT", "/opt/carbonpanel")) / "shared"
-    if shared.is_dir():
+    if shared.is_dir() and os.access(shared, os.W_OK):
         return shared / "settings.json"
     # Dev / non-installed fallback.
     return Path.home() / ".config" / "carbonpanel" / "settings.json"
