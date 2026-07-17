@@ -369,6 +369,8 @@ onMounted(load)
 }
 .row-main:hover { background: var(--bg-hover); }
 
+.col-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
 .col-port .port-num { font-size: 13px; font-weight: 700; color: var(--accent); }
 
 .proto-badge {

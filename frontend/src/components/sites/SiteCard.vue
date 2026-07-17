@@ -74,7 +74,10 @@ function statusClass(s?: string) {
 
 .card-header { display: flex; flex-direction: column; gap: 5px; }
 .card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.site-name { font-size: 13px; font-weight: 600; color: var(--fg); }
+.site-name {
+  font-size: 13px; font-weight: 600; color: var(--fg);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 
 .type-badge {
   font-size: 9px;
@@ -99,13 +102,17 @@ function statusClass(s?: string) {
 .status-text { font-size: 11px; color: var(--fg-muted); text-transform: capitalize; }
 .uptime, .pid { font-size: 10px; color: var(--fg-dim); }
 
-.service-info { display: flex; align-items: center; gap: 6px; }
+.service-info { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .service-label {
   font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;
   padding: 1px 5px; border-radius: 2px;
   background: var(--bg-badge); color: var(--fg-dim); border: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.service-name { font-size: 11px; color: var(--fg-muted); }
+.service-name {
+  font-size: 11px; color: var(--fg-muted);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 
 .description { font-size: 10px; color: var(--fg-dim); line-height: 1.4; }
 

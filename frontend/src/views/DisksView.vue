@@ -449,8 +449,11 @@ onMounted(load)
 }
 
 .disk-left { min-width: 200px; }
-.disk-device-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
-.disk-device { font-size: 13px; font-weight: 600; color: var(--fg); }
+.disk-device-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; min-width: 0; }
+.disk-device {
+  font-size: 13px; font-weight: 600; color: var(--fg);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .disk-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .meta-badge {
   font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
@@ -469,11 +472,15 @@ onMounted(load)
 .badge-health-unknown { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
 .badge-temp { color: var(--fg-muted); }
 
-.disk-mount-row { display: flex; align-items: center; gap: 8px; }
-.disk-mount { font-size: 10px; color: var(--fg-dim); }
+.disk-mount-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.disk-mount {
+  font-size: 10px; color: var(--fg-dim);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .extra-mounts {
   font-size: 9px; color: var(--fg-dim); background: var(--bg-badge);
   border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px;
+  flex-shrink: 0;
 }
 
 .disk-right { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
