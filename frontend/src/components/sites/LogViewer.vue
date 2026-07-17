@@ -3,14 +3,14 @@
     <div class="log-toolbar">
       <span class="log-status">
         <span :class="['ws-dot', wsConnected ? 'dot-green' : 'dot-gray']" />
-        {{ wsConnected ? 'live' : 'disconnected' }}
+        {{ wsConnected ? 'Live' : 'Disconnected' }}
       </span>
-      <span class="log-path">{{ logPath ?? 'no log path' }}</span>
+      <span class="log-path">{{ logPath ?? 'No log path' }}</span>
       <div class="toolbar-actions">
         <button :class="['follow-btn', { active: follow }]" @click="follow = !follow">
-          {{ follow ? '⬇ follow' : '⬇ follow' }}
+          {{ follow ? '⬇ Follow' : '⬇ Follow' }}
         </button>
-        <button class="clear-btn" @click="lines = []">clear</button>
+        <button class="clear-btn" @click="lines = []">Clear</button>
       </div>
     </div>
 
@@ -20,7 +20,7 @@
         :key="i"
         class="log-line"
       >{{ line }}
-</span><span v-if="lines.length === 0" class="log-empty">{{ logPath ? 'waiting for output…' : 'no log paths configured for this site' }}</span></pre>
+</span><span v-if="lines.length === 0" class="log-empty">{{ logPath ? 'Waiting for output…' : 'No log paths configured for this site' }}</span></pre>
     </div>
   </div>
 </template>

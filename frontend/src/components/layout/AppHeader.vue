@@ -6,9 +6,9 @@
     </div>
 
     <div class="header-center">
-      <span v-if="system" class="uptime">up {{ formatUptime(system.uptime_seconds) }}</span>
+      <span v-if="system" class="uptime">Up {{ formatUptime(system.uptime_seconds) }}</span>
       <span v-if="loadAvg" class="load">
-        load <span class="mono">{{ loadAvg[0].toFixed(2) }}</span>
+        Load <span class="mono">{{ loadAvg[0].toFixed(2) }}</span>
         <span class="text-muted"> / {{ loadAvg[1].toFixed(2) }} / {{ loadAvg[2].toFixed(2) }}</span>
       </span>
     </div>

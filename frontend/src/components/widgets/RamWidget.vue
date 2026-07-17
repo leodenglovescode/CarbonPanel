@@ -18,21 +18,21 @@
 
     <div class="mem-stats">
       <div class="stat">
-        <span class="stat-lbl">used</span>
+        <span class="stat-lbl">Used</span>
         <span class="stat-val text-accent">{{ fmt(mem.used_mb) }} {{ unitLabel }}</span>
       </div>
       <div class="stat">
-        <span class="stat-lbl">free</span>
+        <span class="stat-lbl">Free</span>
         <span class="stat-val">{{ fmt(mem.free_mb) }} {{ unitLabel }}</span>
       </div>
       <div class="stat">
-        <span class="stat-lbl">total</span>
+        <span class="stat-lbl">Total</span>
         <span class="stat-val">{{ fmt(mem.total_mb) }} {{ unitLabel }}</span>
       </div>
     </div>
 
     <div v-if="mem.swap_total_mb > 0" class="swap-row">
-      <span class="swap-lbl">swap</span>
+      <span class="swap-lbl">Swap</span>
       <div class="bar-track swap">
         <div class="bar-fill swap-fill" :style="{ width: swapPct + '%' }" />
       </div>

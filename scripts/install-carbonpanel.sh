@@ -17,6 +17,9 @@ PREVIOUS_LINK="$INSTALL_ROOT/previous"
 BACKEND_ENV_FILE="$SHARED_DIR/backend.env"
 STATUS_FILE="$SHARED_DIR/update-status.json"
 CONTROL_SCRIPT="$BIN_DIR/carbonpanelctl"
+TLS_DIR="$SHARED_DIR/tls"
+TLS_CERT="$TLS_DIR/cert.pem"
+TLS_KEY="$TLS_DIR/key.pem"
 NGINX_SITE="/etc/nginx/sites-available/carbonpanel.conf"
 NGINX_SITE_LINK="/etc/nginx/sites-enabled/carbonpanel.conf"
 BACKEND_SERVICE="carbonpanel-backend.service"
@@ -45,7 +48,7 @@ else
 fi
 
 if [[ "${EUID}" -ne 0 ]]; then
-  printf "\n  ${RED}${BOLD}✗  hold up — this needs root.${NC}\n" >&2
+  printf "\n  ${RED}${BOLD}✗  Hold up — this needs root.${NC}\n" >&2
   printf "  ${DIM}  try: curl -fsSL <url> | sudo bash${NC}\n\n" >&2
   exit 1
 fi
@@ -328,7 +331,7 @@ install_os_prerequisites() {
   export DEBIAN_FRONTEND=noninteractive
   # Broken third-party repos (Docker, NVIDIA, Chrome, etc.) cause apt-get update
   # to return exit code 100. Treat that as a warning — the cached lists are enough.
-  apt-get update -y >/dev/null 2>&1 || warn "some apt sources threw a tantrum — rolling with cached package lists, should be fine"
+  apt-get update -y >/dev/null 2>&1 || warn "Some apt sources threw a tantrum — rolling with cached package lists, should be fine"
   # Core utilities — safe to install unconditionally on any apt system.
   run_silent apt-get install -y \
     ca-certificates \
@@ -421,7 +424,7 @@ SECRET_KEY=$secret
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=$admin_password
 DATABASE_URL=sqlite+aiosqlite:////opt/carbonpanel/shared/carbonpanel.db
-CORS_ORIGINS='["http://127.0.0.1:$APP_PORT","http://localhost:$APP_PORT"]'
+CORS_ORIGINS='["https://127.0.0.1:$APP_PORT","https://localhost:$APP_PORT"]'
 METRICS_INTERVAL_SECONDS=1.0
 PROCESS_LIMIT=25
 CARBONPANEL_INSTALL_ROOT=$INSTALL_ROOT
@@ -434,15 +437,66 @@ EOF
 CarbonPanel initial credentials
 ===============================
 
-URL: http://localhost:$APP_PORT
+URL: https://your-server-ip:$APP_PORT
 Username: admin
 Password: $admin_password
 
+CarbonPanel serves HTTPS with a self-signed certificate — your browser will
+warn that it isn't trusted. That's expected; click through it (e.g. "Advanced
+-> Proceed"). It's still real encryption, just not backed by a public CA.
+
 This file is only written on first install.
-Change the admin password after signing in.
+Change the admin password after signing in — the onboarding wizard will
+walk you through this and 2FA/passkey setup on first login.
 EOF
   chmod 600 "$SHARED_DIR/first-install.txt"
   chown root:root "$SHARED_DIR/first-install.txt"
+}
+
+ensure_tls_cert() {
+  mkdir -p "$TLS_DIR"
+  chmod 750 "$TLS_DIR"
+  chown root:root "$TLS_DIR"
+
+  # Self-signed, so there's no ACME-style auto-renewal — a fresh cert is only
+  # minted on install/update. Skip regen if the existing one isn't expiring
+  # soon, so re-running update doesn't invalidate anything that pinned it.
+  if [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] && \
+     openssl x509 -checkend 2592000 -noout -in "$TLS_CERT" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local -a sans=("DNS:localhost" "IP:127.0.0.1" "IP:::1")
+  local host_name
+  host_name="$(hostname 2>/dev/null || true)"
+  [[ -n "$host_name" ]] && sans+=("DNS:$host_name")
+  local ip
+  for ip in $(hostname -I 2>/dev/null || true); do
+    sans+=("IP:$ip")
+  done
+  local san_string
+  san_string="$(IFS=,; echo "${sans[*]}")"
+
+  run_silent openssl req -x509 -nodes -newkey rsa:2048 \
+    -keyout "$TLS_KEY" -out "$TLS_CERT" \
+    -days 3650 \
+    -subj "/CN=carbonpanel" \
+    -addext "subjectAltName=$san_string" \
+    -addext "keyUsage=digitalSignature,keyEncipherment" \
+    -addext "extendedKeyUsage=serverAuth" \
+    || die "Failed to generate the self-signed TLS certificate."
+
+  chmod 600 "$TLS_KEY"
+  chmod 644 "$TLS_CERT"
+  chown root:root "$TLS_KEY" "$TLS_CERT"
+}
+
+# Existing installs from before HTTPS was the default won't have this set —
+# patch it into an already-written env file too, not just fresh ones, so an
+# update actually finishes hardening the cookie instead of leaving it half done.
+ensure_cookie_secure_flag() {
+  grep -q '^COOKIE_SECURE=' "$BACKEND_ENV_FILE" 2>/dev/null || \
+    printf 'COOKIE_SECURE=true\n' >> "$BACKEND_ENV_FILE"
 }
 
 clone_release() {
@@ -496,11 +550,11 @@ build_release() {
   local release_dir="$1"
   BUILD_STEP_CURRENT=0
 
-  build_step "creating backend virtualenv..." python3 -m venv "$release_dir/backend/.venv"
-  build_step "upgrading pip tooling..." "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
-  build_step "installing backend dependencies..." "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
-  build_step "installing frontend dependencies..." npm --prefix "$release_dir/frontend" ci
-  build_step "building frontend..." npm --prefix "$release_dir/frontend" run build
+  build_step "Creating backend virtualenv..." python3 -m venv "$release_dir/backend/.venv"
+  build_step "Upgrading pip tooling..." "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
+  build_step "Installing backend dependencies..." "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
+  build_step "Installing frontend dependencies..." npm --prefix "$release_dir/frontend" ci
+  build_step "Building frontend..." npm --prefix "$release_dir/frontend" run build
   [[ -t 1 ]] && printf '\n'
 
   run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
@@ -512,9 +566,22 @@ build_release() {
 write_nginx_config() {
   cat > "$NGINX_SITE" <<EOF
 server {
-    listen $APP_PORT;
-    listen [::]:$APP_PORT;
+    listen $APP_PORT ssl;
+    listen [::]:$APP_PORT ssl;
     server_name _;
+
+    ssl_certificate $TLS_CERT;
+    ssl_certificate_key $TLS_KEY;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Self-signed — no CA to hand this to, so a plain HTTP request on this
+    # same port (old bookmark, curl without -k, etc.) can't be told apart
+    # from a real client by nginx's listener alone. error_page 497 is nginx's
+    # own signal for "that was HTTP, not TLS" and lets us redirect it instead
+    # of just resetting the connection.
+    error_page 497 https://\$host:$APP_PORT\$request_uri;
 
     root $CURRENT_LINK/frontend/dist;
     index index.html;
@@ -543,9 +610,9 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
-        # The auth token travels in the WS URL query string (?token=...) —
-        # keep it out of the access log rather than writing 8h bearer tokens
-        # to disk in plaintext on every connection.
+        # Auth rides the httpOnly session cookie, same as everything else —
+        # nothing sensitive in the URL, but keep WS handshakes out of the
+        # access log anyway since they're just noisy reconnect spam.
         access_log off;
     }
 
@@ -782,7 +849,7 @@ deploy_release() {
   switch_symlink "$CURRENT_LINK" "$release_dir"
 
   if ! run_database_tasks "$release_dir" "$first_install"; then
-    warn "database step choked — rolling back, don't panic"
+    warn "Database step choked — rolling back, don't panic"
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
     [[ -n "$previous_target" ]] && switch_symlink "$PREVIOUS_LINK" "$previous_target"
@@ -797,7 +864,7 @@ deploy_release() {
   run_silent systemctl restart nginx
 
   if ! wait_for_http "http://127.0.0.1:$BACKEND_PORT/docs"; then
-    warn "health check came back dead — rolling back to the last good version"
+    warn "Health check came back dead — rolling back to the last good version"
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
     run_silent systemctl daemon-reload
@@ -870,9 +937,9 @@ check_for_updates() {
   chmod 644 "$STATUS_FILE"
 
   if [[ "$update_available" == "true" ]]; then
-    ok "new drop available: ${BOLD}${ref}${NC} — hit update to grab it 🆕"
+    ok "New drop available: ${BOLD}${ref}${NC} — hit update to grab it 🆕"
   else
-    ok "you're on the latest — no updates needed ✨"
+    ok "You're on the latest — no updates needed ✨"
   fi
 }
 
@@ -880,19 +947,22 @@ install_or_update() {
   local install_mode="$1"
   local source_type ref release_url release_id release_dir commit installed_at
 
-  log "sniffing for port squatters on :${APP_PORT}..."
+  log "Sniffing for port squatters on :${APP_PORT}..."
   ensure_port_available
-  log "grabbing system dependencies from apt..."
+  log "Grabbing system dependencies from apt..."
   install_os_prerequisites
-  log "conjuring the carbonpanel service account..."
+  log "Conjuring the CarbonPanel service account..."
   ensure_service_account
   ensure_nginx_log_access
-  log "staking out territory on disk..."
+  log "Staking out territory on disk..."
   ensure_layout
-  log "locking in your secrets and config..."
+  log "Locking in your secrets and config..."
   ensure_backend_env
+  log "Minting a self-signed TLS cert..."
+  ensure_tls_cert
+  ensure_cookie_secure_flag
 
-  log "asking github what's poppin..."
+  log "Asking GitHub what's poppin..."
   mapfile -t resolved < <(resolve_requested_reference)
   source_type="${resolved[0]}"
   ref="${resolved[1]:-}"
@@ -900,7 +970,7 @@ install_or_update() {
 
   [[ -n "$ref" ]] || die "couldn't figure out what version to install — check your internet connection and that ${REPO_URL} is reachable"
 
-  log "yanking the code down (${BOLD}${ref}${NC})..."
+  log "Yanking the code down (${BOLD}${ref}${NC})..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"
   release_dir="$(clone_release "$ref" "$release_id")"
   commit="$(git -C "$release_dir" rev-parse HEAD)"
@@ -924,7 +994,7 @@ install_or_update() {
 
   build_release "$release_dir"
 
-  log "deploying the new release..."
+  log "Deploying the new release..."
   if ! deploy_release "$release_dir" "$ref" "$commit" "$source_type" "$release_url" "$installed_at"; then
     CP_STATUS_REPO_URL="$REPO_URL" \
     CP_STATUS_CURRENT_VERSION="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)" \
@@ -947,12 +1017,13 @@ install_or_update() {
   systemd_reload_enable
   check_for_updates
 
-  ok "carbonpanel ${ref} is live! (${commit:0:8})"
+  ok "CarbonPanel ${ref} is live! (${commit:0:8})"
   if [[ -f "$SHARED_DIR/first-install.txt" && "$install_mode" == "install" ]]; then
     printf "\n"
-    printf "  ${GREEN}${BOLD}🎉  you're in!${NC}\n"
-    note "credentials → ${BOLD}${SHARED_DIR}/first-install.txt${NC}"
-    note "panel       → ${BOLD}http://your-server-ip:${APP_PORT}${NC}"
+    printf "  ${GREEN}${BOLD}🎉  You're in!${NC}\n"
+    note "Credentials → ${BOLD}${SHARED_DIR}/first-install.txt${NC}"
+    note "Panel       → ${BOLD}https://your-server-ip:${APP_PORT}${NC}"
+    note "Your browser will warn about the self-signed cert — click through it"
     printf "\n"
   fi
 }
@@ -976,7 +1047,7 @@ rollback_release() {
   run_silent systemctl restart nginx
   check_for_updates
 
-  ok "rolled back to $(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version) — crisis averted 😅"
+  ok "Rolled back to $(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version) — crisis averted 😅"
 }
 
 print_current_version() {
@@ -991,7 +1062,7 @@ print_current_version() {
   # Live GitHub check — don't rely on cached STATUS_FILE which may be stale/missing
   slug="$(repo_slug)"
   api_base="https://api.github.com/repos/$slug"
-  note "pinging github for the latest..."
+  note "Pinging GitHub for the latest..."
   release_json="$(github_api_get "$api_base/releases/latest" 2>/dev/null || true)"
   release_tag="$(printf '%s' "$release_json" | json_query tag_name 2>/dev/null || true)"
   if [[ -z "$release_tag" || "$release_tag" == "null" ]]; then
@@ -1005,28 +1076,28 @@ print_current_version() {
   # Determine status
   if [[ -z "$current_version" ]]; then
     if [[ -L "$CURRENT_LINK" ]]; then
-      status_label="${YELLOW}installed (pre-dates version tracking)${NC}"
+      status_label="${YELLOW}Installed (pre-dates version tracking)${NC}"
     else
-      status_label="${DIM}not installed${NC}"
+      status_label="${DIM}Not installed${NC}"
     fi
   elif [[ "$latest_version" == "unknown" ]]; then
-    status_label="${DIM}installed — could not reach github${NC}"
+    status_label="${DIM}Installed — could not reach GitHub${NC}"
   elif [[ "$current_version" == "$latest_version" ]]; then
-    status_label="${GREEN}${BOLD}✓ up to date${NC}"
+    status_label="${GREEN}${BOLD}✓ Up to date${NC}"
   else
-    status_label="${YELLOW}${BOLD}⬆ update available${NC}"
+    status_label="${YELLOW}${BOLD}⬆ Update available${NC}"
   fi
 
   short_commit="${current_commit:0:12}"
 
   printf "\n"
-  printf "  ${CYAN}${BOLD}version info${NC}\n"
+  printf "  ${CYAN}${BOLD}Version info${NC}\n"
   printf "  ${DIM}────────────────────────────────────────${NC}\n"
-  printf "  installed   ${BOLD}%s${NC}\n" "${current_version:-unknown}"
-  [[ -n "$short_commit" ]] && printf "  commit      ${DIM}%s${NC}\n" "$short_commit"
-  [[ -n "$installed_at" ]] && printf "  since       ${DIM}%s${NC}\n" "$installed_at"
-  printf "  latest      ${BOLD}%s${NC}\n" "$latest_version"
-  printf "  status      "
+  printf "  Installed   ${BOLD}%s${NC}\n" "${current_version:-Unknown}"
+  [[ -n "$short_commit" ]] && printf "  Commit      ${DIM}%s${NC}\n" "$short_commit"
+  [[ -n "$installed_at" ]] && printf "  Since       ${DIM}%s${NC}\n" "$installed_at"
+  printf "  Latest      ${BOLD}%s${NC}\n" "$latest_version"
+  printf "  Status      "
   printf "${status_label}\n"
   printf "\n"
 }
@@ -1038,24 +1109,24 @@ show_menu() {
   fi
 
   printf "\n"
-  printf "  ${CYAN}${BOLD}⚡  carbonpanel${NC}  ${DIM}— server monitoring${NC}\n"
+  printf "  ${CYAN}${BOLD}⚡  CarbonPanel${NC}  ${DIM}— server monitoring${NC}\n"
   printf "\n"
   printf "  ${DIM}────────────────────────────────────────${NC}\n"
   if [[ -n "$installed_version" ]]; then
-    printf "  ${GREEN}✓${NC}  running ${BOLD}%s${NC}\n" "$installed_version"
+    printf "  ${GREEN}✓${NC}  Running ${BOLD}%s${NC}\n" "$installed_version"
   else
-    printf "  ${YELLOW}not installed yet${NC}  ${DIM}— fresh slate 🧼${NC}\n"
+    printf "  ${YELLOW}Not installed yet${NC}  ${DIM}— fresh slate 🧼${NC}\n"
   fi
   printf "  ${DIM}────────────────────────────────────────${NC}\n"
   printf "\n"
-  printf "  ${CYAN}${BOLD}1${NC}  install        ${DIM}cook a fresh one${NC}\n"
-  printf "  ${CYAN}${BOLD}2${NC}  update         ${DIM}grab the latest heat${NC}\n"
-  printf "  ${CYAN}${BOLD}3${NC}  rollback       ${DIM}hit the oops button${NC}\n"
-  printf "  ${CYAN}${BOLD}4${NC}  uninstall      ${DIM}scorched earth 🔥${NC}\n"
-  printf "  ${CYAN}${BOLD}5${NC}  version info   ${DIM}see what's poppin${NC}\n"
-  printf "  ${CYAN}${BOLD}6${NC}  fix            ${DIM}repair permissions & common issues${NC}\n"
+  printf "  ${CYAN}${BOLD}1${NC}  Install        ${DIM}cook a fresh one${NC}\n"
+  printf "  ${CYAN}${BOLD}2${NC}  Update         ${DIM}grab the latest heat${NC}\n"
+  printf "  ${CYAN}${BOLD}3${NC}  Rollback       ${DIM}hit the oops button${NC}\n"
+  printf "  ${CYAN}${BOLD}4${NC}  Uninstall      ${DIM}scorched earth 🔥${NC}\n"
+  printf "  ${CYAN}${BOLD}5${NC}  Version info   ${DIM}see what's poppin${NC}\n"
+  printf "  ${CYAN}${BOLD}6${NC}  Fix            ${DIM}repair permissions & common issues${NC}\n"
   printf "\n"
-  printf "  ${BOLD}pick one [1-6]:${NC} "
+  printf "  ${BOLD}Pick one [1-6]:${NC} "
   read -r choice
   printf '\n'
   case "$choice" in
@@ -1079,85 +1150,85 @@ fix_carbonpanel() {
   local fixed=0
 
   printf "\n"
-  printf "  ${CYAN}${BOLD}⚡  carbonpanel fix${NC}  ${DIM}— repairing common issues${NC}\n"
+  printf "  ${CYAN}${BOLD}⚡  CarbonPanel fix${NC}  ${DIM}— repairing common issues${NC}\n"
   printf "\n"
 
   # ── Docker access (scoped sudo, not docker-group) ─────────────────────────
   # docker-group membership is root-equivalent (bind-mount escape), so it's
   # removed here rather than granted — Docker access comes from the sudoers
   # rule checked below instead.
-  log "checking Docker access model..."
+  log "Checking Docker access model..."
   if getent group docker >/dev/null 2>&1 && id -nG "$SERVICE_USER" | grep -qw docker; then
     gpasswd -d "$SERVICE_USER" docker >/dev/null 2>&1 || true
-    ok "removed ${BOLD}${SERVICE_USER}${NC} from the docker group (now uses scoped sudo instead)"
+    ok "Removed ${BOLD}${SERVICE_USER}${NC} from the docker group (now uses scoped sudo instead)"
     fixed=1
   else
     ok "${SERVICE_USER} is not in the docker group"
   fi
 
   # ── Disk group (smartctl SMART data) ─────────────────────────────────────
-  log "checking disk group membership (smartctl)..."
+  log "Checking disk group membership (smartctl)..."
   if ! getent group disk >/dev/null 2>&1; then
-    warn "disk group not found — skipping SMART fix."
+    warn "Disk group not found — skipping SMART fix."
   else
     if id -nG "$SERVICE_USER" | grep -qw disk; then
       ok "${SERVICE_USER} is already in the disk group"
     else
       usermod -aG disk "$SERVICE_USER"
-      ok "added ${BOLD}${SERVICE_USER}${NC} to the disk group (enables SMART monitoring)"
+      ok "Added ${BOLD}${SERVICE_USER}${NC} to the disk group (enables SMART monitoring)"
       fixed=1
     fi
   fi
 
   # ── nginx log access (ACL, scoped — not the adm group) ────────────────────
-  log "checking nginx log access..."
+  log "Checking nginx log access..."
   if ! command_exists setfacl; then
-    warn "setfacl not found (install the 'acl' package) — skipping nginx log-access fix."
+    warn "The setfacl command wasn't found (install the 'acl' package) — skipping the nginx log-access fix."
   elif [[ ! -d /var/log/nginx ]]; then
-    ok "no /var/log/nginx on this host — skipping"
+    ok "No /var/log/nginx on this host — skipping"
   else
     if getfacl -p /var/log/nginx 2>/dev/null | grep -q "^user:${SERVICE_USER}:r"; then
       ok "${SERVICE_USER} already has ACL read access to /var/log/nginx"
     else
       ensure_nginx_log_access
-      ok "granted ${BOLD}${SERVICE_USER}${NC} ACL read access to /var/log/nginx (site logs), scoped — not the broader adm group"
+      ok "Granted ${BOLD}${SERVICE_USER}${NC} ACL read access to /var/log/nginx (site logs), scoped — not the broader adm group"
       fixed=1
     fi
   fi
 
   # ── Shared directory ownership ────────────────────────────────────────────
-  log "checking shared directory ownership..."
+  log "Checking shared directory ownership..."
   if [[ "$(stat -c '%U:%G' "$SHARED_DIR")" != "${SERVICE_USER}:${SERVICE_GROUP}" ]]; then
     chown "$SERVICE_USER:$SERVICE_GROUP" "$SHARED_DIR"
-    ok "fixed ownership of ${BOLD}${SHARED_DIR}${NC}"
+    ok "Fixed ownership of ${BOLD}${SHARED_DIR}${NC}"
     fixed=1
   else
-    ok "shared directory ownership is correct"
+    ok "Shared directory ownership is correct"
   fi
 
   # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
-  log "checking sudoers rules..."
+  log "Checking sudoers rules..."
   local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso, ${DOCKER_SUDOERS_CMDS}"
   local current_sudoers=""
   [[ -f "$SUDOERS_FILE" ]] && current_sudoers="$(cat "$SUDOERS_FILE")"
   if [[ "$current_sudoers" != "$expected_sudoers" ]]; then
     printf '%s\n' "$expected_sudoers" > "$SUDOERS_FILE"
     chmod 440 "$SUDOERS_FILE"
-    ok "updated sudoers rules"
+    ok "Updated sudoers rules"
     fixed=1
   else
-    ok "sudoers rules are correct"
+    ok "Sudoers rules are correct"
   fi
 
   # ── Restart service to pick up any group/permission changes ──────────────
   if [[ "$fixed" -eq 1 ]]; then
-    log "restarting ${BACKEND_SERVICE} to apply changes..."
-    systemctl restart "$BACKEND_SERVICE" 2>/dev/null || warn "could not restart ${BACKEND_SERVICE} — do it manually: systemctl restart ${BACKEND_SERVICE}"
-    ok "service restarted"
+    log "Restarting ${BACKEND_SERVICE} to apply changes..."
+    systemctl restart "$BACKEND_SERVICE" 2>/dev/null || warn "Could not restart ${BACKEND_SERVICE} — do it manually: systemctl restart ${BACKEND_SERVICE}"
+    ok "Service restarted"
   fi
 
   printf "\n"
-  ok "fix complete"
+  ok "Fix complete"
   printf "\n"
 }
 
@@ -1173,14 +1244,14 @@ uninstall_carbonpanel() {
 
   printf "\n"
   printf "  ${RED}${BOLD}☠   SCORCHED EARTH MODE  ☠${NC}\n"
-  [[ -n "$installed_version" ]] && printf "  ${DIM}  currently running: %s${NC}\n" "$installed_version"
+  [[ -n "$installed_version" ]] && printf "  ${DIM}  Currently running: %s${NC}\n" "$installed_version"
   printf "\n"
-  printf "  ${YELLOW}this will permanently delete carbonpanel,\n"
-  printf "  its services, and all data. no undo button.${NC}\n"
+  printf "  ${YELLOW}This will permanently delete CarbonPanel,\n"
+  printf "  its services, and all data. No undo button.${NC}\n"
   printf "\n"
-  printf "  ${BOLD}are you sure? [y/N]:${NC} "
+  printf "  ${BOLD}Are you sure? [y/N]:${NC} "
   read -r confirm
-  [[ "${confirm,,}" == "y" ]] || { printf "\n  ${GREEN}✓${NC}  smart move — nothing was touched\n\n"; exit 0; }
+  [[ "${confirm,,}" == "y" ]] || { printf "\n  ${GREEN}✓${NC}  Smart move — nothing was touched\n\n"; exit 0; }
 
   db_path=""
   if [[ -f "$BACKEND_ENV_FILE" ]]; then
@@ -1188,18 +1259,18 @@ uninstall_carbonpanel() {
   fi
 
   if [[ -n "$db_path" && -f "$db_path" ]]; then
-    printf "  ${BOLD}back up the database first? [Y/n]:${NC} "
+    printf "  ${BOLD}Back up the database first? [Y/n]:${NC} "
     read -r do_backup
     if [[ "${do_backup,,}" != "n" ]]; then
       db_backup="/tmp/carbonpanel-db-$(date -u +%Y%m%d%H%M%S).sqlite3"
       cp "$db_path" "$db_backup"
-      ok "database saved to ${BOLD}${db_backup}${NC} — just in case 🛟"
+      ok "Database saved to ${BOLD}${db_backup}${NC} — just in case 🛟"
     fi
   fi
 
   # Only CarbonPanel's own systemd units are removed.
   # nginx, npm, nodejs, and any other system services are left untouched.
-  log "yeeting carbonpanel services into the void..."
+  log "Yeeting CarbonPanel services into the void..."
   for svc in "$UPDATE_CHECK_TIMER" "$UPDATE_CHECK_SERVICE" "$UPDATE_SERVICE" "$BACKEND_SERVICE"; do
     systemctl stop "$svc" >/dev/null 2>&1 || true
     systemctl disable "$svc" >/dev/null 2>&1 || true
@@ -1208,26 +1279,26 @@ uninstall_carbonpanel() {
   run_silent systemctl daemon-reload
 
   # Remove only CarbonPanel's nginx site config — nginx itself is not stopped or removed.
-  log "scrubbing our nginx footprint (nginx itself stays up) ..."
+  log "Scrubbing our nginx footprint (nginx itself stays up)..."
   rm -f "$NGINX_SITE" "$NGINX_SITE_LINK"
   nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
 
-  log "revoking the sudo backstage pass..."
+  log "Revoking the sudo backstage pass..."
   rm -f "$SUDOERS_FILE"
 
-  log "carpet bombing ${INSTALL_ROOT}..."
+  log "Nuking ${INSTALL_ROOT} from orbit — it's the only way to be sure..."
   rm -rf "$INSTALL_ROOT"
 
-  printf "  ${BOLD}remove the '%s' system user too? [y/N]:${NC} " "$SERVICE_USER"
+  printf "  ${BOLD}Remove the '%s' system user too? [y/N]:${NC} " "$SERVICE_USER"
   read -r remove_user
   if [[ "${remove_user,,}" == "y" ]]; then
     userdel "$SERVICE_USER" >/dev/null 2>&1 || true
-    ok "service user gone"
+    ok "Service user gone"
   fi
 
   printf "\n"
-  ok "carbonpanel has been yeeted into the void 💨"
-  [[ -n "${db_backup:-}" ]] && note "db backup → ${BOLD}${db_backup}${NC}"
+  ok "CarbonPanel has been yeeted into the void 💨"
+  [[ -n "${db_backup:-}" ]] && note "DB backup → ${BOLD}${db_backup}${NC}"
   printf "\n"
 }
 

@@ -26,10 +26,18 @@ curl -fsSL https://carbonpanel.leodeng.dev/install.sh | sudo bash
 ```
 
 Initial credentials are saved to `/opt/carbonpanel/shared/first-install.txt` after install.
+First login walks you through an onboarding wizard to set a real password and optionally
+enable 2FA / register a passkey.
 
 > CarbonPanel manages the host it runs on — systemd services, real process/disk access,
 > nginx sites — so it runs as a native systemd service rather than in a container. A prior
 > Docker deployment path has been removed for this reason.
+
+nginx serves the panel over HTTPS with a self-signed certificate generated at install time
+(covering the server's hostname and detected IPs). Your browser will warn that it isn't
+trusted — that's expected for a self-signed cert; click through it (Chrome: "Advanced" →
+"Proceed"). It's still real TLS encryption, just not backed by a public CA, which is a lot
+better than the plaintext HTTP this used to default to.
 
 ---
 
@@ -54,7 +62,8 @@ All settings are written to `backend/.env` (local dev / install script).
 | `SECRET_KEY` | `dev-secret-...` | JWT signing key — **change this in production** |
 | `ADMIN_USERNAME` | `admin` | Initial admin username |
 | `ADMIN_PASSWORD` | `changeme` | Initial admin password |
-| `APP_PORT` | `8787` | Port nginx listens on |
+| `APP_PORT` | `8787` | Port nginx listens on (HTTPS) |
+| `COOKIE_SECURE` | `true` (install script) / `false` (default) | Marks the session cookie HTTPS-only — the install script sets this once it provisions TLS |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./carbonpanel.db` | Database connection string |
 | `METRICS_INTERVAL_SECONDS` | `2.0` | How often metrics are collected |
 | `PROCESS_LIMIT` | `25` | Max processes shown in the dashboard |
@@ -69,7 +78,9 @@ All settings are written to `backend/.env` (local dev / install script).
 - **System services** — browse, start/stop/restart, enable/disable, star and reorder
 - **Sites** — manage tracked services with log streaming and config file editing
 - **Customizable UI** — dark/light/auto theme, custom colors, fonts, gradients, background images
-- **JWT auth** with optional **TOTP 2FA**
+- **JWT auth** with optional **TOTP 2FA** and **passkeys**
+- **HTTPS by default** — self-signed cert generated at install time, no plaintext credentials on the wire
+- **Guided onboarding** — first login walks through setting a password and 2FA/passkey setup
 - **In-panel updates** — version check via GitHub API, one-click update from the Settings page
 
 ---

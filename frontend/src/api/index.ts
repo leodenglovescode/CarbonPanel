@@ -88,6 +88,7 @@ export interface UserInfo {
   id: string
   username: string
   totp_enabled: boolean
+  onboarding_completed: boolean
 }
 
 export interface TOTPSetupResponse {
@@ -103,6 +104,7 @@ export const authApi = {
     api.post<{ success: boolean }>('/auth/login/totp', { session_token, totp_code }),
   me: () => api.get<UserInfo>('/auth/me'),
   logout: () => api.post('/auth/logout'),
+  completeOnboarding: () => api.post('/auth/onboarding/complete'),
 }
 
 export const settingsApi = {

@@ -2,17 +2,17 @@
   <BaseCard>
     <template #header>
       <span class="card-title">System</span>
-      <span class="badge badge-green">online</span>
+      <span class="badge badge-green">Online</span>
     </template>
 
     <div class="sys-layout">
       <div class="uptime-block">
-        <div class="uptime-label">uptime</div>
+        <div class="uptime-label">Uptime</div>
         <div class="uptime-val">{{ formatUptime(system.uptime_seconds) }}</div>
       </div>
 
       <div class="load-block">
-        <div class="load-label">load average</div>
+        <div class="load-label">Load average</div>
         <div class="load-grid">
           <div v-for="(val, i) in system_load" :key="i" class="load-item">
             <span class="load-num" :class="loadColor(val)">{{ val.toFixed(2) }}</span>
@@ -22,7 +22,7 @@
       </div>
 
       <div class="host-block">
-        <div class="host-label">hostname</div>
+        <div class="host-label">Hostname</div>
         <div class="host-val">{{ system.hostname }}</div>
       </div>
     </div>

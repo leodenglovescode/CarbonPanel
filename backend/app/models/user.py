@@ -42,6 +42,7 @@ class User(Base):
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     totp_secret: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     pending_totp_secret: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

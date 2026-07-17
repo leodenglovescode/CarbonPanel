@@ -9,7 +9,7 @@
         <span :class="['status-dot', statusClass(site.status?.status)]" />
         <span class="status-text">{{ site.status?.status ?? 'unknown' }}</span>
         <span v-if="site.status?.uptime" class="uptime">· {{ site.status.uptime }}</span>
-        <span v-if="site.status?.pid" class="pid">pid {{ site.status.pid }}</span>
+        <span v-if="site.status?.pid" class="pid">PID {{ site.status.pid }}</span>
       </div>
     </div>
 
@@ -96,7 +96,7 @@ function statusClass(s?: string) {
 .dot-red    { background: var(--danger); }
 .dot-gray   { background: var(--fg-dim); }
 .dot-yellow { background: var(--warning); }
-.status-text { font-size: 11px; color: var(--fg-muted); }
+.status-text { font-size: 11px; color: var(--fg-muted); text-transform: capitalize; }
 .uptime, .pid { font-size: 10px; color: var(--fg-dim); }
 
 .service-info { display: flex; align-items: center; gap: 6px; }

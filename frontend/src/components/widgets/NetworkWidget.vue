@@ -3,7 +3,7 @@
     <template #header>
       <span class="card-title">Network</span>
       <span class="badge badge-gray">{{ network.length }} interface{{ network.length !== 1 ? 's' : '' }}</span>
-      <span v-if="network.length > 2" class="badge badge-gray">showing top 2</span>
+      <span v-if="network.length > 2" class="badge badge-gray">Showing top 2</span>
     </template>
 
     <div class="net-list">
