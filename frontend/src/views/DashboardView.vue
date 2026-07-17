@@ -374,8 +374,11 @@ const sortedWidgets = computed(() =>
 /* Wide screens: repack the small stat widgets 3-per-row instead of 2 so they
    don't just stretch wider. Only applies outside edit mode — edit mode always
    shows your saved drag/resize positions, since a screen-width-only rule can't
-   participate in the resize interaction. */
-@media (min-width: 1900px) {
+   participate in the resize interaction.
+   Queries the actual content-area width (via .content's container-type:
+   inline-size in AuthLayout.vue), not the raw viewport — the 178px sidebar
+   otherwise throws off the breakpoint math. */
+@container (min-width: 1900px) {
   .grid:not(.grid-edit) .grid-item.cpu       { grid-column: 1 / span 4  !important; grid-row: 6 / span 7  !important; }
   .grid:not(.grid-edit) .grid-item.ram       { grid-column: 5 / span 4  !important; grid-row: 6 / span 7  !important; }
   .grid:not(.grid-edit) .grid-item.gpu       { grid-column: 9 / span 4  !important; grid-row: 6 / span 7  !important; }
@@ -389,10 +392,15 @@ const sortedWidgets = computed(() =>
   .grid:not(.grid-edit) .grid-item.processes   { grid-row: 32 / span 11 !important; }
 }
 
-/* Below 900px the drag/resize grid gives way to a natural single-column stack.
-   Each widget sizes to its own content (via its own flex/min-height + container
-   queries) instead of a fixed pixel grid cell — no per-widget overrides needed here. */
-@media (max-width: 900px) {
+/* Below 900px of actual content width the drag/resize grid gives way to a
+   natural single-column stack. Each widget sizes to its own content (via its
+   own flex/min-height + container queries) instead of a fixed pixel grid cell
+   — no per-widget overrides needed here.
+   This is a @container query (see above) rather than @media so it reacts to
+   the space actually left after the sidebar, not the window width — a plain
+   viewport media query here under-triggers by ~180px and lets widgets get
+   squeezed instead of stacking. */
+@container (max-width: 900px) {
   .grid { grid-auto-rows: auto; }
   .grid-item { grid-column: 1 / -1 !important; grid-row: auto !important; overflow: visible; }
   .widget-body { height: auto !important; overflow: visible; }

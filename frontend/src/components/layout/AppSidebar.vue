@@ -2,7 +2,7 @@
   <aside class="sidebar" :class="{ 'mobile-open': mobileOpen }">
     <div class="sidebar-top">
       <div class="logo">
-        <span class="bracket">[</span>carbon<span class="accent">panel</span><span class="bracket">]</span>
+        <span class="bracket">[</span>Carbon<span class="accent">Panel</span><span class="bracket">]</span>
       </div>
       <button class="mobile-close-btn" aria-label="Close menu" @click="$emit('close')">✕</button>
     </div>

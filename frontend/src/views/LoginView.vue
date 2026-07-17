@@ -3,7 +3,7 @@
     <div v-if="bg.loginBgLayerVisible" class="login-bg-layer" :style="bg.loginBgLayerStyle" />
     <div class="login-box">
       <div class="login-logo">
-        <span class="bracket">[</span>carbon<span class="accent">panel</span><span class="bracket">]</span>
+        <span class="bracket">[</span>Carbon<span class="accent">Panel</span><span class="bracket">]</span>
       </div>
       <p class="login-sub">Server monitoring</p>
 
