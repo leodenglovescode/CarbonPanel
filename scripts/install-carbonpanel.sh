@@ -970,6 +970,26 @@ install_or_update() {
 
   [[ -n "$ref" ]] || die "couldn't figure out what version to install — check your internet connection and that ${REPO_URL} is reachable"
 
+  # This process is running whatever version of THIS SCRIPT was already on
+  # disk when it started. build_release() overwrites $CONTROL_SCRIPT with the
+  # new version further down, but bash already parsed this process's function
+  # bodies into memory at startup and won't pick up the new file mid-run — so
+  # an update that changes install-script logic (new nginx directives, new
+  # systemd units, ...) would silently deploy with the OLD logic this one
+  # time and only take effect on the NEXT update. Re-exec into the target
+  # ref's own copy of the script so build/deploy/config generation always
+  # matches what's actually about to be deployed.
+  if [[ -z "${CARBONPANEL_REEXECED:-}" ]]; then
+    local bootstrap_dir
+    bootstrap_dir="$(mktemp -d)"
+    if git clone --quiet --depth 1 --branch "$ref" "$REPO_URL" "$bootstrap_dir" >/dev/null 2>&1 \
+       && [[ -f "$bootstrap_dir/scripts/install-carbonpanel.sh" ]]; then
+      CARBONPANEL_REEXECED=1 exec bash "$bootstrap_dir/scripts/install-carbonpanel.sh" "$install_mode" --ref "$ref"
+    fi
+    rm -rf "$bootstrap_dir"
+    warn "Couldn't bootstrap the latest install script — continuing with the version already running."
+  fi
+
   log "Yanking the code down (${BOLD}${ref}${NC})..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"
   release_dir="$(clone_release "$ref" "$release_id")"
