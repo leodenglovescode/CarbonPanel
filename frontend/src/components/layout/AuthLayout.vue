@@ -51,6 +51,7 @@ const sidebarOpen = ref(false)
 .content {
   flex: 1;
   overflow-y: auto;
+  container-type: inline-size;
 }
 
 .mobile-backdrop {

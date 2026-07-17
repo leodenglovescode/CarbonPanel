@@ -169,7 +169,7 @@ onMounted(load)
 .state-msg.error { color: var(--danger); }
 .state-msg.muted { color: var(--fg-dim); }
 
-.container-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; align-items: start; }
+.container-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; align-items: start; }
 .container-card {
   background: color-mix(in srgb, var(--bg-card) 72%, transparent);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
