@@ -654,6 +654,20 @@ server {
         access_log off;
     }
 
+    # index.html has no content hash in its filename, so a browser (or any
+    # intermediate cache) that treats it as cacheable will keep serving a
+    # stale shell pointing at a previous deploy's now-gone hashed JS/CSS
+    # after an update — always revalidate it. The hashed files under
+    # /assets/ are safe to cache forever since a new deploy gets new names.
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate" always;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files \$uri =404;
+    }
+
     location / {
         try_files \$uri \$uri/ /index.html;
     }
