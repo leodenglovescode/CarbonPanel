@@ -194,9 +194,12 @@ onMounted(load)
 .id-badge { font-size: 10px; color: var(--fg-dim); font-family: monospace; padding: 2px 6px; background: var(--bg-input); border-radius: 3px; }
 
 .stats-row { display: flex; gap: 12px; }
-.stat-item { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.stat-item { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .stat-lbl { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
-.stat-val { font-size: 10px; color: var(--fg); }
+.stat-val {
+  font-size: 10px; color: var(--fg);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .mini-bar { height: 3px; background: var(--bg-subtle); border-radius: 2px; overflow: hidden; }
 .mini-fill { height: 100%; border-radius: 2px; transition: width var(--bar-transition); }
 
@@ -210,7 +213,7 @@ onMounted(load)
 .act-start:hover:not(:disabled) { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .act-stop:hover:not(:disabled) { border-color: rgba(255,68,68,0.4); color: var(--danger); background: var(--danger-dim); }
 .act-restart:hover:not(:disabled) { border-color: rgba(100,180,255,0.4); color: #60a5fa; background: rgba(96,165,250,0.1); }
-.act-msg { font-size: 10px; color: var(--accent); }
+.act-msg { font-size: 10px; color: var(--accent); overflow-wrap: anywhere; min-width: 0; }
 .act-err { color: var(--danger); }
 
 @media (max-width: 640px) {
@@ -220,8 +223,8 @@ onMounted(load)
   .stats-row { gap: 12px; }
 }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0; min-width: 320px; max-width: 440px; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; box-sizing: border-box; }
+.modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0; width: 100%; max-width: 440px; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); }
 .modal-title { font-size: 13px; font-weight: 600; }
 .close-btn { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: 14px; padding: 2px 6px; }

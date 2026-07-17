@@ -83,7 +83,10 @@ async function maybePromptForUpdate() {
 watch(
   () => auth.isAuthenticated,
   (authenticated) => {
-    if (authenticated) void prefsSync.load()
+    if (authenticated) {
+      void prefsSync.load()
+      bg.migrateLegacyImages()
+    }
   },
   { immediate: true },
 )
