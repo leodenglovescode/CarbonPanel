@@ -73,12 +73,14 @@ import { computed, ref } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import type { ProcessMetrics } from '@/types/metrics'
 import { useMetricsStore } from '@/stores/metrics'
+import { useDialogStore } from '@/stores/dialog'
 import { processesApi } from '@/api/index'
 
 const props = defineProps<{ processes: ProcessMetrics[] }>()
 const emit = defineEmits<{ sortChange: [sort: 'cpu' | 'memory'] }>()
 
 const store = useMetricsStore()
+const dialog = useDialogStore()
 const currentSort = store.processSort
 const searchQuery = ref('')
 const expanded = ref(false)
@@ -101,14 +103,23 @@ function setSort(s: 'cpu' | 'memory') {
 }
 
 async function promptKill(p: ProcessMetrics, force: boolean) {
-  const msg = force
-    ? `Force kill (SIGKILL) ${p.name} (PID ${p.pid})? Data loss possible.`
-    : `Terminate ${p.name} (PID ${p.pid})?`
-  if (!window.confirm(msg)) return
+  const confirmed = await dialog.confirm({
+    title: force ? 'Force kill process' : 'Terminate process',
+    message: force
+      ? `Force kill (SIGKILL) ${p.name} (PID ${p.pid})? Data loss possible.`
+      : `Terminate ${p.name} (PID ${p.pid})?`,
+    confirmLabel: force ? 'Force Kill' : 'Terminate',
+    variant: 'danger',
+  })
+  if (!confirmed) return
   try {
     await processesApi.kill(p.pid, force)
   } catch (e: any) {
-    window.alert(e.response?.data?.detail || 'Failed to kill process')
+    await dialog.alert({
+      title: 'Error',
+      message: e.response?.data?.detail || 'Failed to kill process',
+      variant: 'danger',
+    })
   }
 }
 
