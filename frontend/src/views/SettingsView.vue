@@ -874,11 +874,13 @@
             <span class="style-lbl">Enable proxy</span>
             <button
               :class="['theme-btn', { active: proxy.enabled }]"
-              @click="proxy.enabled = true"
+              :disabled="proxySaving"
+              @click="setProxyEnabled(true)"
             >On</button>
             <button
               :class="['theme-btn', { active: !proxy.enabled }]"
-              @click="proxy.enabled = false"
+              :disabled="proxySaving"
+              @click="setProxyEnabled(false)"
             >Off</button>
           </div>
 
@@ -886,22 +888,24 @@
             <span class="style-lbl">Type</span>
             <button
               :class="['theme-btn', { active: proxy.type === 'http' }]"
-              @click="proxy.type = 'http'"
+              :disabled="proxySaving"
+              @click="setProxyType('http')"
             >HTTP</button>
             <button
               :class="['theme-btn', { active: proxy.type === 'socks5' }]"
-              @click="proxy.type = 'socks5'"
+              :disabled="proxySaving"
+              @click="setProxyType('socks5')"
             >SOCKS5</button>
           </div>
 
           <div class="proxy-fields">
             <div class="proxy-field">
               <span class="style-lbl">Host</span>
-              <BaseInput v-model="proxy.host" placeholder="127.0.0.1" />
+              <BaseInput v-model="proxy.host" placeholder="127.0.0.1" @blur="saveProxy" />
             </div>
             <div class="proxy-field proxy-field-port">
               <span class="style-lbl">Port</span>
-              <BaseInput v-model.number="proxy.port" type="number" placeholder="7890" />
+              <BaseInput v-model.number="proxy.port" type="number" placeholder="7890" @blur="saveProxy" />
             </div>
           </div>
 
@@ -909,9 +913,6 @@
           <p v-if="proxySuccess" class="success-msg">{{ proxySuccess }}</p>
 
           <div class="proxy-actions">
-            <BaseButton variant="ghost" :disabled="proxySaving" @click="saveProxy">
-              {{ proxySaving ? 'Saving…' : 'Save' }}
-            </BaseButton>
             <BaseButton variant="ghost" :disabled="proxyTesting" @click="testProxy">
               {{ proxyTesting ? 'Testing…' : 'Test connection' }}
             </BaseButton>
@@ -1673,7 +1674,13 @@ async function loadProxy() {
   try {
     const { data } = await proxyApi.get()
     proxy.value = data
-  } catch { /* ignore — defaults remain */ }
+  } catch (e: any) {
+    // Was previously a silent no-op — a failed fetch here looked identical
+    // to "no proxy configured," which is exactly backwards for a feature
+    // whose entire point is "make requests work when the network is
+    // unreliable." Surface it instead of quietly showing the default.
+    proxyError.value = e.response?.data?.detail || 'Failed to load proxy settings.'
+  }
 }
 
 async function saveProxy() {
@@ -1688,6 +1695,23 @@ async function saveProxy() {
   } finally {
     proxySaving.value = false
   }
+}
+
+// Every other settings section in this page auto-saves the instant you
+// change something — Proxy used to be the one exception, requiring a
+// separate "Save" click after toggling. That mismatch is exactly what led
+// to "I turned it on but it's still off": the toggle alone never reached
+// the server. These wrappers make on/off and type auto-save immediately,
+// same as clicking Save used to; host/port auto-save on blur instead of on
+// every keystroke (see the @blur binding in the template).
+function setProxyEnabled(enabled: boolean) {
+  proxy.value.enabled = enabled
+  void saveProxy()
+}
+
+function setProxyType(type: ProxyConfig['type']) {
+  proxy.value.type = type
+  void saveProxy()
 }
 
 async function testProxy() {
@@ -2046,6 +2070,7 @@ onMounted(async () => {
   letter-spacing: 0.04em;
 }
 .theme-btn:hover:not(.active) { border-color: var(--fg-dim); color: var(--fg-muted); }
+.theme-btn:disabled { opacity: 0.5; cursor: default; }
 .theme-btn.active {
   border-color: var(--accent-border);
   color: var(--accent);
