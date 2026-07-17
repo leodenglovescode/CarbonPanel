@@ -621,13 +621,16 @@ server {
     root $CURRENT_LINK/frontend/dist;
     index index.html;
 
-    client_max_body_size 10m;
+    # 20 MB matches the background-image upload cap in
+    # backend/app/services/background_image_service.py (MAX_UPLOAD_BYTES),
+    # plus headroom for multipart overhead.
+    client_max_body_size 22m;
 
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "same-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https://cdn.simpleicons.org https://api.iconify.design; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https://cdn.simpleicons.org https://api.iconify.design; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
 
     location /api/ {
         proxy_pass http://127.0.0.1:$BACKEND_PORT;

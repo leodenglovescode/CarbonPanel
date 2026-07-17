@@ -35,8 +35,8 @@ export function useUserPrefsSync() {
       background: {
         appBg: { ...bg.appBg },
         loginBg: { ...bg.loginBg },
-        appBgImage: bg.appBgImage,
-        loginBgImage: bg.loginBgImage,
+        appBgImageVersion: bg.appBgImageVersion,
+        loginBgImageVersion: bg.loginBgImageVersion,
       },
       siteTraffic: {
         selectedSiteId: siteTraffic.selectedSiteId,
@@ -86,8 +86,8 @@ export function useUserPrefsSync() {
         () => alerts.diskScope,
         () => JSON.stringify(bg.appBg),
         () => JSON.stringify(bg.loginBg),
-        () => bg.appBgImage,
-        () => bg.loginBgImage,
+        () => bg.appBgImageVersion,
+        () => bg.loginBgImageVersion,
         () => siteTraffic.selectedSiteId,
       ],
       scheduleRemoteSave,

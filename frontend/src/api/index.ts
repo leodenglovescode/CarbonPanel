@@ -115,6 +115,18 @@ export const settingsApi = {
     api.put('/settings/profile', { current_password, new_username, new_password }),
 }
 
+export const backgroundImageApi = {
+  upload: (target: 'app' | 'login', file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ ok: boolean; bytes: number }>(`/settings/background-image/${target}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30_000,
+    })
+  },
+  remove: (target: 'app' | 'login') => api.delete(`/settings/background-image/${target}`),
+}
+
 export interface SystemVersionResponse {
   configured: boolean
   repo_url: string

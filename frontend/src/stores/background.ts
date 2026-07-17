@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { backgroundImageApi } from '@/api/index'
 
 export interface BgConfig {
   type: 'color' | 'gradient' | 'image'
@@ -27,9 +28,19 @@ const DEFAULT_BG: BgConfig = {
 }
 
 const APP_BG_KEY = 'cp_bg_app'
-const APP_BG_IMG_KEY = 'cp_bg_app_img'
 const LOGIN_BG_KEY = 'cp_bg_login'
-const LOGIN_BG_IMG_KEY = 'cp_bg_login_img'
+// The images themselves live server-side (see backgroundImageApi /
+// backend/app/api/background_images.py) — a base64 copy of a multi-MB photo
+// used to blow the browser's ~5-10MB localStorage quota, which silently
+// broke the transparent-body toggle further down the call chain and made
+// custom backgrounds render as a flat color instead of the photo. All that's
+// kept client-side now is a small version counter used to cache-bust the URL.
+const APP_BG_IMG_VERSION_KEY = 'cp_bg_app_img_v'
+const LOGIN_BG_IMG_VERSION_KEY = 'cp_bg_login_img_v'
+// Pre-migration keys — only read once, to carry an existing image over to
+// server-side storage. Never written again after this version.
+const LEGACY_APP_BG_IMG_KEY = 'cp_bg_app_img'
+const LEGACY_LOGIN_BG_IMG_KEY = 'cp_bg_login_img'
 
 function parseConfig(raw: unknown): BgConfig {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_BG }
@@ -61,8 +72,9 @@ function loadConfig(key: string): BgConfig {
   }
 }
 
-function loadImage(key: string): string | null {
-  try { return localStorage.getItem(key) } catch { return null }
+function loadVersion(key: string): number {
+  const v = parseInt(localStorage.getItem(key) || '0', 10)
+  return Number.isFinite(v) && v > 0 ? v : 0
 }
 
 function gradientCss(cfg: BgConfig): string {
@@ -72,8 +84,13 @@ function gradientCss(cfg: BgConfig): string {
 export const useBackgroundStore = defineStore('background', () => {
   const appBg = ref<BgConfig>(loadConfig(APP_BG_KEY))
   const loginBg = ref<BgConfig>(loadConfig(LOGIN_BG_KEY))
-  const appBgImage = ref<string | null>(loadImage(APP_BG_IMG_KEY))
-  const loginBgImage = ref<string | null>(loadImage(LOGIN_BG_IMG_KEY))
+  const appBgImageVersion = ref<number>(loadVersion(APP_BG_IMG_VERSION_KEY))
+  const loginBgImageVersion = ref<number>(loadVersion(LOGIN_BG_IMG_VERSION_KEY))
+
+  // Public URLs for the compressed images, cache-busted by version so a
+  // re-upload is picked up immediately instead of showing the old cached one.
+  const appBgImage = computed(() => (appBgImageVersion.value > 0 ? `/api/v1/settings/background-image/app?v=${appBgImageVersion.value}` : null))
+  const loginBgImage = computed(() => (loginBgImageVersion.value > 0 ? `/api/v1/settings/background-image/login?v=${loginBgImageVersion.value}` : null))
 
   // ── App background (applied via a Vue-rendered fixed layer in App.vue) ──────
 
@@ -112,19 +129,21 @@ export const useBackgroundStore = defineStore('background', () => {
     applyAppBg()
   }
 
-  function setAppBgImage(dataUrl: string | null) {
-    appBgImage.value = dataUrl
-    if (dataUrl) localStorage.setItem(APP_BG_IMG_KEY, dataUrl)
-    else localStorage.removeItem(APP_BG_IMG_KEY)
+  function setAppBgImageVersion(version: number | null) {
+    appBgImageVersion.value = version ?? 0
+    if (version) localStorage.setItem(APP_BG_IMG_VERSION_KEY, String(version))
+    else localStorage.removeItem(APP_BG_IMG_VERSION_KEY)
     applyAppBg()
   }
 
   function resetAppBg() {
+    const hadImage = appBgImageVersion.value > 0
     appBg.value = { ...DEFAULT_BG }
-    appBgImage.value = null
+    appBgImageVersion.value = 0
     localStorage.removeItem(APP_BG_KEY)
-    localStorage.removeItem(APP_BG_IMG_KEY)
+    localStorage.removeItem(APP_BG_IMG_VERSION_KEY)
     applyAppBg()
+    if (hadImage) backgroundImageApi.remove('app').catch(() => {})
   }
 
   // ── Login background (applied via Vue-rendered layer in LoginView) ─────────
@@ -141,7 +160,7 @@ export const useBackgroundStore = defineStore('background', () => {
     const img = loginBgImage.value
     let backgroundImage = ''
     if (cfg.type === 'gradient') backgroundImage = `${scrimLayer(cfg.overlay)}, ${gradientCss(cfg)}`
-    else if (cfg.type === 'image' && img) backgroundImage = `${scrimLayer(cfg.overlay)}, url(${img})`
+    else if (cfg.type === 'image' && img) backgroundImage = `${scrimLayer(cfg.overlay)}, url("${img}")`
     const style: Record<string, string> = {
       backgroundImage,
       backgroundSize: 'cover',
@@ -157,17 +176,49 @@ export const useBackgroundStore = defineStore('background', () => {
     localStorage.setItem(LOGIN_BG_KEY, JSON.stringify(loginBg.value))
   }
 
-  function setLoginBgImage(dataUrl: string | null) {
-    loginBgImage.value = dataUrl
-    if (dataUrl) localStorage.setItem(LOGIN_BG_IMG_KEY, dataUrl)
-    else localStorage.removeItem(LOGIN_BG_IMG_KEY)
+  function setLoginBgImageVersion(version: number | null) {
+    loginBgImageVersion.value = version ?? 0
+    if (version) localStorage.setItem(LOGIN_BG_IMG_VERSION_KEY, String(version))
+    else localStorage.removeItem(LOGIN_BG_IMG_VERSION_KEY)
   }
 
   function resetLoginBg() {
+    const hadImage = loginBgImageVersion.value > 0
     loginBg.value = { ...DEFAULT_BG }
-    loginBgImage.value = null
+    loginBgImageVersion.value = 0
     localStorage.removeItem(LOGIN_BG_KEY)
-    localStorage.removeItem(LOGIN_BG_IMG_KEY)
+    localStorage.removeItem(LOGIN_BG_IMG_VERSION_KEY)
+    if (hadImage) backgroundImageApi.remove('login').catch(() => {})
+  }
+
+  // ── One-time migration from the old localStorage-blob storage ──────────────
+  // Requires auth (the upload endpoint does), so this is called from App.vue
+  // once the user is logged in — not from this store's own init.
+
+  async function migrateLegacyImageIfPresent(target: 'app' | 'login') {
+    const legacyKey = target === 'app' ? LEGACY_APP_BG_IMG_KEY : LEGACY_LOGIN_BG_IMG_KEY
+    const dataUrl = localStorage.getItem(legacyKey)
+    if (!dataUrl) return
+    if (!dataUrl.startsWith('data:')) {
+      localStorage.removeItem(legacyKey)
+      return
+    }
+    try {
+      const blob = await (await fetch(dataUrl)).blob()
+      const file = new File([blob], `${target}-background`, { type: blob.type || 'image/png' })
+      await backgroundImageApi.upload(target, file)
+      if (target === 'app') setAppBgImageVersion(Date.now())
+      else setLoginBgImageVersion(Date.now())
+      localStorage.removeItem(legacyKey)
+    } catch {
+      // Leave the legacy key in place so this retries on next login instead
+      // of silently dropping the user's configured image.
+    }
+  }
+
+  function migrateLegacyImages() {
+    void migrateLegacyImageIfPresent('app')
+    void migrateLegacyImageIfPresent('login')
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -188,28 +239,23 @@ export const useBackgroundStore = defineStore('background', () => {
   function loadFromDb(data: {
     appBg?: unknown
     loginBg?: unknown
-    appBgImage?: string | null
-    loginBgImage?: string | null
+    appBgImageVersion?: number | null
+    loginBgImageVersion?: number | null
   }) {
     if (data.appBg) {
       appBg.value = parseConfig(data.appBg)
       localStorage.setItem(APP_BG_KEY, JSON.stringify(appBg.value))
       applyAppBg()
     }
-    if ('appBgImage' in data) {
-      appBgImage.value = data.appBgImage ?? null
-      if (data.appBgImage) localStorage.setItem(APP_BG_IMG_KEY, data.appBgImage)
-      else localStorage.removeItem(APP_BG_IMG_KEY)
-      applyAppBg()
+    if ('appBgImageVersion' in data) {
+      setAppBgImageVersion(data.appBgImageVersion ?? null)
     }
     if (data.loginBg) {
       loginBg.value = parseConfig(data.loginBg)
       localStorage.setItem(LOGIN_BG_KEY, JSON.stringify(loginBg.value))
     }
-    if ('loginBgImage' in data) {
-      loginBgImage.value = data.loginBgImage ?? null
-      if (data.loginBgImage) localStorage.setItem(LOGIN_BG_IMG_KEY, data.loginBgImage)
-      else localStorage.removeItem(LOGIN_BG_IMG_KEY)
+    if ('loginBgImageVersion' in data) {
+      setLoginBgImageVersion(data.loginBgImageVersion ?? null)
     }
   }
 
@@ -218,6 +264,8 @@ export const useBackgroundStore = defineStore('background', () => {
     loginBg,
     appBgImage,
     loginBgImage,
+    appBgImageVersion,
+    loginBgImageVersion,
     appBgLayerVisible,
     appBgLayerStyle,
     loginBgLayerVisible,
@@ -227,11 +275,12 @@ export const useBackgroundStore = defineStore('background', () => {
     gradientPreview,
     applyAppBg,
     setAppBg,
-    setAppBgImage,
+    setAppBgImageVersion,
     resetAppBg,
     setLoginBg,
-    setLoginBgImage,
+    setLoginBgImageVersion,
     resetLoginBg,
     loadFromDb,
+    migrateLegacyImages,
   }
 })

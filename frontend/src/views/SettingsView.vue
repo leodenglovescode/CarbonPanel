@@ -221,15 +221,15 @@
             <template v-if="bg.appBg.type === 'image'">
               <div v-if="bg.appBgImage" class="img-preview-row">
                 <img :src="bg.appBgImage" class="img-thumb" alt="App background" />
-                <button class="reset-sm danger-sm" @click="bg.setAppBgImage(null)">Remove</button>
+                <button class="reset-sm danger-sm" :disabled="uploading === 'app'" @click="removeImage('app')">Remove</button>
               </div>
-              <div v-else class="upload-drop" @click="triggerUpload('app')">
-                <span>Click to upload image</span>
-                <span class="upload-hint">JPG, PNG, WEBP · max 3 MB</span>
+              <div v-else class="upload-drop" :class="{ disabled: uploading === 'app' }" @click="uploading !== 'app' && triggerUpload('app')">
+                <span>{{ uploading === 'app' ? 'Uploading…' : 'Click to upload image' }}</span>
+                <span class="upload-hint">JPG, PNG, WEBP · max 20 MB · compressed automatically</span>
               </div>
               <input ref="appFileInput" type="file" accept="image/*" class="file-hidden"
                 @change="handleUpload('app', $event)" />
-              <p v-if="uploadError === 'app'" class="upload-error">Image too large — max 3 MB</p>
+              <p v-if="uploadError === 'app'" class="upload-error">{{ uploadErrorMsg }}</p>
             </template>
 
             <label v-if="bg.appBg.type !== 'color'" class="style-field">
@@ -304,15 +304,15 @@
             <template v-if="bg.loginBg.type === 'image'">
               <div v-if="bg.loginBgImage" class="img-preview-row">
                 <img :src="bg.loginBgImage" class="img-thumb" alt="Login background" />
-                <button class="reset-sm danger-sm" @click="bg.setLoginBgImage(null)">Remove</button>
+                <button class="reset-sm danger-sm" :disabled="uploading === 'login'" @click="removeImage('login')">Remove</button>
               </div>
-              <div v-else class="upload-drop" @click="triggerUpload('login')">
-                <span>Click to upload image</span>
-                <span class="upload-hint">JPG, PNG, WEBP · max 3 MB</span>
+              <div v-else class="upload-drop" :class="{ disabled: uploading === 'login' }" @click="uploading !== 'login' && triggerUpload('login')">
+                <span>{{ uploading === 'login' ? 'Uploading…' : 'Click to upload image' }}</span>
+                <span class="upload-hint">JPG, PNG, WEBP · max 20 MB · compressed automatically</span>
               </div>
               <input ref="loginFileInput" type="file" accept="image/*" class="file-hidden"
                 @change="handleUpload('login', $event)" />
-              <p v-if="uploadError === 'login'" class="upload-error">Image too large — max 3 MB</p>
+              <p v-if="uploadError === 'login'" class="upload-error">{{ uploadErrorMsg }}</p>
             </template>
 
             <label v-if="bg.loginBg.type !== 'color'" class="style-field">
@@ -923,7 +923,7 @@ import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, passkeysApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PasskeyCredential } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, passkeysApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PasskeyCredential } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -980,6 +980,8 @@ const bgTypes = [
 const appFileInput = ref<HTMLInputElement | null>(null)
 const loginFileInput = ref<HTMLInputElement | null>(null)
 const uploadError = ref<'app' | 'login' | null>(null)
+const uploadErrorMsg = ref('')
+const uploading = ref<'app' | 'login' | null>(null)
 
 function triggerUpload(target: 'app' | 'login') {
   uploadError.value = null
@@ -987,23 +989,43 @@ function triggerUpload(target: 'app' | 'login') {
   else loginFileInput.value?.click()
 }
 
-function handleUpload(target: 'app' | 'login', event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+async function handleUpload(target: 'app' | 'login', event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file) return
-  if (file.size > 3 * 1024 * 1024) {
+  input.value = ''
+
+  if (file.size > 20 * 1024 * 1024) {
     uploadError.value = target
-    ;(event.target as HTMLInputElement).value = ''
+    uploadErrorMsg.value = 'Image too large — max 20 MB'
     return
   }
+
   uploadError.value = null
-  const reader = new FileReader()
-  reader.onload = () => {
-    const dataUrl = reader.result as string
-    if (target === 'app') bg.setAppBgImage(dataUrl)
-    else bg.setLoginBgImage(dataUrl)
+  uploading.value = target
+  try {
+    await backgroundImageApi.upload(target, file)
+    const version = Date.now()
+    if (target === 'app') bg.setAppBgImageVersion(version)
+    else bg.setLoginBgImageVersion(version)
+  } catch (e: any) {
+    uploadError.value = target
+    uploadErrorMsg.value = e.response?.data?.detail || 'Upload failed'
+  } finally {
+    uploading.value = null
   }
-  reader.readAsDataURL(file)
-  ;(event.target as HTMLInputElement).value = ''
+}
+
+async function removeImage(target: 'app' | 'login') {
+  uploadError.value = null
+  try {
+    await backgroundImageApi.remove(target)
+    if (target === 'app') bg.setAppBgImageVersion(null)
+    else bg.setLoginBgImageVersion(null)
+  } catch (e: any) {
+    uploadError.value = target
+    uploadErrorMsg.value = e.response?.data?.detail || 'Failed to remove image'
+  }
 }
 
 const alertMetrics = [
@@ -2105,6 +2127,8 @@ onMounted(() => {
   cursor: pointer; transition: all var(--transition); color: var(--fg-muted); font-size: 11px;
 }
 .upload-drop:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+.upload-drop.disabled { cursor: default; opacity: 0.6; }
+.upload-drop.disabled:hover { border-color: var(--border); color: var(--fg-muted); background: none; }
 .upload-hint { font-size: 10px; color: var(--fg-dim); }
 
 .img-preview-row { display: flex; align-items: center; gap: 10px; }
