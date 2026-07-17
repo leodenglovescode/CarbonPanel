@@ -5,7 +5,7 @@
       <div class="login-logo">
         <span class="bracket">[</span>carbon<span class="accent">panel</span><span class="bracket">]</span>
       </div>
-      <p class="login-sub">server monitoring</p>
+      <p class="login-sub">Server monitoring</p>
 
       <!-- Step 1: Username + Password -->
       <form v-if="step === 1" class="login-form" @submit.prevent="handleLogin">

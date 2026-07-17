@@ -31,7 +31,7 @@
           </div>
           <div class="load-item load-sep">
             <span class="load-val">{{ cpu.per_core.filter(p => p > 5).length }}</span>
-            <span class="load-lbl">active</span>
+            <span class="load-lbl">Active</span>
           </div>
         </div>
       </div>

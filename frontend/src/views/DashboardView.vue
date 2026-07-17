@@ -21,7 +21,7 @@
 
     <div v-if="!metrics.latest && visibleWidgets.length === 0" class="loading">
       <span class="loading-dot" /><span class="loading-dot" /><span class="loading-dot" />
-      <span class="loading-text">connecting…</span>
+      <span class="loading-text">Connecting…</span>
     </div>
 
     <!-- ── Unified grid (normal + edit mode) ── -->

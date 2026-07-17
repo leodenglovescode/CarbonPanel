@@ -16,7 +16,7 @@
             :disabled="loading"
             @click="startReorder"
           >
-            reorder
+            Reorder
           </button>
           <template v-else>
             <button
@@ -24,14 +24,14 @@
               :disabled="loading || reorderBusy"
               @click="saveReorder"
             >
-              {{ reorderBusy ? 'saving...' : 'save order' }}
+              {{ reorderBusy ? 'Saving...' : 'Save order' }}
             </button>
             <button
               class="refresh-btn"
               :disabled="loading || reorderBusy"
               @click="cancelReorder"
             >
-              cancel
+              Cancel
             </button>
           </template>
         </template>
@@ -40,7 +40,7 @@
           :disabled="loading || reorderBusy || reorderMode"
           @click="loadServices()"
         >
-          {{ loading ? 'refreshing...' : 'refresh' }}
+          {{ loading ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
     </div>
@@ -57,7 +57,7 @@
       </button>
     </div>
 
-    <div v-if="loading" class="state-msg">loading...</div>
+    <div v-if="loading" class="state-msg">Loading...</div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <div v-else-if="services.length === 0" class="state-msg muted">
       {{ emptyStateMessage() }}
@@ -125,15 +125,15 @@
           </div>
           <div class="meta-item">
             <span class="meta-label">autostart</span>
-            <span class="meta-value">{{ svc.autostart_enabled ? 'enabled' : 'disabled' }}</span>
+            <span class="meta-value">{{ svc.autostart_enabled ? 'Enabled' : 'Disabled' }}</span>
           </div>
         </div>
 
-        <div v-if="svc.uptime" class="uptime">since {{ svc.uptime }}</div>
+        <div v-if="svc.uptime" class="uptime">Since {{ svc.uptime }}</div>
 
         <div v-if="activeTab === 'starred' && reorderMode" class="reorder-row">
           <span class="drag-indicator" aria-hidden="true">||</span>
-          <span class="reorder-hint">drag card to reorder</span>
+          <span class="reorder-hint">Drag card to reorder</span>
         </div>
 
         <div class="actions-row">
@@ -168,7 +168,7 @@
               "
               @change="toggleAutostart(svc.service_name, ($event.target as HTMLInputElement).checked)"
             />
-            <span>start on boot</span>
+            <span>Start on boot</span>
           </label>
         </div>
 
@@ -350,16 +350,16 @@ async function saveReorder() {
 
 function emptyStateMessage() {
   if (activeTab.value === 'starred') {
-    return 'no starred services yet'
+    return 'No starred services yet'
   }
 
   if (activeTab.value === 'timers') {
-    return 'no systemd timers found'
+    return 'No systemd timers found'
   }
 
   return activeTab.value === 'all'
-    ? 'no systemd services found'
-    : 'no admin/user-created systemd services found'
+    ? 'No systemd services found'
+    : 'No admin/user-created systemd services found'
 }
 
 async function runAction(serviceName: string, action: SiteAction) {

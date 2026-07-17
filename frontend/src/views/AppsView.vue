@@ -6,7 +6,7 @@
         <p class="page-subtitle">{{ filteredApps.length }} listening port{{ filteredApps.length !== 1 ? 's' : '' }}</p>
       </div>
       <button class="refresh-btn" :disabled="loading" @click="load">
-        {{ loading ? 'scanning...' : 'refresh' }}
+        {{ loading ? 'Scanning...' : 'Refresh' }}
       </button>
     </div>
 
@@ -27,14 +27,14 @@
         <input
           v-model="search"
           class="search-input"
-          placeholder="filter by port, name, label..."
+          placeholder="Filter by port, name, label..."
         />
       </div>
     </div>
 
-    <div v-if="loading" class="state-msg">scanning ports...</div>
+    <div v-if="loading" class="state-msg">Scanning ports...</div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
-    <div v-else-if="filteredApps.length === 0" class="state-msg muted">no apps match this filter</div>
+    <div v-else-if="filteredApps.length === 0" class="state-msg muted">No apps match this filter</div>
 
     <div v-else class="app-table">
       <div class="table-head">
@@ -77,7 +77,7 @@
             <span v-else class="label-display" @click.stop="startEdit(app)">
               <span v-if="app.custom_label" class="custom-label">{{ app.custom_label }}</span>
               <span v-else-if="app.auto_label" class="auto-label">{{ app.auto_label }}</span>
-              <span v-else class="no-label">+ label</span>
+              <span v-else class="no-label">+ Label</span>
             </span>
           </span>
           <span class="col-process">
@@ -147,7 +147,7 @@
               :disabled="killBusy !== null"
               @click="doKill"
             >
-              {{ killBusy !== null ? 'killing...' : 'kill process' }}
+              {{ killBusy !== null ? 'Killing...' : 'Kill process' }}
             </button>
           </div>
         </div>
