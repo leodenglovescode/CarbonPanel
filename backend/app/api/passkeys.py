@@ -28,10 +28,9 @@ from webauthn.helpers.structs import (
 from app.core.dependencies import get_current_user
 from app.core.security import create_access_token
 from app.database import get_db
-from app.models.device import Device
 from app.models.user import User
 from app.models.webauthn_credential import WebAuthnCredential
-from app.services.auth_service import _device_name
+from app.services.auth_service import _record_device
 
 router = APIRouter(prefix="/auth/passkey", tags=["passkeys"])
 
@@ -274,20 +273,16 @@ async def passkey_login_complete(
     jti = str(uuid.uuid4())
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
+    device_id = request.headers.get("x-device-id")
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    device = Device(
-        user_id=user_id,
-        jti=jti,
-        name=f"Passkey – {_device_name(ua)}",
-        ip_address=ip,
-        user_agent=ua,
+    await _record_device(
+        user_id, jti, ip, ua, db, name_prefix="Passkey –", device_id=device_id
     )
-    db.add(device)
     await db.commit()
 
     token = create_access_token(user_id=user_id, username=user.username, jti=jti)

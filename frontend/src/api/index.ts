@@ -18,11 +18,25 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
 })
 
+// Persistent per-browser fingerprint so re-logging in (session expiry, logout,
+// etc.) from the same browser updates its existing "Active Sessions" entry
+// instead of registering a new device every time.
+const DEVICE_ID_STORAGE_KEY = 'cp_device_id'
+function getDeviceId(): string {
+  let id = localStorage.getItem(DEVICE_ID_STORAGE_KEY)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, id)
+  }
+  return id
+}
+
 api.interceptors.request.use((config) => {
   const auth = useAuthStore()
   if (auth.token) {
     config.headers.Authorization = `Bearer ${auth.token}`
   }
+  config.headers['X-Device-Id'] = getDeviceId()
   return config
 })
 
