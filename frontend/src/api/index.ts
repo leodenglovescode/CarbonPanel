@@ -108,8 +108,6 @@ export interface SystemVersionResponse {
   error: string | null
   release_url: string | null
   notes_url: string | null
-  deployment_type: 'docker' | 'self-hosted' | null
-  docker_pull_cmd: string | null
 }
 
 export const systemApi = {
