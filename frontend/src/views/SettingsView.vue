@@ -46,7 +46,7 @@
           <div class="section-header stylistic-header">
             <span class="section-title">Stylistic Settings</span>
             <span :class="['badge', theme.hasStyleOverrides ? 'badge-green' : 'badge-gray']">
-              {{ theme.hasStyleOverrides ? 'customized' : 'defaults' }}
+              {{ theme.hasStyleOverrides ? 'Customized' : 'Defaults' }}
             </span>
           </div>
           <p class="section-desc">
@@ -82,7 +82,7 @@
                 :class="['theme-btn', 'contrast-btn', { active: isHighContrast }]"
                 @click="updateHighContrast(!isHighContrast)"
               >
-                {{ isHighContrast ? 'on' : 'off' }}
+                {{ isHighContrast ? 'On' : 'Off' }}
               </button>
             </div>
 
@@ -178,7 +178,7 @@
           <div class="bg-block">
             <div class="bg-block-head">
               <span class="style-lbl">App Background</span>
-              <button v-if="bg.isCustom(bg.appBg) || bg.appBgImage" class="reset-sm" @click="bg.resetAppBg()">reset</button>
+              <button v-if="bg.isCustom(bg.appBg) || bg.appBgImage" class="reset-sm" @click="bg.resetAppBg()">Reset</button>
             </div>
 
             <div class="bg-type-row">
@@ -221,10 +221,10 @@
             <template v-if="bg.appBg.type === 'image'">
               <div v-if="bg.appBgImage" class="img-preview-row">
                 <img :src="bg.appBgImage" class="img-thumb" alt="App background" />
-                <button class="reset-sm danger-sm" @click="bg.setAppBgImage(null)">remove</button>
+                <button class="reset-sm danger-sm" @click="bg.setAppBgImage(null)">Remove</button>
               </div>
               <div v-else class="upload-drop" @click="triggerUpload('app')">
-                <span>click to upload image</span>
+                <span>Click to upload image</span>
                 <span class="upload-hint">JPG, PNG, WEBP · max 3 MB</span>
               </div>
               <input ref="appFileInput" type="file" accept="image/*" class="file-hidden"
@@ -253,7 +253,7 @@
           <div class="bg-block">
             <div class="bg-block-head">
               <span class="style-lbl">Login Screen Background</span>
-              <button v-if="bg.isCustom(bg.loginBg) || bg.loginBgImage" class="reset-sm" @click="bg.resetLoginBg()">reset</button>
+              <button v-if="bg.isCustom(bg.loginBg) || bg.loginBgImage" class="reset-sm" @click="bg.resetLoginBg()">Reset</button>
             </div>
 
             <div class="bg-type-row">
@@ -296,10 +296,10 @@
             <template v-if="bg.loginBg.type === 'image'">
               <div v-if="bg.loginBgImage" class="img-preview-row">
                 <img :src="bg.loginBgImage" class="img-thumb" alt="Login background" />
-                <button class="reset-sm danger-sm" @click="bg.setLoginBgImage(null)">remove</button>
+                <button class="reset-sm danger-sm" @click="bg.setLoginBgImage(null)">Remove</button>
               </div>
               <div v-else class="upload-drop" @click="triggerUpload('login')">
-                <span>click to upload image</span>
+                <span>Click to upload image</span>
                 <span class="upload-hint">JPG, PNG, WEBP · max 3 MB</span>
               </div>
               <input ref="loginFileInput" type="file" accept="image/*" class="file-hidden"
@@ -327,7 +327,7 @@
         <div id="section-display" class="section">
           <div class="section-header">
             <span class="section-title">Display Preferences</span>
-            <span class="badge badge-gray">units</span>
+            <span class="badge badge-gray">Units</span>
           </div>
           <p class="section-desc">Choose how memory and network speed are displayed across the dashboard.</p>
 
@@ -431,7 +431,7 @@
         <div id="section-alerts" class="section">
           <div class="section-header">
             <span class="section-title">Alert Thresholds</span>
-            <span class="badge badge-gray">toast on exceed</span>
+            <span class="badge badge-gray">Toast on exceed</span>
           </div>
           <p class="section-desc">Set a % threshold for CPU, RAM, or any disk. A toast notification fires when exceeded. Set to 0 to disable.</p>
 
@@ -471,7 +471,7 @@
               @input="e => alerts.setThreshold(metric.key, parseInt((e.target as HTMLInputElement).value))"
             />
             <span class="alert-val">
-              {{ alerts.thresholds[metric.key] === 0 ? 'off' : alerts.thresholds[metric.key] + '%' }}
+              {{ alerts.thresholds[metric.key] === 0 ? 'Off' : alerts.thresholds[metric.key] + '%' }}
             </span>
           </div>
         </div>
@@ -487,10 +487,10 @@
             >
               {{
                 versionInfo?.update_in_progress
-                  ? 'installing'
+                  ? 'Installing'
                   : versionInfo?.update_available
-                    ? 'update available'
-                    : 'up to date'
+                    ? 'Update available'
+                    : 'Up to date'
               }}
             </span>
           </div>
@@ -502,15 +502,15 @@
           <div class="version-grid">
             <div class="info-row">
               <span class="info-lbl">Current</span>
-              <span class="info-val">{{ versionInfo?.current_version ?? 'unknown' }}</span>
+              <span class="info-val">{{ versionInfo?.current_version ?? 'Unknown' }}</span>
             </div>
             <div class="info-row">
               <span class="info-lbl">Latest</span>
-              <span class="info-val">{{ versionInfo?.latest_version ?? 'not checked yet' }}</span>
+              <span class="info-val">{{ versionInfo?.latest_version ?? 'Not checked yet' }}</span>
             </div>
             <div class="info-row">
               <span class="info-lbl">Checked</span>
-              <span class="info-val text-muted">{{ versionInfo?.checked_at ?? 'never' }}</span>
+              <span class="info-val text-muted">{{ versionInfo?.checked_at ?? 'Never' }}</span>
             </div>
             <div v-if="versionInfo?.error" class="info-row">
               <span class="info-lbl">Status</span>

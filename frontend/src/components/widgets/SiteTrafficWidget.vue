@@ -3,7 +3,7 @@
     <template #header>
       <span class="card-title">Site Traffic</span>
       <select v-model="selectedId" class="site-select" @change="onSiteChange">
-        <option value="">select a site…</option>
+        <option value="">Select a site…</option>
         <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.name }}</option>
       </select>
     </template>
@@ -11,16 +11,16 @@
     <div v-if="!sites.length" class="empty-state">No sites configured yet.</div>
     <div v-else-if="!selectedId" class="empty-state">Pick a site above to see its traffic.</div>
     <div v-else-if="error" class="empty-state error">{{ error }}</div>
-    <div v-else-if="!traffic" class="empty-state">loading…</div>
+    <div v-else-if="!traffic" class="empty-state">Loading…</div>
     <template v-else>
       <div class="headline">
         <div class="stat">
           <span class="stat-val">{{ traffic.total_requests }}</span>
-          <span class="stat-lbl">requests / {{ traffic.window_minutes }}m</span>
+          <span class="stat-lbl">Requests / {{ traffic.window_minutes }}m</span>
         </div>
         <div class="stat">
           <span class="stat-val">{{ fmtBytes(traffic.total_bytes) }}</span>
-          <span class="stat-lbl">served</span>
+          <span class="stat-lbl">Served</span>
         </div>
       </div>
 

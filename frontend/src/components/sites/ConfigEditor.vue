@@ -1,11 +1,11 @@
 <template>
   <div class="config-editor">
     <div class="editor-toolbar">
-      <span class="editor-path">{{ configPath ?? 'no config path set' }}</span>
+      <span class="editor-path">{{ configPath ?? 'No config path set' }}</span>
       <div class="toolbar-actions">
         <span v-if="saveMsg" :class="['save-msg', saveMsg.type]">{{ saveMsg.text }}</span>
         <button class="save-btn" :disabled="!configPath || saving" @click="save">
-          {{ saving ? 'saving…' : 'save' }}
+          {{ saving ? 'Saving…' : 'Save' }}
         </button>
       </div>
     </div>
@@ -17,9 +17,9 @@
       v-model="content"
       class="editor-area"
       spellcheck="false"
-      :placeholder="loading ? 'loading…' : ''"
+      :placeholder="loading ? 'Loading…' : ''"
     />
-    <div v-else class="no-config">no config file path configured for this site</div>
+    <div v-else class="no-config">No config file path configured for this site</div>
   </div>
 </template>
 

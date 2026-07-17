@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -99,7 +101,19 @@ async def me(current_user: User = Depends(get_current_user)):
         id=current_user.id,
         username=current_user.username,
         totp_enabled=current_user.totp_enabled,
+        onboarding_completed=current_user.onboarding_completed_at is not None,
     )
+
+
+@router.post("/onboarding/complete", response_model=SuccessResponse)
+async def complete_onboarding(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.onboarding_completed_at is None:
+        current_user.onboarding_completed_at = datetime.now(timezone.utc)
+        await db.commit()
+    return SuccessResponse()
 
 
 @router.post("/logout", response_model=SuccessResponse)

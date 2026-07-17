@@ -11,6 +11,11 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/onboarding',
+      name: 'onboarding',
+      component: () => import('@/views/OnboardingView.vue'),
+    },
+    {
       path: '/',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
@@ -79,6 +84,16 @@ router.beforeEach(async (to) => {
     return { name: 'login' }
   }
   if (to.name === 'login' && auth.isAuthenticated) {
+    return { name: 'dashboard' }
+  }
+  if (
+    auth.isAuthenticated &&
+    !auth.user?.onboarding_completed &&
+    to.name !== 'onboarding'
+  ) {
+    return { name: 'onboarding' }
+  }
+  if (to.name === 'onboarding' && auth.user?.onboarding_completed) {
     return { name: 'dashboard' }
   }
 })

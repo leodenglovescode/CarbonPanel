@@ -18,21 +18,21 @@
         <RingChart :value="dev.utilization_percent" :size="72" />
         <div class="dev-stats">
           <div class="stat-row">
-            <span class="stat-lbl">util</span>
+            <span class="stat-lbl">Util</span>
             <div class="bar-track">
               <div class="bar-fill util" :style="{ width: dev.utilization_percent + '%' }" />
             </div>
             <span class="stat-val">{{ dev.utilization_percent.toFixed(0) }}%</span>
           </div>
           <div class="stat-row">
-            <span class="stat-lbl">vram</span>
+            <span class="stat-lbl">VRAM</span>
             <div class="bar-track">
               <div class="bar-fill vram" :style="{ width: (dev.memory_used_mb / dev.memory_total_mb * 100) + '%' }" />
             </div>
             <span class="stat-val">{{ fmt(dev.memory_used_mb) }} / {{ fmt(dev.memory_total_mb) }}</span>
           </div>
           <div class="stat-row">
-            <span class="stat-lbl">pwr</span>
+            <span class="stat-lbl">Pwr</span>
             <span class="stat-plain">{{ dev.power_draw_w.toFixed(0) }} W</span>
           </div>
         </div>

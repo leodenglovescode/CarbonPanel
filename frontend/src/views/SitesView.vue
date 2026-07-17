@@ -3,15 +3,15 @@
     <div class="page-header">
       <h1 class="page-title">Sites</h1>
       <div class="header-actions">
-        <button class="add-btn secondary" @click="openDiscover">⟳ from nginx</button>
-        <button class="add-btn" @click="showForm = true">+ add site</button>
+        <button class="add-btn secondary" @click="openDiscover">⟳ From nginx</button>
+        <button class="add-btn" @click="showForm = true">+ Add site</button>
       </div>
     </div>
 
-    <div v-if="store.loading" class="state-msg">loading…</div>
+    <div v-if="store.loading" class="state-msg">Loading…</div>
     <div v-else-if="store.error" class="state-msg error">{{ store.error }}</div>
     <div v-else-if="store.sites.length === 0" class="state-msg muted">
-      no sites registered yet — add one to get started
+      No sites registered yet — add one to get started
     </div>
 
     <div v-else class="sites-grid">
@@ -68,20 +68,20 @@
           <div class="form-row">
             <label class="form-label">Log Paths</label>
             <input v-model="logPathsRaw" class="form-input" placeholder="/var/log/nginx/access.log, /var/log/nginx/error.log" />
-            <span class="form-hint">comma-separated</span>
+            <span class="form-hint">Comma-separated</span>
           </div>
 
           <div class="form-row">
             <label class="form-label">Description</label>
-            <input v-model="form.description" class="form-input" placeholder="optional" />
+            <input v-model="form.description" class="form-input" placeholder="Optional" />
           </div>
 
           <p v-if="formError" class="form-error">{{ formError }}</p>
 
           <div class="modal-actions">
-            <button type="button" class="btn-ghost" @click="cancelForm">cancel</button>
+            <button type="button" class="btn-ghost" @click="cancelForm">Cancel</button>
             <button type="submit" class="btn-primary" :disabled="submitting">
-              {{ submitting ? 'saving…' : 'add site' }}
+              {{ submitting ? 'Saving…' : 'Add site' }}
             </button>
           </div>
         </form>
@@ -95,13 +95,13 @@
           <button class="close-btn" @click="showDiscover = false">✕</button>
         </div>
         <div class="modal-body">
-          <div v-if="discoverLoading" class="state-msg">scanning…</div>
+          <div v-if="discoverLoading" class="state-msg">Scanning…</div>
           <div v-else-if="discoverError" class="state-msg error">{{ discoverError }}</div>
           <div v-else-if="!discoverData?.nginx_available" class="state-msg muted">
             /etc/nginx/sites-available not found on this server
           </div>
           <div v-else-if="!discoverData.candidates.length" class="state-msg muted">
-            no config files found in /etc/nginx/sites-available
+            No config files found in /etc/nginx/sites-available
           </div>
           <template v-else>
             <p class="discover-hint">
@@ -124,7 +124,7 @@
                 <div class="cand-info">
                   <span class="cand-name">{{ c.name }}</span>
                   <span class="cand-path">{{ c.config_file_path }}</span>
-                  <span v-if="c.already_exists" class="cand-exists">already added</span>
+                  <span v-if="c.already_exists" class="cand-exists">Already added</span>
                   <span v-else-if="c.server_names.length" class="cand-meta">
                     {{ c.server_names.join(', ') }}
                   </span>
@@ -133,13 +133,13 @@
             </div>
             <p v-if="importError" class="form-error">{{ importError }}</p>
             <div class="modal-actions">
-              <button class="btn-ghost" @click="showDiscover = false">cancel</button>
+              <button class="btn-ghost" @click="showDiscover = false">Cancel</button>
               <button
                 class="btn-primary"
                 :disabled="importing || !selectedPaths.length"
                 @click="doImport"
               >
-                {{ importing ? 'importing…' : `import ${selectedPaths.length}` }}
+                {{ importing ? 'Importing…' : `Import ${selectedPaths.length}` }}
               </button>
             </div>
           </template>

@@ -6,6 +6,7 @@ export interface UserInfo {
   id: string
   username: string
   totp_enabled: boolean
+  onboarding_completed: boolean
 }
 
 export const useAuthStore = defineStore('auth', () => {

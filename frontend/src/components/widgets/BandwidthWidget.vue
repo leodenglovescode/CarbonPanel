@@ -29,7 +29,7 @@
       </div>
 
       <button v-if="extraCount > 0 || expanded" class="show-more" @click="expanded = !expanded">
-        {{ expanded ? '▲ show less' : `▼ +${extraCount} more` }}
+        {{ expanded ? '▲ Show less' : `▼ +${extraCount} more` }}
       </button>
     </div>
   </BaseCard>

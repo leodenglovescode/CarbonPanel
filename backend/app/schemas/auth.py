@@ -20,6 +20,7 @@ class UserInfo(BaseModel):
     id: str
     username: str
     totp_enabled: bool
+    onboarding_completed: bool
 
 
 class TOTPSetupResponse(BaseModel):

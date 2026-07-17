@@ -10,10 +10,10 @@
       </div>
       <div class="header-actions">
         <button class="refresh-btn" :disabled="smartBusy" @click="runSmartScan">
-          {{ smartBusy ? 'scanning...' : 'scan SMART' }}
+          {{ smartBusy ? 'Scanning...' : 'Scan SMART' }}
         </button>
         <button class="refresh-btn" :disabled="loading" @click="load">
-          {{ loading ? 'refreshing...' : 'refresh' }}
+          {{ loading ? 'Refreshing...' : 'Refresh' }}
         </button>
       </div>
     </div>
@@ -31,9 +31,9 @@
       </button>
     </div>
 
-    <div v-if="loading" class="state-msg">loading...</div>
+    <div v-if="loading" class="state-msg">Loading...</div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
-    <div v-else-if="filteredDisks.length === 0" class="state-msg muted">no disks in this filter</div>
+    <div v-else-if="filteredDisks.length === 0" class="state-msg muted">No disks in this filter</div>
 
     <div v-else class="disk-list">
       <div
@@ -157,19 +157,19 @@
                   </span>
                 </div>
                 <div class="smart-item">
-                  <span class="si-label">last scan</span>
+                  <span class="si-label">Last scan</span>
                   <span class="si-val si-dim">{{ fmtChecked(disk.smart.last_checked) }}</span>
                 </div>
               </div>
             </div>
             <div v-else class="smart-panel smart-unavailable">
               <div class="panel-label">SMART</div>
-              <span class="smart-na">not yet scanned — click "scan SMART" above</span>
+              <span class="smart-na">Not yet scanned — click "Scan SMART" above</span>
             </div>
 
             <!-- Extra mounts -->
             <div v-if="disk.extra_mounts.length" class="mounts-panel">
-              <div class="panel-label">also mounted at</div>
+              <div class="panel-label">Also mounted at</div>
               <div class="mount-list">
                 <span v-for="m in disk.extra_mounts" :key="m" class="mount-entry">{{ m }}</span>
               </div>
@@ -184,15 +184,15 @@
                   class="action-btn"
                   :disabled="actionBusy === diskKey(disk)"
                   @click="confirmUnmount(disk)"
-                >unmount</button>
+                >Unmount</button>
                 <span v-else class="action-locked" :title="`${disk.bus_type.toUpperCase()} drives cannot be unmounted`">
-                  unmount unavailable
+                  Unmount unavailable
                 </span>
                 <button
                   class="action-btn"
                   :disabled="actionBusy === diskKey(disk)"
                   @click="runCheck(disk)"
-                >check filesystem</button>
+                >Check filesystem</button>
               </div>
               <div v-if="actionOutput[diskKey(disk)]" class="action-output" :class="{ 'output-error': actionError[diskKey(disk)] }">
                 <pre>{{ actionOutput[diskKey(disk)] }}</pre>

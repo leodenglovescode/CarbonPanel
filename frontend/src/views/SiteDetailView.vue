@@ -1,19 +1,19 @@
 <template>
   <div class="detail-page">
-    <div v-if="loading" class="state-msg">loading…</div>
-    <div v-else-if="!site" class="state-msg error">site not found</div>
+    <div v-if="loading" class="state-msg">Loading…</div>
+    <div v-else-if="!site" class="state-msg error">Site not found</div>
 
     <template v-else>
       <!-- Header -->
       <div class="detail-header">
         <div class="breadcrumb">
-          <router-link to="/sites" class="back-link">← sites</router-link>
+          <router-link to="/sites" class="back-link">← Sites</router-link>
           <span class="sep">/</span>
           <span class="site-name-crumb">{{ site.name }}</span>
         </div>
 
         <div class="header-right">
-          <button class="delete-btn" @click="confirmDelete">delete</button>
+          <button class="delete-btn" @click="confirmDelete">Delete</button>
         </div>
       </div>
 
@@ -72,9 +72,9 @@
       <div class="confirm-modal">
         <p class="confirm-msg">Delete <strong>{{ site?.name }}</strong>? This cannot be undone.</p>
         <div class="confirm-actions">
-          <button class="btn-ghost" @click="showDeleteConfirm = false">cancel</button>
+          <button class="btn-ghost" @click="showDeleteConfirm = false">Cancel</button>
           <button class="btn-danger" :disabled="deleting" @click="doDelete">
-            {{ deleting ? 'deleting…' : 'delete' }}
+            {{ deleting ? 'Deleting…' : 'Delete' }}
           </button>
         </div>
       </div>

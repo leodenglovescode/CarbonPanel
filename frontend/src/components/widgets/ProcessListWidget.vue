@@ -17,13 +17,13 @@
       <input
         v-model="searchQuery"
         class="search-input"
-        placeholder="filter by name…"
+        placeholder="Filter by name…"
         spellcheck="false"
       />
       <button
         :class="['expand-btn', { active: expanded }]"
         @click="expanded = !expanded"
-        :title="expanded ? 'show less' : 'show all'"
+        :title="expanded ? 'Show less' : 'Show all'"
       >{{ expanded ? '▲ less' : '▼ all' }}</button>
     </div>
 
@@ -60,7 +60,7 @@
             </td>
           </tr>
           <tr v-if="visibleProcesses.length === 0">
-            <td colspan="7" class="no-results">no matching processes</td>
+            <td colspan="7" class="no-results">No matching processes</td>
           </tr>
         </tbody>
       </table>
