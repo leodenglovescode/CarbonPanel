@@ -25,10 +25,33 @@ const api = axios.create({
 // etc.) from the same browser updates its existing "Active Sessions" entry
 // instead of registering a new device every time.
 const DEVICE_ID_STORAGE_KEY = 'cp_device_id'
+function generateId(): string {
+  // crypto.randomUUID() throws outside secure contexts (HTTPS/localhost) —
+  // this panel is commonly self-hosted over plain HTTP on a LAN IP, so a
+  // fresh browser with no cached device id would throw here on every
+  // request, including login, before the request ever left the browser.
+  // getRandomValues() has no such restriction.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID()
+    } catch {
+      // fall through to the getRandomValues-based UUID below
+    }
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(16))
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`
+}
+
 function getDeviceId(): string {
   let id = localStorage.getItem(DEVICE_ID_STORAGE_KEY)
   if (!id) {
-    id = crypto.randomUUID()
+    id = generateId()
     localStorage.setItem(DEVICE_ID_STORAGE_KEY, id)
   }
   return id
