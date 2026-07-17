@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
@@ -43,10 +43,18 @@ const prefsSync = useUserPrefsSync()
 prefsSync.startWatching()
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const isPublicRoute = computed(() => !!route.meta.public)
 
 async function maybePromptForUpdate() {
+  // The Settings page has its own full check/install/progress UI — popping
+  // this dialog on top of it double-notifies for the same event and, worse,
+  // races it: a manual "Check for Updates" click there kicks off a real
+  // multi-second GitHub check, and this route-change watcher would otherwise
+  // read the update-status file mid-check and surface its own separate,
+  // out-of-sync verdict.
+  if (route.path === '/settings') return
   if (!auth.isAuthenticated || isPublicRoute.value) return
 
   try {
@@ -70,11 +78,10 @@ async function maybePromptForUpdate() {
     await systemApi.installUpdate()
     localStorage.removeItem(UPDATE_PROMPT_STORAGE_KEY)
 
-    await dialog.alert({
-      title: 'Update started',
-      message:
-        'CarbonPanel has started installing the update. The app will restart automatically. Refresh this page in about a minute.',
-    })
+    // Settings has the live progress bar + restart countdown — land there
+    // instead of leaving the user on whatever page they were on with just a
+    // one-off "refresh in a minute" message and no actual feedback loop.
+    await router.push('/settings')
   } catch {
     // Intentionally ignore update prompt errors to avoid interrupting app usage.
   }

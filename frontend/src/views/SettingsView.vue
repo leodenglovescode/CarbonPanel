@@ -534,49 +534,62 @@
             </div>
           </div>
 
-          <div class="version-actions">
-            <BaseButton variant="ghost" :disabled="versionActionLoading" @click="checkForUpdates">
-              {{ versionActionLoading ? 'Working…' : 'Check for Updates' }}
-            </BaseButton>
-
-            <BaseButton
-              variant="primary"
-              :disabled="
-                versionActionLoading ||
-                !versionInfo?.update_available ||
-                !!versionInfo?.update_in_progress
-              "
-              @click="installUpdate"
-            >
-              {{
-                versionInfo?.update_in_progress
-                  ? 'Installing…'
-                  : versionActionLoading
-                    ? 'Working…'
-                    : 'Install Update'
-              }}
-            </BaseButton>
-
-            <a
-              v-if="versionInfo?.notes_url || versionInfo?.release_url"
-              class="version-link"
-              :href="versionInfo?.notes_url || versionInfo?.release_url || '#'"
-              target="_blank"
-              rel="noreferrer"
-            >
-              View Release Notes
-            </a>
-          </div>
-
-          <div v-if="installing" class="update-progress">
-            <div class="update-progress-track">
-              <div class="update-progress-fill" :style="{ width: updateProgressPercent + '%' }" />
+          <div v-if="restarting" class="restart-countdown">
+            <div class="restart-countdown-num">{{ restartCountdown > 0 ? restartCountdown : '…' }}</div>
+            <div class="restart-countdown-copy">
+              <strong>Panel is restarting</strong>
+              <span>
+                {{ restartCountdown > 0 ? `Reconnecting automatically in ${restartCountdown}s` : 'Reconnecting…' }}
+                — this page isn't broken, it's just picking up the update. It'll reload itself.
+              </span>
             </div>
-            <span class="update-progress-label">{{ updateStepLabel }}</span>
           </div>
 
-          <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
-          <p v-if="versionError" class="error-msg">{{ versionError }}</p>
+          <template v-else>
+            <div class="version-actions">
+              <BaseButton variant="ghost" :disabled="versionActionLoading" @click="checkForUpdates">
+                {{ versionActionLoading ? 'Working…' : 'Check for Updates' }}
+              </BaseButton>
+
+              <BaseButton
+                variant="primary"
+                :disabled="
+                  versionActionLoading ||
+                  !versionInfo?.update_available ||
+                  !!versionInfo?.update_in_progress
+                "
+                @click="installUpdate"
+              >
+                {{
+                  versionInfo?.update_in_progress
+                    ? 'Installing…'
+                    : versionActionLoading
+                      ? 'Working…'
+                      : 'Install Update'
+                }}
+              </BaseButton>
+
+              <a
+                v-if="versionInfo?.notes_url || versionInfo?.release_url"
+                class="version-link"
+                :href="versionInfo?.notes_url || versionInfo?.release_url || '#'"
+                target="_blank"
+                rel="noreferrer"
+              >
+                View Release Notes
+              </a>
+            </div>
+
+            <div v-if="installing" class="update-progress">
+              <div class="update-progress-track">
+                <div class="update-progress-fill" :style="{ width: updateProgressPercent + '%' }" />
+              </div>
+              <span class="update-progress-label">{{ updateStepLabel }}</span>
+            </div>
+
+            <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
+            <p v-if="versionError" class="error-msg">{{ versionError }}</p>
+          </template>
 
           <div class="log-box-wrap">
             <div class="log-box-header">
@@ -910,7 +923,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -1139,7 +1152,17 @@ async function fetchServiceLogs() {
   }
 }
 
-async function loadVersionInfo() {
+// True network-level failure (request never got a response — backend process
+// down/restarting) vs. a normal HTTP error response from a live server. Only
+// the former means "the panel is mid-restart," which is what the reconnect
+// countdown below reacts to.
+function isNetworkFailure(e: any): boolean {
+  return !e.response
+}
+
+// Returns whether the backend was actually reachable (a network failure
+// means "no response at all," not "responded with an error").
+async function loadVersionInfo(): Promise<boolean> {
   versionError.value = ''
 
   try {
@@ -1148,8 +1171,10 @@ async function loadVersionInfo() {
     if (res.data.error) {
       versionError.value = res.data.error
     }
+    return true
   } catch (e: any) {
     versionError.value = e.response?.data?.detail || 'Failed to load version status'
+    return !isNetworkFailure(e)
   }
 }
 
@@ -1231,6 +1256,80 @@ const updateStepLabel = computed(() =>
   updateStepIndex.value >= 0 ? UPDATE_STEPS[updateStepIndex.value].label : 'Starting…',
 )
 
+// ── Restart countdown ────────────────────────────────────────────────────
+// Partway through an install the backend process actually restarts, which
+// makes every in-flight request fail for a few seconds — that reads as a
+// dead page unless it's explained. Once that happens (or once the install
+// finishes cleanly and we need to pick up the freshly-built frontend
+// bundle), this ticks a visible countdown and health-checks in the
+// background, reloading as soon as the backend answers again — extending
+// the wait instead of giving up if it's not back yet.
+const restarting = ref(false)
+const restartCountdown = ref(0)
+let restartTimer: ReturnType<typeof setInterval> | null = null
+
+function stopRestartCountdown() {
+  if (restartTimer) {
+    clearInterval(restartTimer)
+    restartTimer = null
+  }
+}
+
+function startRestartCountdown(seconds = 30) {
+  if (restarting.value) return
+  restarting.value = true
+  restartCountdown.value = seconds
+  stopRestartCountdown()
+  restartTimer = setInterval(async () => {
+    restartCountdown.value -= 1
+    if (restartCountdown.value > 0) return
+    const reachable = await loadVersionInfo()
+    if (reachable) {
+      stopRestartCountdown()
+      window.location.reload()
+    } else {
+      restartCountdown.value = 10 // not back yet — keep retrying every 10s
+    }
+  }, 1000)
+}
+
+onUnmounted(stopRestartCountdown)
+
+// Shared by a freshly-triggered install and by resuming one already running
+// server-side (see onMounted below) — so navigating away and back mid-install
+// still shows live progress instead of a reset, empty-looking page.
+async function pollInstallProgress() {
+  installing.value = true
+  const deadline = Date.now() + 6 * 60_000
+  while (Date.now() < deadline && !restarting.value) {
+    const reachable = await loadVersionInfo()
+    await fetchServiceLogs()
+    if (!reachable) {
+      startRestartCountdown()
+      return
+    }
+    if (!versionInfo.value?.update_in_progress) break
+    await wait(3000)
+  }
+  if (restarting.value) return
+
+  if (versionInfo.value?.update_in_progress) {
+    versionSuccess.value = 'Still installing — check back in a bit.'
+    return
+  }
+
+  if (versionInfo.value?.update_available) {
+    versionSuccess.value = 'Update finished, but a newer version is already available — check again.'
+    return
+  }
+
+  // Finished while staying reachable the whole time (a fast restart the poll
+  // interval never caught) — still reload, since this tab's JS bundle is
+  // stale against the newly deployed frontend either way.
+  versionSuccess.value = "Update installed — reloading to pick up the new version…"
+  startRestartCountdown(5)
+}
+
 async function installUpdate() {
   if (!versionInfo.value?.update_available || versionInfo.value.update_in_progress) return
 
@@ -1244,7 +1343,6 @@ async function installUpdate() {
   if (!confirmed) return
 
   versionActionLoading.value = true
-  installing.value = true
   versionError.value = ''
   versionSuccess.value = ''
 
@@ -1253,23 +1351,8 @@ async function installUpdate() {
   try {
     await systemApi.installUpdate()
     versionSuccess.value = 'Installing update…'
-
-    // Poll until the update service finishes — a fresh venv + npm build can
-    // take a few minutes, unlike the 45s check-for-updates poll above.
-    const deadline = Date.now() + 6 * 60_000
     await wait(1200)
-    while (Date.now() < deadline) {
-      await Promise.all([loadVersionInfo(), fetchServiceLogs()])
-      if (!versionInfo.value?.update_in_progress) break
-      await wait(3000)
-    }
-    await fetchServiceLogs()
-
-    versionSuccess.value = versionInfo.value?.update_in_progress
-      ? 'Still installing — check back in a bit.'
-      : versionInfo.value?.update_available
-        ? 'Update finished, but a newer version is already available — check again.'
-        : "Update installed — you're on the latest version."
+    await pollInstallProgress()
   } catch (e: any) {
     const detail = e.response?.data?.detail || e.response?.data?.message
     const network = e.code === 'ECONNABORTED'
@@ -1278,7 +1361,7 @@ async function installUpdate() {
     versionError.value = detail || network || 'Failed to start update installation'
   } finally {
     versionActionLoading.value = false
-    installing.value = false
+    if (!restarting.value) installing.value = false
   }
 }
 
@@ -1617,13 +1700,19 @@ async function testProxy() {
   }
 }
 
-onMounted(() => {
-  void loadVersionInfo()
-  void fetchServiceLogs()
+onMounted(async () => {
   void loadWebhooks()
   void loadProxy()
   void loadDevices()
   void loadPasskeys()
+
+  await Promise.all([loadVersionInfo(), fetchServiceLogs()])
+  // An install kicked off from this page (or another tab/session) can still
+  // be running server-side after this component remounts — resume showing
+  // live progress instead of a blank slate.
+  if (versionInfo.value?.update_in_progress) {
+    void pollInstallProgress()
+  }
 })
 </script>
 
@@ -2022,6 +2111,39 @@ onMounted(() => {
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+.restart-countdown {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-dim);
+  animation: slide-in 150ms ease;
+}
+.restart-countdown-num {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--accent-border);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.restart-countdown-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.restart-countdown-copy strong { font-size: 12px; color: var(--fg); }
+.restart-countdown-copy span { font-size: 11px; color: var(--fg-muted); line-height: 1.5; }
 
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(-4px); }
