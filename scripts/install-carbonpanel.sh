@@ -477,6 +477,9 @@ build_release() {
   )
 
   run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
+  # $BIN_DIR isn't on PATH by default — symlink onto it so `carbonpanelctl`
+  # works bare, as the README and systemd ExecStart units document.
+  ln -sf "$CONTROL_SCRIPT" /usr/local/bin/carbonpanelctl
 }
 
 write_nginx_config() {
