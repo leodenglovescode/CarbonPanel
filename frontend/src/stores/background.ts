@@ -8,6 +8,7 @@ export interface BgConfig {
   gradientEnd: string
   blur: number
   brightness: number
+  overlay: number
 }
 
 const DEFAULT_BG: BgConfig = {
@@ -17,6 +18,12 @@ const DEFAULT_BG: BgConfig = {
   gradientEnd: '#1a1a3e',
   blur: 0,
   brightness: 100,
+  // Scrim strength (0-80) darkening/lightening custom backgrounds toward the
+  // active theme's base color, so text and controls in glass cards stay
+  // readable regardless of how bright the user's image/gradient is. Applied
+  // by default so it doesn't rely on the user noticing a contrast problem;
+  // the Settings slider lets them dial it down or up for their own image.
+  overlay: 40,
 }
 
 const APP_BG_KEY = 'cp_bg_app'
@@ -34,7 +41,16 @@ function parseConfig(raw: unknown): BgConfig {
     gradientEnd: typeof p.gradientEnd === 'string' ? p.gradientEnd : DEFAULT_BG.gradientEnd,
     blur: typeof p.blur === 'number' ? Math.min(20, Math.max(0, p.blur)) : DEFAULT_BG.blur,
     brightness: typeof p.brightness === 'number' ? Math.min(150, Math.max(30, p.brightness)) : DEFAULT_BG.brightness,
+    overlay: typeof p.overlay === 'number' ? Math.min(80, Math.max(0, p.overlay)) : DEFAULT_BG.overlay,
   }
+}
+
+// Scrim color tracks the active theme (--fg is light-on-dark by default, dark-on-light
+// under [data-theme="light"]) so the overlay always pushes custom backgrounds toward
+// the base the theme's own text/border colors were tuned against.
+function scrimLayer(overlay: number): string {
+  const alpha = (overlay / 100).toFixed(2)
+  return `linear-gradient(rgba(var(--bg-scrim-rgb), ${alpha}), rgba(var(--bg-scrim-rgb), ${alpha}))`
 }
 
 function loadConfig(key: string): BgConfig {
@@ -73,10 +89,10 @@ export const useBackgroundStore = defineStore('background', () => {
     const img = appBgImage.value
     const filter = [cfg.blur > 0 ? `blur(${cfg.blur}px)` : '', cfg.brightness !== 100 ? `brightness(${cfg.brightness}%)` : ''].filter(Boolean).join(' ')
     if (cfg.type === 'gradient') {
-      return { backgroundImage: gradientCss(cfg), filter }
+      return { backgroundImage: `${scrimLayer(cfg.overlay)}, ${gradientCss(cfg)}`, filter }
     }
     if (cfg.type === 'image' && img) {
-      return { backgroundImage: `url("${img}")`, backgroundSize: 'cover', backgroundPosition: 'center', filter }
+      return { backgroundImage: `${scrimLayer(cfg.overlay)}, url("${img}")`, backgroundSize: 'cover', backgroundPosition: 'center', filter }
     }
     return {}
   })
@@ -124,8 +140,8 @@ export const useBackgroundStore = defineStore('background', () => {
     const cfg = loginBg.value
     const img = loginBgImage.value
     let backgroundImage = ''
-    if (cfg.type === 'gradient') backgroundImage = gradientCss(cfg)
-    else if (cfg.type === 'image' && img) backgroundImage = `url(${img})`
+    if (cfg.type === 'gradient') backgroundImage = `${scrimLayer(cfg.overlay)}, ${gradientCss(cfg)}`
+    else if (cfg.type === 'image' && img) backgroundImage = `${scrimLayer(cfg.overlay)}, url(${img})`
     const style: Record<string, string> = {
       backgroundImage,
       backgroundSize: 'cover',

@@ -33,6 +33,9 @@
   --border-row: rgba(255,255,255,0.03);
   --bg-badge:   rgba(255,255,255,0.05);
   --accent-hover: #33ffaa;
+  /* scrim tint for custom app/login backgrounds — dark theme text is light-on-dark,
+     so bright images/gradients get darkened toward this to stay readable */
+  --bg-scrim-rgb: 0, 0, 0;
   --motion-translate-y: -1px;
   --motion-press-scale: 0.992;
   --route-enter-y: 6px;
@@ -66,6 +69,8 @@
   --border-row: rgba(0,0,0,0.06);
   --bg-badge:   rgba(0,0,0,0.06);
   --accent-hover: #00cc77;
+  /* light theme text is dark-on-light, so dark images/gradients get lightened instead */
+  --bg-scrim-rgb: 255, 255, 255;
 }
 
 *, *::before, *::after {
