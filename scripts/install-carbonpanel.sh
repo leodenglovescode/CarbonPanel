@@ -943,12 +943,60 @@ check_for_updates() {
   current_commit="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" commit)"
   current_source_type="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" source_type)"
 
-  # Unique per invocation — the daily timer and an interactive `update` run
-  # (which calls check_for_updates itself at the end) can land at the same
-  # time and would otherwise both clone into the same fixed path and corrupt
-  # each other's checkout.
-  latest_dir="$(mktemp -d "$TMP_DIR/check-$(safe_name "$ref").XXXXXX")"
-  run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$latest_dir" || { rm -rf "$latest_dir"; die "Unable to fetch latest version metadata."; }
+  # GitHub connectivity from some hosts is genuinely flaky (intermittent TLS
+  # resets, slow/blocked routes) — a couple of quick retries clears most of
+  # that without meaningfully slowing down checks when the network's fine.
+  local attempt clone_ok=""
+  for attempt in 1 2 3; do
+    # Unique per attempt/invocation — the daily timer and an interactive
+    # `update` run (which calls check_for_updates itself at the end) can
+    # land at the same time and would otherwise both clone into the same
+    # fixed path and corrupt each other's checkout.
+    latest_dir="$(mktemp -d "$TMP_DIR/check-$(safe_name "$ref").XXXXXX")"
+    if run_silent git clone --depth 1 --branch "$ref" "$REPO_URL" "$latest_dir"; then
+      clone_ok=1
+      break
+    fi
+    rm -rf "$latest_dir"
+    [[ "$attempt" -lt 3 ]] && sleep 3
+  done
+
+  if [[ -z "$clone_ok" ]]; then
+    # A failed check used to just die() here, leaving the status file
+    # completely untouched — the UI would then keep showing whatever the
+    # *last successful* check found (hours old, potentially "up to date"
+    # from before this failure) with no indication that anything went
+    # wrong. Preserve what the last successful check knew about the latest
+    # version (a transient failure shouldn't erase a real pending update),
+    # but stamp checked_at + an explicit error so the frontend can tell
+    # "just confirmed" apart from "silently failed a minute ago."
+    local prev_latest_version prev_latest_commit prev_latest_source_type prev_release_url prev_update_available
+    prev_latest_version="$(read_json_file_field "$STATUS_FILE" latest_version)"
+    prev_latest_commit="$(read_json_file_field "$STATUS_FILE" latest_commit)"
+    prev_latest_source_type="$(read_json_file_field "$STATUS_FILE" latest_source_type)"
+    prev_release_url="$(read_json_file_field "$STATUS_FILE" release_url)"
+    prev_update_available="$(read_json_file_field "$STATUS_FILE" update_available)"
+    [[ "$prev_update_available" == "true" ]] || prev_update_available="false"
+
+    CP_STATUS_REPO_URL="$REPO_URL" \
+    CP_STATUS_CURRENT_VERSION="$current_version" \
+    CP_STATUS_CURRENT_COMMIT="$current_commit" \
+    CP_STATUS_CURRENT_SOURCE_TYPE="$current_source_type" \
+    CP_STATUS_LATEST_VERSION="$prev_latest_version" \
+    CP_STATUS_LATEST_COMMIT="$prev_latest_commit" \
+    CP_STATUS_LATEST_SOURCE_TYPE="$prev_latest_source_type" \
+    CP_STATUS_CHECKED_AT="$checked_at" \
+    CP_STATUS_STATUS="check_failed" \
+    CP_STATUS_ERROR="Couldn't reach GitHub after 3 attempts — check network/DNS, or set a proxy under Settings → Proxy." \
+    CP_STATUS_RELEASE_URL="$prev_release_url" \
+    CP_STATUS_NOTES_URL="$prev_release_url" \
+    CP_STATUS_UPDATE_AVAILABLE="$prev_update_available" \
+    write_json_file "$STATUS_FILE"
+
+    chmod 644 "$STATUS_FILE"
+    die "Unable to fetch latest version metadata after 3 attempts."
+  fi
+
   latest_commit="$(git -C "$latest_dir" rev-parse HEAD)"
   rm -rf "$latest_dir"
 
