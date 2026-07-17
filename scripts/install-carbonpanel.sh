@@ -17,6 +17,9 @@ PREVIOUS_LINK="$INSTALL_ROOT/previous"
 BACKEND_ENV_FILE="$SHARED_DIR/backend.env"
 STATUS_FILE="$SHARED_DIR/update-status.json"
 CONTROL_SCRIPT="$BIN_DIR/carbonpanelctl"
+TLS_DIR="$SHARED_DIR/tls"
+TLS_CERT="$TLS_DIR/cert.pem"
+TLS_KEY="$TLS_DIR/key.pem"
 NGINX_SITE="/etc/nginx/sites-available/carbonpanel.conf"
 NGINX_SITE_LINK="/etc/nginx/sites-enabled/carbonpanel.conf"
 BACKEND_SERVICE="carbonpanel-backend.service"
@@ -421,7 +424,7 @@ SECRET_KEY=$secret
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=$admin_password
 DATABASE_URL=sqlite+aiosqlite:////opt/carbonpanel/shared/carbonpanel.db
-CORS_ORIGINS='["http://127.0.0.1:$APP_PORT","http://localhost:$APP_PORT"]'
+CORS_ORIGINS='["https://127.0.0.1:$APP_PORT","https://localhost:$APP_PORT"]'
 METRICS_INTERVAL_SECONDS=1.0
 PROCESS_LIMIT=25
 CARBONPANEL_INSTALL_ROOT=$INSTALL_ROOT
@@ -434,15 +437,66 @@ EOF
 CarbonPanel initial credentials
 ===============================
 
-URL: http://localhost:$APP_PORT
+URL: https://your-server-ip:$APP_PORT
 Username: admin
 Password: $admin_password
 
+CarbonPanel serves HTTPS with a self-signed certificate — your browser will
+warn that it isn't trusted. That's expected; click through it (e.g. "Advanced
+-> Proceed"). It's still real encryption, just not backed by a public CA.
+
 This file is only written on first install.
-Change the admin password after signing in.
+Change the admin password after signing in — the onboarding wizard will
+walk you through this and 2FA/passkey setup on first login.
 EOF
   chmod 600 "$SHARED_DIR/first-install.txt"
   chown root:root "$SHARED_DIR/first-install.txt"
+}
+
+ensure_tls_cert() {
+  mkdir -p "$TLS_DIR"
+  chmod 750 "$TLS_DIR"
+  chown root:root "$TLS_DIR"
+
+  # Self-signed, so there's no ACME-style auto-renewal — a fresh cert is only
+  # minted on install/update. Skip regen if the existing one isn't expiring
+  # soon, so re-running update doesn't invalidate anything that pinned it.
+  if [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] && \
+     openssl x509 -checkend 2592000 -noout -in "$TLS_CERT" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local -a sans=("DNS:localhost" "IP:127.0.0.1" "IP:::1")
+  local host_name
+  host_name="$(hostname 2>/dev/null || true)"
+  [[ -n "$host_name" ]] && sans+=("DNS:$host_name")
+  local ip
+  for ip in $(hostname -I 2>/dev/null || true); do
+    sans+=("IP:$ip")
+  done
+  local san_string
+  san_string="$(IFS=,; echo "${sans[*]}")"
+
+  run_silent openssl req -x509 -nodes -newkey rsa:2048 \
+    -keyout "$TLS_KEY" -out "$TLS_CERT" \
+    -days 3650 \
+    -subj "/CN=carbonpanel" \
+    -addext "subjectAltName=$san_string" \
+    -addext "keyUsage=digitalSignature,keyEncipherment" \
+    -addext "extendedKeyUsage=serverAuth" \
+    || die "Failed to generate the self-signed TLS certificate."
+
+  chmod 600 "$TLS_KEY"
+  chmod 644 "$TLS_CERT"
+  chown root:root "$TLS_KEY" "$TLS_CERT"
+}
+
+# Existing installs from before HTTPS was the default won't have this set —
+# patch it into an already-written env file too, not just fresh ones, so an
+# update actually finishes hardening the cookie instead of leaving it half done.
+ensure_cookie_secure_flag() {
+  grep -q '^COOKIE_SECURE=' "$BACKEND_ENV_FILE" 2>/dev/null || \
+    printf 'COOKIE_SECURE=true\n' >> "$BACKEND_ENV_FILE"
 }
 
 clone_release() {
@@ -512,9 +566,22 @@ build_release() {
 write_nginx_config() {
   cat > "$NGINX_SITE" <<EOF
 server {
-    listen $APP_PORT;
-    listen [::]:$APP_PORT;
+    listen $APP_PORT ssl;
+    listen [::]:$APP_PORT ssl;
     server_name _;
+
+    ssl_certificate $TLS_CERT;
+    ssl_certificate_key $TLS_KEY;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Self-signed — no CA to hand this to, so a plain HTTP request on this
+    # same port (old bookmark, curl without -k, etc.) can't be told apart
+    # from a real client by nginx's listener alone. error_page 497 is nginx's
+    # own signal for "that was HTTP, not TLS" and lets us redirect it instead
+    # of just resetting the connection.
+    error_page 497 https://\$host:$APP_PORT\$request_uri;
 
     root $CURRENT_LINK/frontend/dist;
     index index.html;
@@ -543,9 +610,9 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
-        # The auth token travels in the WS URL query string (?token=...) —
-        # keep it out of the access log rather than writing 8h bearer tokens
-        # to disk in plaintext on every connection.
+        # Auth rides the httpOnly session cookie, same as everything else —
+        # nothing sensitive in the URL, but keep WS handshakes out of the
+        # access log anyway since they're just noisy reconnect spam.
         access_log off;
     }
 
@@ -891,6 +958,9 @@ install_or_update() {
   ensure_layout
   log "locking in your secrets and config..."
   ensure_backend_env
+  log "minting a self-signed TLS cert..."
+  ensure_tls_cert
+  ensure_cookie_secure_flag
 
   log "asking github what's poppin..."
   mapfile -t resolved < <(resolve_requested_reference)
@@ -952,7 +1022,8 @@ install_or_update() {
     printf "\n"
     printf "  ${GREEN}${BOLD}🎉  you're in!${NC}\n"
     note "credentials → ${BOLD}${SHARED_DIR}/first-install.txt${NC}"
-    note "panel       → ${BOLD}http://your-server-ip:${APP_PORT}${NC}"
+    note "panel       → ${BOLD}https://your-server-ip:${APP_PORT}${NC}"
+    note "your browser will warn about the self-signed cert — click through it"
     printf "\n"
   fi
 }
