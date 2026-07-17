@@ -15,6 +15,7 @@
     </Transition>
   </router-view>
   <ToastContainer />
+  <ConfirmDialog />
   <CommandPalette v-if="!isPublicRoute" />
 </template>
 
@@ -23,17 +24,20 @@ import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import CommandPalette from '@/components/layout/CommandPalette.vue'
 import { systemApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useBackgroundStore } from '@/stores/background'
+import { useDialogStore } from '@/stores/dialog'
 import { useUserPrefsSync } from '@/composables/useUserPrefsSync'
 
 const UPDATE_PROMPT_STORAGE_KEY = 'cp_update_prompt_version'
 
 useThemeStore()
 const bg = useBackgroundStore()
+const dialog = useDialogStore()
 
 const prefsSync = useUserPrefsSync()
 prefsSync.startWatching()
@@ -52,9 +56,11 @@ async function maybePromptForUpdate() {
 
     if (localStorage.getItem(UPDATE_PROMPT_STORAGE_KEY) === data.latest_version) return
 
-    const shouldInstall = window.confirm(
-      `CarbonPanel ${data.latest_version} is available.\n\nCurrent version: ${data.current_version ?? 'unknown'}\nInstall the update now?`,
-    )
+    const shouldInstall = await dialog.confirm({
+      title: 'Update available',
+      message: `CarbonPanel ${data.latest_version} is available.\n\nCurrent version: ${data.current_version ?? 'unknown'}\nInstall the update now?`,
+      confirmLabel: 'Install',
+    })
 
     if (!shouldInstall) {
       localStorage.setItem(UPDATE_PROMPT_STORAGE_KEY, data.latest_version)
@@ -64,9 +70,11 @@ async function maybePromptForUpdate() {
     await systemApi.installUpdate()
     localStorage.removeItem(UPDATE_PROMPT_STORAGE_KEY)
 
-    window.alert(
-      'CarbonPanel has started installing the update. The app will restart automatically. Refresh this page in about a minute.',
-    )
+    await dialog.alert({
+      title: 'Update started',
+      message:
+        'CarbonPanel has started installing the update. The app will restart automatically. Refresh this page in about a minute.',
+    })
   } catch {
     // Intentionally ignore update prompt errors to avoid interrupting app usage.
   }

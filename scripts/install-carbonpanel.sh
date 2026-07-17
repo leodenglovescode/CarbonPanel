@@ -894,6 +894,7 @@ install_or_update() {
 
   build_release "$release_dir"
 
+  log "deploying the new release..."
   if ! deploy_release "$release_dir" "$ref" "$commit" "$source_type" "$release_url" "$installed_at"; then
     CP_STATUS_REPO_URL="$REPO_URL" \
     CP_STATUS_CURRENT_VERSION="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)" \

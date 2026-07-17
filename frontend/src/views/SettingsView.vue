@@ -568,6 +568,13 @@
             </a>
           </div>
 
+          <div v-if="installing" class="update-progress">
+            <div class="update-progress-track">
+              <div class="update-progress-fill" :style="{ width: updateProgressPercent + '%' }" />
+            </div>
+            <span class="update-progress-label">{{ updateStepLabel }}</span>
+          </div>
+
           <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
           <p v-if="versionError" class="error-msg">{{ versionError }}</p>
 
@@ -914,6 +921,7 @@ import { useAlertsStore } from '@/stores/alerts'
 import { useBackgroundStore } from '@/stores/background'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
+import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, passkeysApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PasskeyCredential } from '@/api'
 import QRCode from 'qrcode'
@@ -925,6 +933,7 @@ const alerts = useAlertsStore()
 const bg = useBackgroundStore()
 const displayPrefs = useDisplayPrefsStore()
 const locale = useLocaleStore()
+const dialog = useDialogStore()
 const { t } = locale
 const { sendInterval } = useWebSocket()
 
@@ -1168,17 +1177,60 @@ async function checkForUpdates() {
   }
 }
 
+// Named steps install_or_update() logs, in order — used to turn the plain
+// log tail into real progress instead of an indeterminate spinner. Not a
+// fabricated percentage: each entry only lights up once its matching line
+// has actually appeared in the polled service logs.
+const UPDATE_STEPS = [
+  { match: 'sniffing for port squatters', label: 'Checking port availability' },
+  { match: 'grabbing system dependencies', label: 'Installing system dependencies' },
+  { match: 'conjuring the carbonpanel service account', label: 'Setting up service account' },
+  { match: 'staking out territory on disk', label: 'Preparing install directories' },
+  { match: 'locking in your secrets', label: 'Writing configuration' },
+  { match: "asking github what's poppin", label: 'Checking GitHub for the latest version' },
+  { match: 'yanking the code down', label: 'Cloning release' },
+  { match: "teaching python what's what", label: 'Installing backend dependencies' },
+  { match: 'bundling the frontend heat', label: 'Building frontend' },
+  { match: 'deploying the new release', label: 'Deploying & restarting services' },
+] as const
+
+const installing = ref(false)
+
+const updateStepIndex = computed(() => {
+  if (!installing.value) return -1
+  let idx = -1
+  for (const line of serviceLogs.value) {
+    for (let i = 0; i < UPDATE_STEPS.length; i++) {
+      if (line.includes(UPDATE_STEPS[i].match)) idx = Math.max(idx, i)
+    }
+  }
+  return idx
+})
+
+const updateProgressPercent = computed(() =>
+  updateStepIndex.value >= 0
+    ? Math.round(((updateStepIndex.value + 1) / UPDATE_STEPS.length) * 100)
+    : 4,
+)
+
+const updateStepLabel = computed(() =>
+  updateStepIndex.value >= 0 ? UPDATE_STEPS[updateStepIndex.value].label : 'Starting…',
+)
+
 async function installUpdate() {
   if (!versionInfo.value?.update_available || versionInfo.value.update_in_progress) return
 
   const targetVersion = versionInfo.value.latest_version ?? 'the latest version'
-  const confirmed = window.confirm(
-    `Install CarbonPanel ${targetVersion} now? The app will restart automatically during the update.`,
-  )
+  const confirmed = await dialog.confirm({
+    title: 'Install update',
+    message: `Install CarbonPanel ${targetVersion} now? The app will restart automatically during the update.`,
+    confirmLabel: 'Install',
+  })
 
   if (!confirmed) return
 
   versionActionLoading.value = true
+  installing.value = true
   versionError.value = ''
   versionSuccess.value = ''
 
@@ -1186,10 +1238,24 @@ async function installUpdate() {
 
   try {
     await systemApi.installUpdate()
-    versionSuccess.value =
-      'Update installation started. CarbonPanel will restart automatically. Refresh this page in about a minute.'
+    versionSuccess.value = 'Installing update…'
+
+    // Poll until the update service finishes — a fresh venv + npm build can
+    // take a few minutes, unlike the 45s check-for-updates poll above.
+    const deadline = Date.now() + 6 * 60_000
     await wait(1200)
-    await Promise.all([loadVersionInfo(), fetchServiceLogs()])
+    while (Date.now() < deadline) {
+      await Promise.all([loadVersionInfo(), fetchServiceLogs()])
+      if (!versionInfo.value?.update_in_progress) break
+      await wait(3000)
+    }
+    await fetchServiceLogs()
+
+    versionSuccess.value = versionInfo.value?.update_in_progress
+      ? 'Still installing — check back in a bit.'
+      : versionInfo.value?.update_available
+        ? 'Update finished, but a newer version is already available — check again.'
+        : "Update installed — you're on the latest version."
   } catch (e: any) {
     const detail = e.response?.data?.detail || e.response?.data?.message
     const network = e.code === 'ECONNABORTED'
@@ -1198,6 +1264,7 @@ async function installUpdate() {
     versionError.value = detail || network || 'Failed to start update installation'
   } finally {
     versionActionLoading.value = false
+    installing.value = false
   }
 }
 
@@ -1349,7 +1416,13 @@ async function toggleWebhook(wh: WebhookResponse) {
 }
 
 async function deleteWebhook(id: string) {
-  if (!window.confirm('Delete this webhook?')) return
+  const confirmed = await dialog.confirm({
+    title: 'Delete webhook',
+    message: 'Delete this webhook? This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  })
+  if (!confirmed) return
   await webhooksApi.delete(id)
   await loadWebhooks()
 }
@@ -1928,6 +2001,34 @@ onMounted(() => {
   border: 1px solid var(--accent-border);
   border-radius: var(--radius-sm);
   animation: slide-in 150ms ease;
+}
+
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  animation: slide-in 150ms ease;
+}
+.update-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.update-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width var(--bar-transition);
+}
+.update-progress-label {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 @keyframes slide-in {
