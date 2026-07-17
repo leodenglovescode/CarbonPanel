@@ -245,6 +245,14 @@
                 :value="bg.appBg.brightness"
                 @input="bg.setAppBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })" />
             </label>
+
+            <label v-if="bg.appBg.type !== 'color'" class="style-field">
+              <span class="style-lbl">Text contrast overlay — {{ bg.appBg.overlay }}%</span>
+              <input type="range" class="interval-slider" min="0" max="80" step="5"
+                :value="bg.appBg.overlay"
+                @input="bg.setAppBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })" />
+              <span class="style-hint">Dims the background so text and controls stay readable. Raise this if a bright image washes out the UI.</span>
+            </label>
           </div>
 
           <div class="bg-divider" />
@@ -319,6 +327,14 @@
               <input type="range" class="interval-slider" min="30" max="150" step="5"
                 :value="bg.loginBg.brightness"
                 @input="bg.setLoginBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })" />
+            </label>
+
+            <label v-if="bg.loginBg.type !== 'color'" class="style-field">
+              <span class="style-lbl">Text contrast overlay — {{ bg.loginBg.overlay }}%</span>
+              <input type="range" class="interval-slider" min="0" max="80" step="5"
+                :value="bg.loginBg.overlay"
+                @input="bg.setLoginBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })" />
+              <span class="style-hint">Dims the background so the logo and login form stay readable. Raise this if a bright image washes out the text.</span>
             </label>
           </div>
         </div>
@@ -1665,6 +1681,11 @@ onMounted(() => {
 
 .style-field-wide {
   grid-column: 1 / -1;
+}
+
+.style-hint {
+  font-size: 10px;
+  color: var(--fg-dim);
 }
 
 .style-lbl {
