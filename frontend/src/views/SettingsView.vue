@@ -2061,7 +2061,7 @@ onMounted(() => {
 .account-info { display: flex; flex-direction: column; gap: 8px; }
 .info-row { display: flex; gap: 10px; align-items: center; }
 .info-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); width: 80px; flex-shrink: 0; }
-.info-val { font-size: 12px; color: var(--fg); }
+.info-val { font-size: 12px; color: var(--fg); min-width: 0; overflow-wrap: anywhere; }
 
 .change-creds-toggle { }
 .toggle-link {
@@ -2149,7 +2149,10 @@ onMounted(() => {
   gap: 10px;
 }
 .device-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.device-name { font-size: 12px; color: var(--fg); }
+.device-name {
+  font-size: 12px; color: var(--fg);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .device-meta { font-size: 10px; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .revoke-btn {
   background: none;

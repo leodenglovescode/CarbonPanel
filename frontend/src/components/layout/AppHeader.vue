@@ -57,8 +57,9 @@ function formatUptime(seconds: number): string {
   flex-shrink: 0;
 }
 
-.header-left, .header-right { display: flex; align-items: center; gap: 14px; }
-.header-center { display: flex; align-items: center; gap: 16px; }
+.header-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.header-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.header-center { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 
 .menu-btn {
   display: none;
@@ -74,7 +75,10 @@ function formatUptime(seconds: number): string {
 }
 .menu-btn:hover { color: var(--fg); background: var(--bg-hover); }
 
-.host { font-size: 11px; color: var(--fg-muted); }
+.host {
+  font-size: 11px; color: var(--fg-muted);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 
 .uptime, .load { font-size: 11px; color: var(--fg-muted); }
 

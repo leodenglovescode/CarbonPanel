@@ -171,11 +171,14 @@ onMounted(() => loadSite())
 
 /* Header */
 .detail-header { display: flex; align-items: center; justify-content: space-between; }
-.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.back-link { color: var(--fg-muted); text-decoration: none; transition: color var(--transition); }
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.back-link { color: var(--fg-muted); text-decoration: none; transition: color var(--transition); flex-shrink: 0; }
 .back-link:hover { color: var(--accent); }
-.sep { color: var(--fg-dim); }
-.site-name-crumb { color: var(--fg); font-weight: 600; }
+.sep { color: var(--fg-dim); flex-shrink: 0; }
+.site-name-crumb {
+  color: var(--fg); font-weight: 600;
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .delete-btn {
   background: none; border: 1px solid var(--border); color: var(--fg-dim);
   font-family: var(--font); font-size: 10px; padding: 3px 10px; border-radius: 3px;
@@ -207,7 +210,7 @@ onMounted(() => loadSite())
   padding: 1px 5px; border-radius: 2px;
   background: var(--bg-badge); color: var(--fg-dim); border: 1px solid var(--border);
 }
-.svc-name { font-size: 11px; color: var(--fg-muted); }
+.svc-name { font-size: 11px; color: var(--fg-muted); overflow-wrap: anywhere; }
 
 /* Actions */
 .actions-row { display: flex; align-items: center; gap: 6px; }

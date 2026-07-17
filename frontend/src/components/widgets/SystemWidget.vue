@@ -77,5 +77,5 @@ function loadColor(val: number) {
 .load-num { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 .load-period { font-size: 9px; color: var(--fg-dim); text-transform: uppercase; }
 
-.host-val { font-size: 13px; font-weight: 600; color: var(--fg); }
+.host-val { font-size: 13px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
 </style>

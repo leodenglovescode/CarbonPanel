@@ -179,9 +179,13 @@ onMounted(load)
 .container-card:hover { border-color: var(--border-hover, var(--fg-dim)); }
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.container-name { font-size: 12px; font-weight: 600; color: var(--fg); }
+.card-info { min-width: 0; }
+.container-name {
+  font-size: 12px; font-weight: 600; color: var(--fg);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .container-image { font-size: 10px; color: var(--fg-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
-.card-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.card-badges { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 
 .state-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; letter-spacing: 0.04em; }
 .badge-running { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
@@ -197,8 +201,8 @@ onMounted(load)
 .mini-fill { height: 100%; border-radius: 2px; transition: width var(--bar-transition); }
 
 .status-row { display: flex; gap: 8px; align-items: center; }
-.status-txt { font-size: 10px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ports-txt { font-size: 9px; color: var(--fg-dim); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-txt { font-size: 10px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+.ports-txt { font-size: 9px; color: var(--fg-dim); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 2; }
 
 .actions-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .act-btn { background: none; border: 1px solid var(--border); color: var(--fg-muted); font-family: var(--font); font-size: 10px; padding: 3px 9px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); }

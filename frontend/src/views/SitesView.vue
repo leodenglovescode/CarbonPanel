@@ -297,7 +297,10 @@ async function submitForm() {
 .candidate-row:has(.cand-check:disabled) { opacity: 0.5; cursor: default; }
 .cand-check { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
 .cand-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cand-name { font-size: 12px; font-weight: 600; color: var(--fg); }
+.cand-name {
+  font-size: 12px; font-weight: 600; color: var(--fg);
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 .cand-path { font-size: 10px; color: var(--fg-dim); font-family: monospace; word-break: break-all; }
 .cand-exists { font-size: 10px; color: var(--accent); }
 .cand-meta { font-size: 10px; color: var(--fg-muted); }

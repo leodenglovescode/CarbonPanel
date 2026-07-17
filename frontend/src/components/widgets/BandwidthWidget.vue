@@ -68,7 +68,7 @@ function fmtTotal(mb: number) {
 .no-data { font-size: 11px; color: var(--fg-dim); }
 .bw-list { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow: auto; min-height: 0; }
 .bw-row { display: flex; flex-direction: column; gap: 6px; }
-.iface-name { font-size: 11px; font-weight: 600; color: var(--fg); }
+.iface-name { font-size: 11px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
 .bw-bars { display: flex; flex-direction: column; gap: 5px; }
 .bw-bar-item { display: flex; align-items: center; gap: 8px; }
 .bw-lbl { font-size: 9px; font-weight: 600; width: 26px; flex-shrink: 0; }
