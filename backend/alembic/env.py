@@ -22,7 +22,6 @@ import app.models.webhook  # noqa: E402, F401
 import app.models.device  # noqa: E402, F401
 import app.models.bookmark  # noqa: E402, F401
 import app.models.dashboard_layout  # noqa: E402, F401
-import app.models.webauthn_credential  # noqa: E402, F401
 import app.models.user_preferences  # noqa: E402, F401
 
 # Override alembic.ini's sqlalchemy.url with the value from settings so that

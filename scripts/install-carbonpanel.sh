@@ -482,7 +482,7 @@ warn that it isn't trusted. That's expected; click through it (e.g. "Advanced
 
 This file is only written on first install.
 Change the admin password after signing in — the onboarding wizard will
-walk you through this and 2FA/passkey setup on first login.
+walk you through this and 2FA setup on first login.
 EOF
   chmod 600 "$SHARED_DIR/first-install.txt"
   chown root:root "$SHARED_DIR/first-install.txt"

@@ -343,23 +343,6 @@ export const dashboardApi = {
   saveLayout: (layout: Record<string, object>) => api.put('/dashboard/layout', { layout }),
 }
 
-export interface PasskeyCredential {
-  id: string
-  device_name: string
-}
-
-export const passkeysApi = {
-  registerBegin: () => api.post('/auth/passkey/register/begin'),
-  registerComplete: (credential: object, device_name: string) =>
-    api.post('/auth/passkey/register/complete', { credential, device_name }),
-  list: () => api.get<PasskeyCredential[]>('/auth/passkey/credentials'),
-  delete: (id: string) => api.delete(`/auth/passkey/credentials/${id}`),
-  loginBegin: (username: string) =>
-    api.post<Record<string, unknown>>('/auth/passkey/login/begin', { username }),
-  loginComplete: (session_id: string, credential: object) =>
-    api.post<{ success: boolean }>('/auth/passkey/login/complete', { session_id, credential }),
-}
-
 export const userPrefsApi = {
   get: () => api.get<{ prefs: Record<string, unknown> }>('/settings/preferences'),
   save: (prefs: Record<string, unknown>) => api.put('/settings/preferences', { prefs }),
