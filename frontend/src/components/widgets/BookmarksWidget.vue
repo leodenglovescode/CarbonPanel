@@ -12,6 +12,7 @@
         <input v-model="formUrl" placeholder="https://…" class="bm-input" @keydown.enter="submitForm" @keydown.escape="closeForm" />
         <input v-model="formIconUrl" placeholder="Icon URL (optional)" class="bm-input" @keydown.escape="closeForm" />
       </div>
+      <div v-if="formError" class="form-error">{{ formError }}</div>
       <div class="form-row">
         <button class="fm-cancel" @click="closeForm">Cancel</button>
         <button class="fm-save" @click="submitForm" :disabled="!formUrl.trim()">
@@ -26,7 +27,7 @@
 
     <div v-else class="bm-grid">
       <div v-for="bm in bookmarks" :key="bm.id" class="bm-tile">
-        <a :href="bm.url" target="_blank" rel="noopener noreferrer" class="bm-link" @click.stop>
+        <a :href="safeHref(bm.url)" target="_blank" rel="noopener noreferrer" class="bm-link" @click.stop>
           <div class="bm-icon-wrap">
             <img
               v-if="!iconErrors.has(bm.id)"
@@ -63,6 +64,23 @@ const editId = ref<string | null>(null)
 const formTitle = ref('')
 const formUrl = ref('')
 const formIconUrl = ref('')
+const formError = ref('')
+
+// Bookmark URLs are user-supplied and rendered straight into an <a href>/
+// <img src> — without a scheme allowlist, a "bookmark" of javascript:... or
+// data:... would execute in-page on click instead of navigating.
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function safeHref(url: string): string {
+  return isHttpUrl(url) ? url : '#'
+}
 
 onMounted(async () => {
   try {
@@ -79,7 +97,8 @@ function faviconUrl(url: string) {
 }
 
 function iconSrc(bm: BookmarkInfo) {
-  return bm.icon_url || faviconUrl(bm.url)
+  if (bm.icon_url && isHttpUrl(bm.icon_url)) return bm.icon_url
+  return isHttpUrl(bm.url) ? faviconUrl(bm.url) : ''
 }
 
 function onIconError(e: Event, bm: BookmarkInfo) {
@@ -99,6 +118,7 @@ function openAdd() {
   formTitle.value = ''
   formUrl.value = ''
   formIconUrl.value = ''
+  formError.value = ''
   formOpen.value = true
 }
 
@@ -107,17 +127,29 @@ function openEdit(bm: BookmarkInfo) {
   formTitle.value = bm.title
   formUrl.value = bm.url
   formIconUrl.value = bm.icon_url || ''
+  formError.value = ''
   formOpen.value = true
 }
 
 function closeForm() {
   formOpen.value = false
   editId.value = null
+  formError.value = ''
 }
 
 async function submitForm() {
   const url = formUrl.value.trim()
   if (!url) return
+  if (!isHttpUrl(url)) {
+    formError.value = 'URL must start with http:// or https://'
+    return
+  }
+  const iconUrlTrimmed = formIconUrl.value.trim()
+  if (iconUrlTrimmed && !isHttpUrl(iconUrlTrimmed)) {
+    formError.value = 'Icon URL must start with http:// or https://'
+    return
+  }
+  formError.value = ''
   const title = formTitle.value.trim() || url
   const icon_url = formIconUrl.value.trim() || null
   const sort_order = editId.value
@@ -281,6 +313,7 @@ async function deleteBookmark(id: string) {
   transition: border-color var(--transition);
 }
 .bm-input:focus { border-color: var(--accent-border); }
+.form-error { font-size: 10px; color: var(--danger); }
 .form-row { display: flex; gap: 6px; justify-content: flex-end; }
 .fm-cancel, .fm-save {
   background: none;
