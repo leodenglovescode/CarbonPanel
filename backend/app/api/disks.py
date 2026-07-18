@@ -249,7 +249,9 @@ async def unmount_disk(body: UnmountRequest, _: User = Depends(get_current_user)
         None, lambda: psutil.disk_partitions(all=False)
     )
     part = next((p for p in partitions if p.mountpoint == body.mountpoint), None)
-    if part and not _can_unmount(part.device, part.mountpoint):
+    if not part:
+        raise HTTPException(status_code=404, detail="Mountpoint not found")
+    if not _can_unmount(part.device, part.mountpoint):
         raise HTTPException(
             status_code=400,
             detail=f"Cannot unmount {part.device} — only USB and removable drives may be unmounted",

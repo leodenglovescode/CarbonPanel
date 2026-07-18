@@ -19,10 +19,14 @@ _MAX_BODY_BYTES = 10 * 1024 * 1024
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.secret_key == "dev-secret-change-in-production":
-        print(
-            "\n*** WARNING: SECRET_KEY is unset (using the well-known dev default). "
-            "Any deployment reachable from the internet with this default lets "
-            "anyone forge admin tokens. Set SECRET_KEY in backend/.env. ***\n"
+        # This value is public (it's in the repo), so leaving it in place
+        # lets anyone forge a valid session/JWT for any account. `make setup`
+        # already generates a random one — refuse to serve traffic rather
+        # than silently run with a known-forgeable signing key.
+        raise RuntimeError(
+            "SECRET_KEY is unset (using the well-known dev default). Refusing to "
+            "start: this default lets anyone forge auth tokens. Set SECRET_KEY in "
+            "backend/.env (run `make setup` or `openssl rand -hex 32`)."
         )
     if settings.admin_password == "changeme":
         print(

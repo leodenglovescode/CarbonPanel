@@ -1,11 +1,25 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SiteType = Literal["nginx", "python", "wordpress", "nodejs"]
 ServiceManager = Literal["systemd", "pm2"]
 SiteAction = Literal["start", "stop", "restart"]
+
+
+def _validate_service_name(value: str | None) -> str | None:
+    # service_name is passed as a bare argv element to `systemctl`/`pm2`
+    # (never through a shell, so no quoting/injection risk there) — but a
+    # leading '-' would still let it be parsed as a flag by either CLI
+    # instead of a unit/app name, and NUL/'/' have no legitimate use here.
+    if value is None:
+        return value
+    if not value or value.startswith("-") or "/" in value or "\x00" in value:
+        raise ValueError(
+            "service_name must not be empty, contain '/', or start with '-'"
+        )
+    return value
 
 
 class SiteCreate(BaseModel):
@@ -17,6 +31,8 @@ class SiteCreate(BaseModel):
     log_paths: list[str] = []
     description: str | None = None
 
+    _validate_service_name = field_validator("service_name")(_validate_service_name)
+
 
 class SiteUpdate(BaseModel):
     name: str | None = None
@@ -26,6 +42,8 @@ class SiteUpdate(BaseModel):
     config_file_path: str | None = None
     log_paths: list[str] | None = None
     description: str | None = None
+
+    _validate_service_name = field_validator("service_name")(_validate_service_name)
 
 
 class SiteStatus(BaseModel):

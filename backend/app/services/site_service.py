@@ -89,7 +89,7 @@ def _normalize_service_name(service_name: str) -> str:
     unit = service_name.strip()
     if not unit:
         raise ValueError("Service name is required")
-    if "/" in unit or "\x00" in unit:
+    if "/" in unit or "\x00" in unit or unit.startswith("-"):
         raise ValueError("Invalid service name")
     if unit.endswith(_SUPPORTED_SYSTEMD_UNIT_SUFFIXES):
         return unit
@@ -899,7 +899,11 @@ async def import_nginx_sites(
         if cfg_str in existing_paths:
             skipped += 1
             continue
-        cfg = Path(cfg_str)
+        try:
+            cfg = _resolve_allowed(cfg_str, (_NGINX_SITES_AVAILABLE,))
+        except PermissionError:
+            skipped += 1
+            continue
         if not cfg.is_file():
             skipped += 1
             continue
