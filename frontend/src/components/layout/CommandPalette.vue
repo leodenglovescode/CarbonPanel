@@ -88,7 +88,6 @@ const settingsSections: PaletteItem[] = [
   { key: 'set-language', label: t('settings.language'), category: 'Settings', go: () => goSettings('section-language') },
   { key: 'set-webhooks', label: t('settings.webhooks'), category: 'Settings', go: () => goSettings('section-webhooks') },
   { key: 'set-devices', label: 'Sessions', category: 'Settings', go: () => goSettings('section-devices') },
-  { key: 'set-passkeys', label: 'Passkeys', category: 'Settings', go: () => goSettings('section-passkeys') },
   { key: 'set-proxy', label: 'Proxy', category: 'Settings', go: () => goSettings('section-proxy') },
 ]
 

@@ -27,7 +27,7 @@ curl -fsSL https://carbonpanel.leodeng.dev/install.sh | sudo bash
 
 Initial credentials are saved to `/opt/carbonpanel/shared/first-install.txt` after install.
 First login walks you through an onboarding wizard to set a real password and optionally
-enable 2FA / register a passkey.
+enable 2FA.
 
 > CarbonPanel manages the host it runs on — systemd services, real process/disk access,
 > nginx sites — so it runs as a native systemd service rather than in a container. A prior
@@ -78,9 +78,9 @@ All settings are written to `backend/.env` (local dev / install script).
 - **System services** — browse, start/stop/restart, enable/disable, star and reorder
 - **Sites** — manage tracked services with log streaming and config file editing
 - **Customizable UI** — dark/light/auto theme, custom colors, fonts, gradients, background images
-- **JWT auth** with optional **TOTP 2FA** and **passkeys**
+- **JWT auth** with optional **TOTP 2FA**
 - **HTTPS by default** — self-signed cert generated at install time, no plaintext credentials on the wire
-- **Guided onboarding** — first login walks through setting a password and 2FA/passkey setup
+- **Guided onboarding** — first login walks through setting a password and 2FA setup
 - **In-panel updates** — version check via GitHub API, one-click update from the Settings page
 
 ---

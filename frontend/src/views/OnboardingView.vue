@@ -2,7 +2,7 @@
   <div class="onboarding-page">
     <div class="onboarding-box">
       <div class="onboarding-logo">
-        <span class="bracket">[</span>carbon<span class="accent">panel</span><span class="bracket">]</span>
+        <span class="bracket">[</span>Carbon<span class="accent">Panel</span><span class="bracket">]</span>
       </div>
 
       <div class="step-track">
@@ -118,45 +118,7 @@
         </div>
       </div>
 
-      <!-- Step 3: Passkey -->
-      <div v-else-if="step === 3" class="step-panel">
-        <h1 class="step-heading">Add a passkey</h1>
-        <template v-if="passkeySupported">
-          <p class="step-desc">Sign in with your device's fingerprint, face, or security key — no password needed.</p>
-          <BaseInput
-            v-model="passkeyName"
-            label="Passkey name (optional)"
-            id="ob-passkey-name"
-            placeholder="e.g. MacBook Touch ID"
-          />
-          <p v-if="passkeyError" class="error-msg">{{ passkeyError }}</p>
-          <p v-if="passkeyDone" class="success-msg">Passkey registered successfully.</p>
-          <div class="step-actions">
-            <button type="button" class="skip-btn" @click="next">Skip for now</button>
-            <BaseButton
-              variant="primary"
-              :disabled="passkeyLoading || passkeyDone"
-              style="flex:1; justify-content:center"
-              @click="registerPasskey"
-            >
-              {{ passkeyLoading ? 'Waiting for key…' : passkeyDone ? 'Registered ✓' : 'Register passkey' }}
-            </BaseButton>
-          </div>
-        </template>
-        <template v-else>
-          <p class="step-desc">
-            Passkeys need a secure context (HTTPS or localhost). Set one up later from Settings once
-            this panel is served over HTTPS.
-          </p>
-          <div class="step-actions">
-            <BaseButton variant="primary" style="width:100%; justify-content:center" @click="next">
-              Continue
-            </BaseButton>
-          </div>
-        </template>
-      </div>
-
-      <!-- Step 4: Done -->
+      <!-- Step 3: Done -->
       <div v-else class="step-panel">
         <h1 class="step-heading">You're all set 🎉</h1>
         <p class="step-desc">Your account is ready. Head to the dashboard to see your server.</p>
@@ -171,10 +133,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { authApi, settingsApi, passkeysApi, type TOTPSetupResponse } from '@/api'
+import { authApi, settingsApi, type TOTPSetupResponse } from '@/api'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import QRCode from 'qrcode'
@@ -186,7 +148,6 @@ const STEPS = [
   { title: 'Welcome' },
   { title: 'Secure your account' },
   { title: 'Two-factor auth' },
-  { title: 'Passkey' },
   { title: 'All set' },
 ]
 const step = ref(0)
@@ -281,65 +242,6 @@ async function confirmTotp() {
     confirmCode.value = ''
   } finally {
     totpLoading.value = false
-  }
-}
-
-// Step 3: passkey
-const passkeySupported = computed(() => window.isSecureContext && !!navigator.credentials)
-const passkeyName = ref('')
-const passkeyLoading = ref(false)
-const passkeyError = ref('')
-const passkeyDone = ref(false)
-
-function b64urlToBuffer(b64: string): ArrayBuffer {
-  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'))
-  const buf = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
-  return buf.buffer
-}
-
-function bufferToB64url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
-  let bin = ''
-  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i])
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-}
-
-async function registerPasskey() {
-  passkeyError.value = ''
-  passkeyLoading.value = true
-  try {
-    const { data: opts } = await passkeysApi.registerBegin()
-    const pubKeyOpts: PublicKeyCredentialCreationOptions = {
-      ...(opts as any),
-      challenge: b64urlToBuffer((opts as any).challenge),
-      user: {
-        ...(opts as any).user,
-        id: b64urlToBuffer((opts as any).user.id),
-      },
-      excludeCredentials: ((opts as any).excludeCredentials || []).map((c: any) => ({
-        ...c,
-        id: b64urlToBuffer(c.id),
-      })),
-    }
-    const cred = (await navigator.credentials.create({ publicKey: pubKeyOpts })) as PublicKeyCredential
-    if (!cred) throw new Error('No credential returned')
-    const response = cred.response as AuthenticatorAttestationResponse
-    const credJson = {
-      id: cred.id,
-      rawId: bufferToB64url(cred.rawId),
-      type: cred.type,
-      response: {
-        clientDataJSON: bufferToB64url(response.clientDataJSON),
-        attestationObject: bufferToB64url(response.attestationObject),
-      },
-    }
-    await passkeysApi.registerComplete(credJson, passkeyName.value || 'Passkey')
-    passkeyDone.value = true
-  } catch (e: any) {
-    passkeyError.value = e.response?.data?.detail || e.message || 'Registration failed.'
-  } finally {
-    passkeyLoading.value = false
   }
 }
 

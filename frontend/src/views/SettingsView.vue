@@ -831,33 +831,6 @@
           <p v-if="devicesError" class="error-msg">{{ devicesError }}</p>
         </div>
 
-        <!-- Passkeys Section -->
-        <div id="section-passkeys" class="section">
-          <div class="section-header">
-            <span class="section-title">Passkeys</span>
-            <span class="badge badge-gray">{{ passkeys.length }}</span>
-          </div>
-          <p class="section-desc">
-            Sign in with a hardware key, Face ID, or fingerprint — no password needed.
-          </p>
-          <div v-if="passkeysLoading" class="section-loading">Loading…</div>
-          <div v-else-if="!passkeys.length" class="section-empty">No passkeys registered.</div>
-          <div v-else class="device-list">
-            <div v-for="pk in passkeys" :key="pk.id" class="device-row">
-              <span class="device-name">{{ pk.device_name }}</span>
-              <button class="revoke-btn" @click="deletePasskey(pk.id)">Remove</button>
-            </div>
-          </div>
-          <p v-if="passkeysError" class="error-msg">{{ passkeysError }}</p>
-          <p v-if="passkeysSuccess" class="success-msg">{{ passkeysSuccess }}</p>
-          <div class="passkey-add-row">
-            <input v-model="newPasskeyName" placeholder="Device label (e.g. YubiKey 5)" class="pk-name-input" />
-            <BaseButton variant="ghost" :disabled="pkRegistering" @click="registerPasskey">
-              {{ pkRegistering ? 'Registering…' : 'Register passkey' }}
-            </BaseButton>
-          </div>
-        </div>
-
         <div id="section-proxy" class="section">
           <div class="section-header">
             <span class="section-title">Outbound Proxy</span>
@@ -937,7 +910,7 @@ import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, passkeysApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PasskeyCredential } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -966,7 +939,6 @@ const navSections = [
   { id: 'section-language',   label: t('settings.language') },
   { id: 'section-webhooks',   label: t('settings.webhooks') },
   { id: 'section-devices',    label: 'Sessions' },
-  { id: 'section-passkeys',   label: 'Passkeys' },
   { id: 'section-proxy',      label: 'Proxy' },
 ]
 
@@ -1574,94 +1546,6 @@ function fmtDate(iso: string) {
   } catch { return iso }
 }
 
-// ── Passkeys ───────────────────────────────────────────────────────────────────
-
-const passkeys = ref<PasskeyCredential[]>([])
-const passkeysLoading = ref(false)
-const passkeysError = ref('')
-const passkeysSuccess = ref('')
-const pkRegistering = ref(false)
-const newPasskeyName = ref('')
-
-async function loadPasskeys() {
-  passkeysLoading.value = true
-  try {
-    const { data } = await passkeysApi.list()
-    passkeys.value = data
-  } catch { /* ignore */ } finally {
-    passkeysLoading.value = false
-  }
-}
-
-async function deletePasskey(id: string) {
-  try {
-    await passkeysApi.delete(id)
-    passkeys.value = passkeys.value.filter(p => p.id !== id)
-  } catch (e: any) {
-    passkeysError.value = e.response?.data?.detail || 'Failed to remove passkey.'
-  }
-}
-
-function b64urlToBuffer(b64: string): ArrayBuffer {
-  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'))
-  const buf = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
-  return buf.buffer
-}
-
-function bufferToB64url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
-  let bin = ''
-  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i])
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-}
-
-async function registerPasskey() {
-  passkeysError.value = ''
-  passkeysSuccess.value = ''
-  if (!window.isSecureContext || !navigator.credentials) {
-    passkeysError.value = 'Passkeys require HTTPS. Access this panel over HTTPS or from localhost.'
-    return
-  }
-  pkRegistering.value = true
-  try {
-    const { data: opts } = await passkeysApi.registerBegin()
-    // Convert base64url fields to ArrayBuffer
-    const pubKeyOpts: PublicKeyCredentialCreationOptions = {
-      ...(opts as any),
-      challenge: b64urlToBuffer((opts as any).challenge),
-      user: {
-        ...(opts as any).user,
-        id: b64urlToBuffer((opts as any).user.id),
-      },
-      excludeCredentials: ((opts as any).excludeCredentials || []).map((c: any) => ({
-        ...c,
-        id: b64urlToBuffer(c.id),
-      })),
-    }
-    const cred = await navigator.credentials.create({ publicKey: pubKeyOpts }) as PublicKeyCredential
-    if (!cred) throw new Error('No credential returned')
-    const response = cred.response as AuthenticatorAttestationResponse
-    const credJson = {
-      id: cred.id,
-      rawId: bufferToB64url(cred.rawId),
-      type: cred.type,
-      response: {
-        clientDataJSON: bufferToB64url(response.clientDataJSON),
-        attestationObject: bufferToB64url(response.attestationObject),
-      },
-    }
-    await passkeysApi.registerComplete(credJson, newPasskeyName.value || 'Passkey')
-    passkeysSuccess.value = 'Passkey registered successfully.'
-    newPasskeyName.value = ''
-    await loadPasskeys()
-  } catch (e: any) {
-    passkeysError.value = e.response?.data?.detail || e.message || 'Registration failed.'
-  } finally {
-    pkRegistering.value = false
-  }
-}
-
 // ── Proxy ──────────────────────────────────────────────────────────────────────
 
 const proxy = ref<ProxyConfig>({ enabled: false, type: 'http', host: '127.0.0.1', port: 7890 })
@@ -1737,7 +1621,6 @@ onMounted(async () => {
   void loadWebhooks()
   void loadProxy()
   void loadDevices()
-  void loadPasskeys()
 
   await Promise.all([loadVersionInfo(), fetchServiceLogs()])
   // An install kicked off from this page (or another tab/session) can still
@@ -2048,8 +1931,6 @@ onMounted(async () => {
   .proxy-fields { flex-direction: column; }
   .proxy-field-port { max-width: 100%; }
 
-  .passkey-add-row { flex-direction: column; align-items: stretch; }
-
   .version-actions { flex-direction: column; align-items: stretch; }
   .version-link { text-align: center; }
 }
@@ -2314,7 +2195,7 @@ onMounted(async () => {
 .proxy-field-port { max-width: 110px; }
 .proxy-actions { display: flex; gap: 8px; margin-top: 10px; }
 
-/* Devices / Passkeys sections */
+/* Devices section */
 .section-loading { font-size: 11px; color: var(--fg-dim); }
 .section-empty { font-size: 11px; color: var(--fg-dim); }
 .device-list { display: flex; flex-direction: column; gap: 8px; }
@@ -2348,19 +2229,4 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .revoke-btn:hover { background: var(--danger-dim); border-color: rgba(255,68,68,0.5); }
-
-.passkey-add-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-.pk-name-input {
-  flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--fg);
-  font-family: var(--font);
-  font-size: 11px;
-  padding: 6px 10px;
-  outline: none;
-  transition: border-color var(--transition);
-}
-.pk-name-input:focus { border-color: var(--accent-border); }
 </style>

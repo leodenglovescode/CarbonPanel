@@ -2,13 +2,12 @@ from fastapi import APIRouter
 
 from app.api import (
     apps, auth, background_images, bookmarks, cron, dashboard_layout, devices, disks,
-    docker_api, metrics_history, passkeys, preferences, processes, sessions,
+    docker_api, metrics_history, preferences, processes, sessions,
     settings, sites, webhooks, ws, ws_logs,
 )
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
-api_router.include_router(passkeys.router)
 api_router.include_router(settings.router)
 api_router.include_router(sites.router)
 api_router.include_router(disks.router)
