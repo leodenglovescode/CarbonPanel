@@ -1,9 +1,10 @@
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import brute_force
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
@@ -94,15 +95,40 @@ async def setup_2fa(
     return await auth_service.setup_2fa(current_user, db)
 
 
+# TOTP codes are 6 digits (1-in-1M per guess) — without a lockout here, a
+# stolen session cookie (XSS, unlocked device, leaked via a misconfigured
+# proxy) would let an attacker grind these endpoints to strip/re-arm 2FA
+# without ever knowing the actual second factor. Keyed separately from the
+# login brute-force counter so the two don't interfere with each other.
+def _2fa_brute_force_key(http_request: Request, current_user: User) -> tuple[str | None, str]:
+    ip = http_request.client.host if http_request.client else None
+    return ip, f"2fa:{current_user.username}"
+
+
+def _check_2fa_banned(ip: str | None, key: str) -> None:
+    if brute_force.is_banned(ip, key):
+        secs = brute_force.retry_after(ip, key)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed attempts. Try again in {secs} seconds.",
+            headers={"Retry-After": str(secs)},
+        )
+
+
 @router.post("/2fa/enable", response_model=SuccessResponse)
 async def enable_2fa(
     request: TOTPConfirmRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    ip, key = _2fa_brute_force_key(http_request, current_user)
+    _check_2fa_banned(ip, key)
     try:
         await auth_service.enable_2fa(current_user, request.totp_code, db)
+        brute_force.record_success(ip, key)
     except ValueError as exc:
+        brute_force.record_failure(ip, key)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -113,12 +139,17 @@ async def enable_2fa(
 @router.post("/2fa/disable", response_model=SuccessResponse)
 async def disable_2fa(
     request: TOTPConfirmRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    ip, key = _2fa_brute_force_key(http_request, current_user)
+    _check_2fa_banned(ip, key)
     try:
         await auth_service.disable_2fa(current_user, request.totp_code, db)
+        brute_force.record_success(ip, key)
     except ValueError as exc:
+        brute_force.record_failure(ip, key)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
