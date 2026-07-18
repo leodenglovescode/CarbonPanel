@@ -31,15 +31,39 @@ const ICONIFY_COLORS: Record<string, string> = {
   sandisk:        '#E5251E',
 }
 
+// The fetched SVG is rendered via v-html — a compromised/MITM'd CDN response
+// could otherwise inject a <script>, an event-handler attribute, or a
+// <foreignObject> carrying arbitrary HTML straight into the DOM. This is a
+// lightweight belt-and-suspenders filter (root element must be <svg>, no
+// script-capable constructs survive) rather than a full sanitizer.
+function _sanitizeSvg(raw: string): string | null {
+  const text = raw.trim()
+  if (!/^<svg[\s>]/i.test(text)) return null
+  if (!/<\/svg>\s*$/i.test(text)) return null
+  return text
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject\s*>/gi, '')
+    .replace(/\son\w+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, '')
+    .replace(/(href|xlink:href)\s*=\s*(".*?"|'.*?')/gi, (m, attr, val) =>
+      /^["']\s*javascript:/i.test(val) ? '' : m,
+    )
+}
+
 async function _fetchSvg(slug: string): Promise<string | null> {
   // Simple Icons CDN returns SVGs with brand hex baked in — prefer it
   const r1 = await fetch(`https://cdn.simpleicons.org/${slug}`).catch(() => null)
-  if (r1?.ok) return r1.text()
+  if (r1?.ok) {
+    const svg = _sanitizeSvg(await r1.text())
+    if (svg) return svg
+  }
 
   // Fallback: Iconify uses currentColor — pass the brand color explicitly
   const color = encodeURIComponent(ICONIFY_COLORS[slug] ?? '#94a3b8')
   const r2 = await fetch(`https://api.iconify.design/simple-icons/${slug}.svg?color=${color}`).catch(() => null)
-  if (r2?.ok) return r2.text()
+  if (r2?.ok) {
+    const svg = _sanitizeSvg(await r2.text())
+    if (svg) return svg
+  }
 
   return null
 }
