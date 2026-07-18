@@ -1,12 +1,15 @@
 import asyncio
+import getpass
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.dependencies import get_current_user
 from app.models.user import User
+from app.services import cron_service
+from app.services.cron_service import CronJob
 
 router = APIRouter(prefix="/cron", tags=["cron"])
 
@@ -67,10 +70,16 @@ async def _run(cmd: list[str]) -> tuple[int, str]:
 async def list_cron_jobs(_: User = Depends(get_current_user)):
     entries: list[CronEntry] = []
 
-    # System-wide crontab
+    # This process's own crontab — never actually root's (the backend runs
+    # as the unprivileged carbonpanel service account), so label it with the
+    # real current user instead of the previous hardcoded "root". Jobs
+    # created via the panel are stripped out here since they get their own
+    # dedicated, better-labeled section below.
     rc, out = await _run(["crontab", "-l"])
     if rc == 0 and out.strip():
-        entries.extend(_parse_crontab(out, "crontab", "root"))
+        current_user = getpass.getuser()
+        stripped = cron_service.strip_managed_blocks(out)
+        entries.extend(_parse_crontab(stripped, "crontab", current_user))
 
     # /etc/crontab
     try:
@@ -93,3 +102,48 @@ async def list_cron_jobs(_: User = Depends(get_current_user)):
                     pass
 
     return entries
+
+
+class CronJobIn(BaseModel):
+    label: str = ""
+    schedule: str
+    command: str
+
+
+@router.get("/managed", response_model=list[CronJob])
+async def list_managed_jobs(_: User = Depends(get_current_user)):
+    return await cron_service.list_managed_jobs()
+
+
+@router.post("/managed", response_model=CronJob)
+async def create_managed_job(body: CronJobIn, _: User = Depends(get_current_user)):
+    try:
+        return await cron_service.create_job(body.label, body.schedule, body.command)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+
+@router.put("/managed/{job_id}", response_model=CronJob)
+async def update_managed_job(job_id: str, body: CronJobIn, _: User = Depends(get_current_user)):
+    try:
+        result = await cron_service.update_job(job_id, body.label, body.schedule, body.command)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+    if result is None:
+        raise HTTPException(404, "Job not found")
+    return result
+
+
+@router.delete("/managed/{job_id}")
+async def delete_managed_job(job_id: str, _: User = Depends(get_current_user)):
+    try:
+        removed = await cron_service.delete_job(job_id)
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+    if not removed:
+        raise HTTPException(404, "Job not found")
+    return {"ok": True}

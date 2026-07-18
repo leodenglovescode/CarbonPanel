@@ -277,6 +277,26 @@ export const metricsApi = {
   history: () => api.get<HistoryPoint[]>('/metrics/history'),
 }
 
+export interface CronJob {
+  id: string
+  label: string
+  schedule: string
+  command: string
+}
+
+export interface CronJobIn {
+  label: string
+  schedule: string
+  command: string
+}
+
+export const cronApi = {
+  listManaged: () => api.get<CronJob[]>('/cron/managed'),
+  create: (data: CronJobIn) => api.post<CronJob>('/cron/managed', data),
+  update: (id: string, data: CronJobIn) => api.put<CronJob>(`/cron/managed/${id}`, data),
+  delete: (id: string) => api.delete(`/cron/managed/${id}`),
+}
+
 export interface ProxyConfig {
   enabled: boolean
   type: 'http' | 'socks5'
