@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, invalidate_jti
 from app.database import get_db
 from app.models.device import Device
 from app.models.user import User
@@ -16,9 +16,11 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 class DeviceOut(BaseModel):
     id: str
     name: str
+    kind: str
     ip_address: str | None
     last_seen: datetime
     created_at: datetime
+    expires_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -51,4 +53,7 @@ async def revoke_device(
     device.revoked = True
     db.add(device)
     await db.commit()
+    # Drop the cached "not revoked" answer so the next request from this
+    # device is rejected immediately rather than at the end of the cache TTL.
+    invalidate_jti(device.jti)
     return {"success": True}

@@ -8,6 +8,14 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 480  # 8 hours
     totp_session_expire_minutes: int = 5
+    # Paired native clients (Android) can't silently re-auth the way a browser
+    # can — re-pairing means physically scanning a QR again — so their tokens
+    # long outlive a browser session. Safe because pairing issues a jti that
+    # can be revoked from Settings at any time.
+    device_token_expire_days: int = 90
+    # Single-use pairing codes are short-lived by design: the window between
+    # generating the QR and scanning it is seconds, not minutes.
+    pairing_code_expire_minutes: int = 5
     # The default install serves plain HTTP (no TLS termination baked in), so the
     # session cookie can't be marked Secure by default or logins would silently
     # break. Flip to true in .env once you've put TLS in front of the panel.

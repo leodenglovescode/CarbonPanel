@@ -21,6 +21,13 @@ class Device(Base):
     # a duplicate "device" on every login/session-expiry. Null for older sessions
     # recorded before this existed.
     device_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # "browser" for cookie sessions, "android" for QR-paired native clients.
+    # Native clients hold a long-lived bearer token, so the UI needs to tell
+    # the two apart to present (and revoke) them sensibly.
+    kind: Mapped[str] = mapped_column(String, nullable=False, default="browser")
+    # Only set for paired native devices, whose lifetime is governed by
+    # device_token_expire_days rather than the browser session TTL.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False, default="")
     ip_address: Mapped[str | None] = mapped_column(String, nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
