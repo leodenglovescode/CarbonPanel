@@ -4,6 +4,13 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// The release tag is the single source of truth for the version: CI derives
+// both of these from it and passes them in, so a published APK can never
+// report a number that drifted from the tag it was built at. The fallbacks
+// below only apply to local builds.
+val carbonVersionName = (findProperty("carbonVersionName") as String?) ?: "1.0.0"
+val carbonVersionCode = (findProperty("carbonVersionCode") as String?)?.toInt() ?: 1
+
 android {
     namespace = "dev.carbonpanel"
     compileSdk = 36
@@ -16,8 +23,8 @@ android {
         applicationId = "dev.carbonpanel"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = carbonVersionCode
+        versionName = carbonVersionName
     }
 
     // Release signing comes from the environment so CI can inject a keystore
