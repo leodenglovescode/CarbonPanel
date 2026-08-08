@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # session cookie can't be marked Secure by default or logins would silently
     # break. Flip to true in .env once you've put TLS in front of the panel.
     cookie_secure: bool = False
+    # Cookies are scoped by host, not port, so two CarbonPanel instances on the
+    # same machine (a prod install and a dev server on another port) share one
+    # cookie slot and overwrite each other's sessions. Worse, once the prod one
+    # is marked Secure, browsers refuse to let a plain-HTTP dev origin replace
+    # it at all — the dev login silently keeps the prod token and every
+    # subsequent request 401s. Give each instance its own name to separate them.
+    cookie_name: str = "cp_session"
 
     admin_username: str = "admin"
     admin_password: str = "changeme"

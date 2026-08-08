@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models.device import Device
 from app.models.user import User
 
-COOKIE_NAME = "cp_session"
+COOKIE_NAME = settings.cookie_name
 
 
 def is_allowed_ws_origin(ws: WebSocket) -> bool:
