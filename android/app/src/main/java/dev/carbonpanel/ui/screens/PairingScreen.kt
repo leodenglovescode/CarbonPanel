@@ -1,4 +1,4 @@
-package dev.carbonpanel.ui
+package dev.carbonpanel.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
