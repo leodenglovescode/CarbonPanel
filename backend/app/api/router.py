@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.api import (
     apps, auth, background_images, bookmarks, cron, dashboard_layout, devices, disks,
-    docker_api, metrics_history, preferences, processes, sessions,
+    docker_api, metrics_history, pairing, preferences, processes, sessions,
     settings, sites, webhooks, ws, ws_logs,
 )
 
@@ -19,6 +19,7 @@ api_router.include_router(cron.router)
 api_router.include_router(sessions.router)
 api_router.include_router(metrics_history.router)
 api_router.include_router(devices.router)
+api_router.include_router(pairing.router)
 api_router.include_router(bookmarks.router)
 api_router.include_router(dashboard_layout.router)
 api_router.include_router(preferences.router)

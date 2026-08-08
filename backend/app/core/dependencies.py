@@ -1,3 +1,6 @@
+import time
+from threading import Lock
+
 from fastapi import Depends, HTTPException, Request, Response, WebSocket, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,39 +63,123 @@ def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=COOKIE_NAME, path="/")
 
 
+def _extract_token(request: Request) -> str | None:
+    """Session cookie first, then `Authorization: Bearer`.
+
+    Browsers keep using the httpOnly cookie exactly as before — the cookie is
+    checked first so nothing about that path changes. The bearer fallback
+    exists for paired native clients (Android), which have no cookie jar worth
+    the name. Accepting bearer does not reopen CSRF: browsers never attach an
+    Authorization header automatically, which is precisely why the cookie is
+    the one that needs SameSite and the Origin checks on the WS handshake.
+    """
+    token = request.cookies.get(COOKIE_NAME)
+    if token:
+        return token
+    scheme, _, param = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() == "bearer" and param:
+        return param.strip()
+    return None
+
+
+# --- Revocation-check cache -------------------------------------------------
+#
+# Native clients poll metrics as fast as every 0.4s, and the jti revocation
+# lookup would otherwise be a DB round-trip on every one of those requests —
+# costing more than collecting the metrics does. Cache the "this jti is not
+# revoked" answer briefly; revoking a device invalidates it immediately via
+# invalidate_jti(), so the only staleness window is for revocations performed
+# out-of-band (direct DB edits), which resolve within the TTL.
+
+_JTI_CACHE_TTL = 30.0  # seconds
+_jti_cache: dict[str, float] = {}  # jti -> checked_at (monotonic)
+_jti_cache_lock = Lock()
+
+
+def invalidate_jti(jti: str | None) -> None:
+    """Drop a cached revocation result — call when revoking a device."""
+    if not jti:
+        return
+    with _jti_cache_lock:
+        _jti_cache.pop(jti, None)
+
+
+def _jti_recently_verified(jti: str) -> bool:
+    now = time.monotonic()
+    with _jti_cache_lock:
+        checked_at = _jti_cache.get(jti)
+        return checked_at is not None and now - checked_at < _JTI_CACHE_TTL
+
+
+def _remember_jti(jti: str) -> None:
+    now = time.monotonic()
+    with _jti_cache_lock:
+        # Opportunistic sweep — the keyspace is one entry per active session,
+        # so this stays small without needing an LRU.
+        for k in [k for k, t in _jti_cache.items() if now - t >= _JTI_CACHE_TTL]:
+            del _jti_cache[k]
+        _jti_cache[jti] = now
+
+
+CREDENTIALS_ERROR = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+)
+
+
+async def _authenticate(request: Request, db: AsyncSession) -> str:
+    """Validate the caller's token and return their user_id.
+
+    Does no User lookup — callers that need the ORM object do that themselves.
+    """
+    token = _extract_token(request)
+    if not token:
+        raise CREDENTIALS_ERROR
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        raise CREDENTIALS_ERROR
+
+    if payload.get("scope") != "full":
+        raise CREDENTIALS_ERROR
+
+    user_id: str | None = payload.get("sub")
+    if not user_id:
+        raise CREDENTIALS_ERROR
+
+    # JTI revocation check — only enforced when jti is present in the token
+    jti: str | None = payload.get("jti")
+    if jti and not _jti_recently_verified(jti):
+        result = await db.execute(select(Device).where(Device.jti == jti))
+        device = result.scalar_one_or_none()
+        if device is None or device.revoked:
+            raise CREDENTIALS_ERROR
+        _remember_jti(jti)
+
+    return user_id
+
+
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    credentials_error = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-    )
-    token = request.cookies.get(COOKIE_NAME)
-    if not token:
-        raise credentials_error
-    try:
-        payload = decode_token(token)
-    except ValueError:
-        raise credentials_error
-
-    if payload.get("scope") != "full":
-        raise credentials_error
-
-    user_id: str | None = payload.get("sub")
-    if not user_id:
-        raise credentials_error
-
-    # JTI revocation check — only enforced when jti is present in the token
-    jti: str | None = payload.get("jti")
-    if jti:
-        result = await db.execute(select(Device).where(Device.jti == jti))
-        device = result.scalar_one_or_none()
-        if device is None or device.revoked:
-            raise credentials_error
-
+    user_id = await _authenticate(request, db)
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
-        raise credentials_error
+        raise CREDENTIALS_ERROR
     return user
+
+
+async def require_auth(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """Auth check for hot polling endpoints, returning only the user_id.
+
+    Skips the User row fetch entirely. On a warm jti cache this costs zero DB
+    queries, which is what makes 0.4s metrics polling affordable. Use it only
+    where the endpoint genuinely doesn't need the User object — everything
+    else should keep using get_current_user.
+    """
+    return await _authenticate(request, db)
