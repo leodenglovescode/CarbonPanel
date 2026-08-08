@@ -9,3 +9,11 @@ build/
 .cxx
 local.properties
 *.hprof
+
+# Build outputs — never commit binaries, and never commit signing material.
+*.apk
+*.aab
+*.aar
+*.keystore
+*.jks
+keystore.properties
