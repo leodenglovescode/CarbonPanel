@@ -315,29 +315,32 @@ github_api_get() {
 }
 
 resolve_latest_reference() {
-  local slug api_base release_json release_tag release_url tags_json tag_name repo_json default_branch
-  slug="$(repo_slug)"
-  api_base="https://api.github.com/repos/$slug"
+  # The panel tracks a branch, never a release.
+  #
+  # GitHub releases on this repo are Android APK artifacts and say nothing
+  # about the panel. Preferring them here meant check_for_updates resolved
+  # "v1.0.0" while install_or_update went on deploying "master", so the
+  # comparison was "master" != "v1.0.0" — true forever. The UI advertised an
+  # update permanently, installing it changed nothing, and clicking again just
+  # produced the install endpoint's cooldown message. Nothing surfaced the
+  # actual mismatch, because both halves were behaving as written.
+  #
+  # An explicit `--ref` still pins to a tag or branch; this is only what
+  # happens when nothing was asked for.
+  local installed_ref installed_type repo_json default_branch
 
-  release_json="$(github_api_get "$api_base/releases/latest" 2>/dev/null || true)"
-  release_tag="$(printf '%s' "$release_json" | json_query tag_name 2>/dev/null || true)"
-  release_url="$(printf '%s' "$release_json" | json_query html_url 2>/dev/null || true)"
-
-  if [[ -n "$release_tag" && "$release_tag" != "null" ]]; then
-    printf 'release\n%s\n%s\n' "$release_tag" "$release_url"
+  # Stay on whatever branch is already deployed, so a host installed from a
+  # non-default branch isn't silently moved onto the default one by an update.
+  installed_ref="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)"
+  installed_type="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" source_type)"
+  if [[ "$installed_type" == "branch" && -n "$installed_ref" ]]; then
+    printf 'branch\n%s\n%s\n' "$installed_ref" "$REPO_URL"
     return 0
   fi
 
-  tags_json="$(github_api_get "$api_base/tags?per_page=1" 2>/dev/null || true)"
-  tag_name="$(printf '%s' "$tags_json" | json_query 0.name 2>/dev/null || true)"
-  if [[ -n "$tag_name" && "$tag_name" != "null" ]]; then
-    printf 'tag\n%s\n%s\n' "$tag_name" "https://github.com/$(repo_slug)/tags"
-    return 0
-  fi
-
-  repo_json="$(github_api_get "$api_base" 2>/dev/null || true)"
+  repo_json="$(github_api_get "https://api.github.com/repos/$(repo_slug)" 2>/dev/null || true)"
   default_branch="$(printf '%s' "$repo_json" | json_query default_branch 2>/dev/null || true)"
-  [[ -n "$default_branch" ]] || default_branch="master"
+  [[ -n "$default_branch" && "$default_branch" != "null" ]] || default_branch="master"
   printf 'branch\n%s\n%s\n' "$default_branch" "$REPO_URL"
 }
 
