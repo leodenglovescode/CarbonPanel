@@ -7,7 +7,7 @@ from app.schemas.metrics import ProcessMetrics
 _MB = 1024 * 1024
 
 
-def _collect_sync(sort_by: str, limit: int) -> list[ProcessMetrics]:
+def _collect_sync() -> list[ProcessMetrics]:
     procs: list[ProcessMetrics] = []
     attrs = ["pid", "name", "cpu_percent", "memory_info", "status", "username"]
     for proc in psutil.process_iter(attrs):
@@ -23,12 +23,25 @@ def _collect_sync(sort_by: str, limit: int) -> list[ProcessMetrics]:
             ))
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
+    return procs
 
+
+def rank(procs: list[ProcessMetrics], sort_by: str, limit: int) -> list[ProcessMetrics]:
+    """Sort and truncate an already-collected process list.
+
+    Split out from collection so one process_iter sweep can serve clients that
+    disagree about sort order — walking every PID once per connected client
+    would be the single most expensive thing the collector does.
+    """
     key = "memory_mb" if sort_by == "memory" else "cpu_percent"
-    procs.sort(key=lambda p: getattr(p, key), reverse=True)
-    return procs[:limit]
+    return sorted(procs, key=lambda p: getattr(p, key), reverse=True)[:limit]
+
+
+async def collect_all() -> list[ProcessMetrics]:
+    """Every process, unsorted. Callers rank it themselves via rank()."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _collect_sync)
 
 
 async def collect(sort_by: str = "cpu", limit: int = 25) -> list[ProcessMetrics]:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _collect_sync, sort_by, limit)
+    return rank(await collect_all(), sort_by, limit)
