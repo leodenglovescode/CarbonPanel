@@ -27,6 +27,7 @@ pi-kiosk/.venv/
 .claude/
 .aider*
 CLAUDE.md
+AGENTS.md
 
 # Android build outputs and signing material
 *.apk
