@@ -884,22 +884,57 @@
             <button v-if="pairing" class="theme-btn" @click="cancelPairing">Done</button>
           </div>
 
-          <div v-if="pairing" class="pair-panel">
-            <img class="pair-qr" :src="`data:image/png;base64,${pairing.qr_png_b64}`" alt="Pairing QR code" />
+          <div v-if="pairing" class="pair-panel" :class="{ 'pair-panel--done': pairStatus === 'claimed' }">
+            <!-- Corner brackets frame the code the way a scanner viewfinder
+                 does, so it reads as "point a camera here" rather than as a
+                 decorative image. -->
+            <div class="pair-qr-frame" :class="{ 'is-stale': pairStatus === 'expired' }">
+              <span class="pair-corner pair-corner--tl" />
+              <span class="pair-corner pair-corner--tr" />
+              <span class="pair-corner pair-corner--bl" />
+              <span class="pair-corner pair-corner--br" />
+              <img
+                class="pair-qr"
+                :src="`data:image/png;base64,${pairing.qr_png_b64}`"
+                alt="Pairing QR code"
+              />
+              <div v-if="pairStatus === 'claimed'" class="pair-qr-veil">✓</div>
+              <div v-else-if="pairStatus === 'expired'" class="pair-qr-veil pair-qr-veil--stale">
+                expired
+              </div>
+            </div>
+
             <div class="pair-side">
+              <div class="pair-steps">
+                <div class="pair-step"><i>1</i><span>Install the CarbonPanel app on your phone</span></div>
+                <div class="pair-step"><i>2</i><span>Open it and tap <b>Scan pairing code</b></span></div>
+                <div class="pair-step"><i>3</i><span>Point the camera at this code</span></div>
+              </div>
+
               <div class="pair-status" :class="pairStatusClass">
                 <template v-if="pairStatus === 'claimed'">
-                  ✓ Paired with {{ pairedName || 'device' }}
+                  Paired with {{ pairedName || 'device' }} — it's ready to use.
                 </template>
                 <template v-else-if="pairStatus === 'expired'">
-                  Code expired — generate a new one.
+                  Code expired. Generate a new one to try again.
                 </template>
                 <template v-else>
-                  Waiting for scan… expires in {{ pairCountdown }}s
+                  <span class="pair-pulse" />Waiting for a device to scan…
                 </template>
               </div>
-              <div class="pair-manual">
-                <span class="pair-manual-label">Or type this code in the app</span>
+
+              <!-- Time pressure is the point: the code is single-use and
+                   short-lived, so the countdown is shown rather than left to
+                   expire silently. -->
+              <div v-if="pairStatus === 'pending'" class="pair-timer">
+                <div class="pair-timer-bar">
+                  <div class="pair-timer-fill" :style="{ width: pairTimerPct + '%' }" />
+                </div>
+                <span class="pair-timer-text">{{ pairCountdown }}s</span>
+              </div>
+
+              <div v-if="pairStatus !== 'claimed'" class="pair-manual">
+                <span class="pair-manual-label">Can't scan? Type this code in the app</span>
                 <code class="pair-code">{{ pairing.code }}</code>
               </div>
             </div>
@@ -1647,6 +1682,14 @@ const pairStatusClass = computed(() => ({
   'pair-ok': pairStatus.value === 'claimed',
   'pair-stale': pairStatus.value === 'expired',
 }))
+
+// Drains as the code ages. Guarded against a zero expires_in so a bad
+// response can't produce a NaN width.
+const pairTimerPct = computed(() => {
+  const total = pairing.value?.expires_in || 0
+  if (total <= 0) return 0
+  return Math.max(0, Math.min(100, (pairCountdown.value / total) * 100))
+})
 
 function endpointKindLabel(kind: string) {
   switch (kind) {
@@ -2466,37 +2509,124 @@ onMounted(async () => {
 .pair-actions { display: flex; gap: 8px; margin-top: 12px; }
 .pair-panel {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   align-items: flex-start;
   margin-top: 12px;
-  padding: 12px;
-  background: var(--bg);
+  padding: 18px;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(0, 255, 136, 0.05), transparent 60%),
+    var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
+  transition: border-color var(--transition), background var(--transition);
 }
+.pair-panel--done { border-color: var(--accent); }
+
+/* Viewfinder framing — corner brackets around the code. */
+.pair-qr-frame {
+  position: relative;
+  flex-shrink: 0;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: #fff;
+}
+.pair-corner {
+  position: absolute;
+  width: 16px; height: 16px;
+  border: 2px solid var(--accent);
+  transition: border-color var(--transition);
+}
+.pair-corner--tl { top: -3px; left: -3px;  border-right: none; border-bottom: none; border-radius: 5px 0 0 0; }
+.pair-corner--tr { top: -3px; right: -3px; border-left: none;  border-bottom: none; border-radius: 0 5px 0 0; }
+.pair-corner--bl { bottom: -3px; left: -3px;  border-right: none; border-top: none; border-radius: 0 0 0 5px; }
+.pair-corner--br { bottom: -3px; right: -3px; border-left: none;  border-top: none; border-radius: 0 0 5px 0; }
+.pair-qr-frame.is-stale .pair-corner { border-color: var(--warning); }
+
 .pair-qr {
+  display: block;
   width: 168px; height: 168px;
   image-rendering: pixelated;   /* keep the modules crisp when upscaled */
-  background: #fff;             /* scanners need the light quiet zone */
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
+  border-radius: 2px;
 }
-.pair-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.pair-status { font-size: 11px; color: var(--fg-muted); }
+/* Covers the code once it can no longer be used, so nobody scans a dead one. */
+.pair-qr-veil {
+  position: absolute; inset: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 14, 13, 0.88);
+  color: var(--accent);
+  font-size: 44px;
+  border-radius: 2px;
+}
+.pair-qr-veil--stale { color: var(--warning); font-size: 13px; letter-spacing: 1px; }
+
+.pair-side {
+  display: flex; flex-direction: column; gap: 14px;
+  min-width: 0; flex: 1;
+}
+
+.pair-steps { display: flex; flex-direction: column; gap: 8px; }
+.pair-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 11px; color: var(--fg-muted); line-height: 1.5;
+}
+.pair-step i {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 255, 136, 0.14);
+  color: var(--accent);
+  font-style: normal; font-size: 10px;
+}
+.pair-step b { color: var(--fg); font-weight: 500; }
+
+.pair-status {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--fg-muted);
+}
 .pair-status.pair-ok { color: var(--accent); }
 .pair-status.pair-stale { color: var(--warning); }
-.pair-manual { display: flex; flex-direction: column; gap: 4px; }
+.pair-pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  animation: pair-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pair-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.72); }
+}
+/* Respect a reduced-motion preference rather than pulsing regardless. */
+@media (prefers-reduced-motion: reduce) {
+  .pair-pulse { animation: none; }
+}
+
+.pair-timer { display: flex; align-items: center; gap: 8px; }
+.pair-timer-bar {
+  flex: 1; height: 3px;
+  background: var(--bg-card);
+  border-radius: 2px; overflow: hidden;
+}
+.pair-timer-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+.pair-timer-text { font-size: 10px; color: var(--fg-dim); min-width: 26px; text-align: right; }
+
+.pair-manual { display: flex; flex-direction: column; gap: 5px; }
 .pair-manual-label { font-size: 10px; color: var(--fg-dim); }
 .pair-code {
   font-family: var(--font);
-  font-size: 18px;
-  letter-spacing: 3px;
+  font-size: 20px;
+  letter-spacing: 4px;
   color: var(--fg);
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  padding: 8px 12px;
+  text-align: center;
+  user-select: all;   /* one click selects the whole code for copying */
 }
 
 @media (max-width: 560px) {
