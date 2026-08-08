@@ -36,8 +36,34 @@ object ApiClient {
     @Volatile
     private var cached: Pair<String, Api>? = null
 
+    @Volatile
+    private var sharedClient: OkHttpClient? = null
+
+    /** Base URL most recently confirmed working, for building absolute URLs. */
+    @Volatile
+    var activeBaseUrl: String? = null
+        private set
+
     fun clearCache() {
         cached = null
+        sharedClient = null
+    }
+
+    /**
+     * The same OkHttp instance the API uses — shared with Coil so background
+     * images inherit the bearer token and the pinned-certificate trust manager.
+     * Loading them with a stock client would 401, and on a self-signed host it
+     * would fail the handshake outright.
+     */
+    fun imageClient(context: Context): OkHttpClient =
+        sharedClient ?: synchronized(this) {
+            sharedClient ?: okHttp(context).also { sharedClient = it }
+        }
+
+    /** Absolute URL of the panel's app background image, or null if unpaired. */
+    fun backgroundImageUrl(context: Context): String? {
+        val base = activeBaseUrl ?: Prefs.get(context).lastGoodEndpoint ?: return null
+        return base.trimEnd('/') + "/api/v1/settings/background-image/app"
     }
 
     private fun okHttp(context: Context): OkHttpClient {
@@ -102,6 +128,7 @@ object ApiClient {
             } ?: false
             if (ok) {
                 prefs.lastGoodEndpoint = url
+                activeBaseUrl = url
                 return@withContext url to api
             }
         }

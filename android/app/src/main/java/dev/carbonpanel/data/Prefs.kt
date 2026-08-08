@@ -61,6 +61,25 @@ class Prefs(context: Context) {
         get() = prefs.getFloat(KEY_POLL_INTERVAL, 2.0f)
         set(v) = prefs.edit().putFloat(KEY_POLL_INTERVAL, v).apply()
 
+    /**
+     * Whether to paint the panel's configured background image behind the app.
+     * Off by default: it costs a network fetch on launch, and a photo behind
+     * dense monospace readouts is a taste call rather than an obvious win.
+     */
+    var backdropEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BACKDROP, false)
+        set(v) = prefs.edit().putBoolean(KEY_BACKDROP, v).apply()
+
+    /** "System" | "Light" | "Dark" — resolved by CarbonTheme. */
+    var themeMode: String
+        get() = prefs.getString(KEY_THEME_MODE, "System") ?: "System"
+        set(v) = prefs.edit().putString(KEY_THEME_MODE, v).apply()
+
+    /** Name of an AccentChoice entry. */
+    var accent: String
+        get() = prefs.getString(KEY_ACCENT, "Carbon") ?: "Carbon"
+        set(v) = prefs.edit().putString(KEY_ACCENT, v).apply()
+
     val isPaired: Boolean get() = !token.isNullOrBlank() && endpoints.isNotEmpty()
 
     /**
@@ -81,16 +100,40 @@ class Prefs(context: Context) {
         prefs.edit().putString(pinKey(host), sha256).apply()
     }
 
-    // ── Widget cache ───────────────────────────────────────────────────────
+    // ── Widget ─────────────────────────────────────────────────────────────
 
-    /** Last snapshot rendered on the home-screen widget, as a summary line. */
-    var widgetSummary: String?
-        get() = prefs.getString(KEY_WIDGET_SUMMARY, null)
-        set(v) = prefs.edit().putString(KEY_WIDGET_SUMMARY, v).apply()
+    /** Serialised WidgetState from the last successful refresh. */
+    var widgetState: String?
+        get() = prefs.getString(KEY_WIDGET_STATE, null)
+        set(v) = prefs.edit().putString(KEY_WIDGET_STATE, v).apply()
 
-    var widgetUpdatedAt: Long
-        get() = prefs.getLong(KEY_WIDGET_TS, 0L)
-        set(v) = prefs.edit().putLong(KEY_WIDGET_TS, v).apply()
+    /**
+     * Mountpoint the widget's disk ring tracks. Blank means "largest disk",
+     * which is a better default than picking `/` — on a server the big data
+     * volume is usually the one worth watching.
+     */
+    var widgetDisk: String
+        get() = prefs.getString(KEY_WIDGET_DISK, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_WIDGET_DISK, v).apply()
+
+    /** Interface the widget's throughput line tracks. Blank means "busiest". */
+    var widgetIface: String
+        get() = prefs.getString(KEY_WIDGET_IFACE, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_WIDGET_IFACE, v).apply()
+
+    /** Name of a NetUnit entry. */
+    var widgetNetUnit: String
+        get() = prefs.getString(KEY_WIDGET_NET_UNIT, "Mbps") ?: "Mbps"
+        set(v) = prefs.edit().putString(KEY_WIDGET_NET_UNIT, v).apply()
+
+    /**
+     * Minutes between widget refreshes. 15 is WorkManager's floor; the default
+     * is deliberately higher because a home-screen widget is glanced at, not
+     * watched, and each refresh is a radio wake-up.
+     */
+    var widgetRefreshMinutes: Int
+        get() = prefs.getInt(KEY_WIDGET_REFRESH, 30)
+        set(v) = prefs.edit().putInt(KEY_WIDGET_REFRESH, v.coerceAtLeast(15)).apply()
 
     fun clear() {
         prefs.edit().clear().apply()
@@ -106,9 +149,15 @@ class Prefs(context: Context) {
         private const val KEY_LAST_GOOD = "last_good_endpoint"
         private const val KEY_POLL_INTERVAL = "poll_interval"
         private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_BACKDROP = "backdrop_enabled"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_ACCENT = "accent"
         private const val KEY_PIN_PREFIX = "pin:"
-        private const val KEY_WIDGET_SUMMARY = "widget_summary"
-        private const val KEY_WIDGET_TS = "widget_ts"
+        private const val KEY_WIDGET_STATE = "widget_state"
+        private const val KEY_WIDGET_DISK = "widget_disk"
+        private const val KEY_WIDGET_IFACE = "widget_iface"
+        private const val KEY_WIDGET_NET_UNIT = "widget_net_unit"
+        private const val KEY_WIDGET_REFRESH = "widget_refresh_minutes"
 
         @Volatile
         private var instance: Prefs? = null
