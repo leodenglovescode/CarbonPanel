@@ -38,7 +38,13 @@ class CarbonViewfinderView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         refreshSizes()
-        val frame = framingRect ?: return
+        val frame = framingRect
+        if (frame == null) {
+            // The rect isn't known until the camera reports its preview size,
+            // so keep checking rather than staying blank forever.
+            postInvalidateDelayed(REDRAW_DELAY_MS)
+            return
+        }
 
         val w = width.toFloat()
         val h = height.toFloat()
@@ -70,15 +76,14 @@ class CarbonViewfinderView @JvmOverloads constructor(
 
         // Deliberately no laser line and no animation: a QR decodes the
         // instant it's in frame, so a sweeping beam implies progress that
-        // isn't happening and just adds a redraw every frame.
-        postInvalidateDelayed(
-            REDRAW_DELAY_MS,
-            frame.left, frame.top, frame.right, frame.bottom,
-        )
+        // isn't happening. The one redraw below tracks a framing rect that can
+        // move when the camera reconfigures; it is not an animation loop.
+        postInvalidateDelayed(TRACK_DELAY_MS)
     }
 
     private companion object {
         const val ACCENT = 0xFF00FF88.toInt()
         const val REDRAW_DELAY_MS = 120L
+        const val TRACK_DELAY_MS = 400L
     }
 }

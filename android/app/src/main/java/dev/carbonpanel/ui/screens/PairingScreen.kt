@@ -89,7 +89,10 @@ fun PairingScreen(
             ScanOptions()
                 .setCaptureActivity(ScannerActivity::class.java)
                 .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                .setPrompt("Point at the code in Settings → Paired Devices")
+                // Overrides the status line under the frame. The header on the
+                // scanner layout already says where to find the code, so this
+                // says what to do rather than repeating it.
+                .setPrompt("Point the camera at the QR code")
                 .setBeepEnabled(false)
                 .setOrientationLocked(false)
         )

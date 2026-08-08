@@ -1,7 +1,7 @@
 package dev.carbonpanel.pairing
 
-import android.os.Bundle
 import com.journeyapps.barcodescanner.CaptureActivity
+import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import dev.carbonpanel.R
 
 /**
@@ -11,10 +11,16 @@ import dev.carbonpanel.R
  * orientation handling and decode lifecycle, none of which is worth
  * reimplementing. Only the presentation is replaced, so pairing doesn't drop
  * the user into a screen that looks like a different application.
+ *
+ * The swap has to happen in initializeContent(), not onCreate(). onCreate()
+ * calls initializeContent() and then hands the returned view to a
+ * CaptureManager that opens the camera against it; calling setContentView()
+ * after super.onCreate() leaves the manager driving a detached view, and the
+ * screen stays black.
  */
 class ScannerActivity : CaptureActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun initializeContent(): DecoratedBarcodeView {
         setContentView(R.layout.activity_scanner)
+        return findViewById(R.id.zxing_barcode_scanner)
     }
 }
