@@ -831,6 +831,81 @@
           <p v-if="devicesError" class="error-msg">{{ devicesError }}</p>
         </div>
 
+        <!-- Paired Devices Section -->
+        <div id="section-pairing" class="section">
+          <div class="section-header">
+            <span class="section-title">Paired Devices</span>
+            <span class="badge badge-gray">{{ pairedCount }}</span>
+          </div>
+          <p class="section-desc">
+            Pair the CarbonPanel Android app by scanning a QR code. The app gets its own
+            long-lived token, revocable above at any time — no password or 2FA code is
+            ever typed on the phone.
+          </p>
+
+          <div class="pair-endpoints">
+            <div class="pair-subhead">Addresses to embed in the code</div>
+            <p class="pair-hint">
+              The phone tries these in order until one answers. Include an address that
+              works away from home — a VPN/Tailscale address or a public domain — or the
+              app will only work on your LAN.
+            </p>
+            <label
+              v-for="ep in allEndpoints"
+              :key="ep.url"
+              class="pair-ep-row"
+            >
+              <input type="checkbox" :value="ep.url" v-model="selectedEndpoints" />
+              <span class="pair-ep-url">{{ ep.url }}</span>
+              <span :class="['pair-ep-kind', `kind-${ep.kind}`]">{{ endpointKindLabel(ep.kind) }}</span>
+            </label>
+
+            <div class="pair-add-row">
+              <BaseInput
+                v-model="newEndpoint"
+                placeholder="https://panel.example.com"
+                @keyup.enter="addEndpoint"
+              />
+              <button class="theme-btn" :disabled="!newEndpoint.trim()" @click="addEndpoint">
+                Add
+              </button>
+            </div>
+            <p v-if="endpointError" class="error-msg">{{ endpointError }}</p>
+          </div>
+
+          <div class="pair-actions">
+            <button
+              class="theme-btn active"
+              :disabled="pairingBusy || !selectedEndpoints.length"
+              @click="startPairing"
+            >
+              {{ pairing ? 'New code' : 'Pair a device' }}
+            </button>
+            <button v-if="pairing" class="theme-btn" @click="cancelPairing">Done</button>
+          </div>
+
+          <div v-if="pairing" class="pair-panel">
+            <img class="pair-qr" :src="`data:image/png;base64,${pairing.qr_png_b64}`" alt="Pairing QR code" />
+            <div class="pair-side">
+              <div class="pair-status" :class="pairStatusClass">
+                <template v-if="pairStatus === 'claimed'">
+                  ✓ Paired with {{ pairedName || 'device' }}
+                </template>
+                <template v-else-if="pairStatus === 'expired'">
+                  Code expired — generate a new one.
+                </template>
+                <template v-else>
+                  Waiting for scan… expires in {{ pairCountdown }}s
+                </template>
+              </div>
+              <div class="pair-manual">
+                <span class="pair-manual-label">Or type this code in the app</span>
+                <code class="pair-code">{{ pairing.code }}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="section-proxy" class="section">
           <div class="section-header">
             <span class="section-title">Outbound Proxy</span>
@@ -910,7 +985,7 @@ import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -939,6 +1014,7 @@ const navSections = [
   { id: 'section-language',   label: t('settings.language') },
   { id: 'section-webhooks',   label: t('settings.webhooks') },
   { id: 'section-devices',    label: 'Sessions' },
+  { id: 'section-pairing',    label: 'Paired Devices' },
   { id: 'section-proxy',      label: 'Proxy' },
 ]
 
@@ -1540,6 +1616,127 @@ async function revokeDevice(id: string) {
   }
 }
 
+// ── Pairing ────────────────────────────────────────────────────────────────────
+
+const discoveredEndpoints = ref<PairingEndpoint[]>([])
+const extraEndpoints = ref<string[]>([])
+const selectedEndpoints = ref<string[]>([])
+const newEndpoint = ref('')
+const endpointError = ref('')
+const pairing = ref<PairingStart | null>(null)
+const pairingBusy = ref(false)
+const pairStatus = ref<'pending' | 'claimed' | 'expired'>('pending')
+const pairedName = ref<string | null>(null)
+const pairCountdown = ref(0)
+let pairPoll: ReturnType<typeof setInterval> | null = null
+let pairTick: ReturnType<typeof setInterval> | null = null
+
+const pairedCount = computed(() => devices.value.filter(d => d.kind === 'android').length)
+
+// Manually-added URLs the server hasn't detected on an interface still belong
+// in the list — they're usually the only ones that work from outside the LAN.
+const allEndpoints = computed<PairingEndpoint[]>(() => {
+  const seen = new Set(discoveredEndpoints.value.map(e => e.url))
+  const extras = extraEndpoints.value
+    .filter(u => !seen.has(u))
+    .map(u => ({ url: u, kind: 'custom' as const, label: 'Configured manually' }))
+  return [...extras, ...discoveredEndpoints.value]
+})
+
+const pairStatusClass = computed(() => ({
+  'pair-ok': pairStatus.value === 'claimed',
+  'pair-stale': pairStatus.value === 'expired',
+}))
+
+function endpointKindLabel(kind: string) {
+  switch (kind) {
+    case 'overlay': return 'VPN — works anywhere'
+    case 'custom':  return 'manual'
+    case 'current': return 'this browser'
+    case 'lan':     return 'LAN only'
+    case 'public':  return 'public'
+    default:        return kind
+  }
+}
+
+async function loadEndpoints() {
+  try {
+    const { data } = await pairingApi.endpoints()
+    discoveredEndpoints.value = data.discovered
+    extraEndpoints.value = data.extra
+    if (!selectedEndpoints.value.length) {
+      // Default to everything reachable off-LAN plus the address that's
+      // demonstrably working right now.
+      selectedEndpoints.value = allEndpoints.value
+        .filter(e => e.kind !== 'public')
+        .map(e => e.url)
+    }
+  } catch { /* section just stays empty */ }
+}
+
+async function addEndpoint() {
+  const url = newEndpoint.value.trim().replace(/\/+$/, '')
+  if (!url) return
+  endpointError.value = ''
+  try {
+    const { data } = await pairingApi.setEndpoints([...extraEndpoints.value, url])
+    extraEndpoints.value = data.extra
+    discoveredEndpoints.value = data.discovered
+    if (!selectedEndpoints.value.includes(url)) selectedEndpoints.value.push(url)
+    newEndpoint.value = ''
+  } catch (e: any) {
+    endpointError.value = e.response?.data?.detail || 'Could not save that address.'
+  }
+}
+
+function stopPairPolling() {
+  if (pairPoll) { clearInterval(pairPoll); pairPoll = null }
+  if (pairTick) { clearInterval(pairTick); pairTick = null }
+}
+
+async function startPairing() {
+  pairingBusy.value = true
+  endpointError.value = ''
+  stopPairPolling()
+  try {
+    const { data } = await pairingApi.start(selectedEndpoints.value)
+    pairing.value = data
+    pairStatus.value = 'pending'
+    pairedName.value = null
+    pairCountdown.value = data.expires_in
+
+    pairTick = setInterval(() => {
+      if (pairCountdown.value > 0) pairCountdown.value--
+    }, 1000)
+
+    pairPoll = setInterval(async () => {
+      if (!pairing.value) return
+      try {
+        const { data: s } = await pairingApi.status(pairing.value.code)
+        pairStatus.value = s.status
+        if (s.status === 'claimed') {
+          pairedName.value = s.device_name
+          stopPairPolling()
+          void loadDevices()
+        } else if (s.status === 'expired') {
+          stopPairPolling()
+        }
+      } catch { /* keep polling */ }
+    }, 2000)
+  } catch (e: any) {
+    endpointError.value = e.response?.data?.detail || 'Could not start pairing.'
+  } finally {
+    pairingBusy.value = false
+  }
+}
+
+function cancelPairing() {
+  stopPairPolling()
+  pairing.value = null
+}
+
+onUnmounted(stopPairPolling)
+
 function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleString()
@@ -1621,6 +1818,7 @@ onMounted(async () => {
   void loadWebhooks()
   void loadProxy()
   void loadDevices()
+  void loadEndpoints()
 
   await Promise.all([loadVersionInfo(), fetchServiceLogs()])
   // An install kicked off from this page (or another tab/session) can still
@@ -2229,4 +2427,79 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .revoke-btn:hover { background: var(--danger-dim); border-color: rgba(255,68,68,0.5); }
+
+/* Paired devices / QR pairing */
+.pair-endpoints { margin-top: 4px; }
+.pair-subhead { font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
+.pair-hint { font-size: 10px; color: var(--fg-dim); line-height: 1.5; margin: 0 0 8px; }
+.pair-ep-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.pair-ep-row:hover { border-color: var(--accent); }
+.pair-ep-url {
+  font-size: 11px; color: var(--fg); flex: 1;
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.pair-ep-kind {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--fg-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.pair-ep-kind.kind-overlay { color: var(--accent); border-color: var(--accent); }
+.pair-ep-kind.kind-lan { color: var(--warning); border-color: var(--warning); }
+.pair-add-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.pair-add-row > :first-child { flex: 1; }
+.pair-actions { display: flex; gap: 8px; margin-top: 12px; }
+.pair-panel {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.pair-qr {
+  width: 168px; height: 168px;
+  image-rendering: pixelated;   /* keep the modules crisp when upscaled */
+  background: #fff;             /* scanners need the light quiet zone */
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.pair-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pair-status { font-size: 11px; color: var(--fg-muted); }
+.pair-status.pair-ok { color: var(--accent); }
+.pair-status.pair-stale { color: var(--warning); }
+.pair-manual { display: flex; flex-direction: column; gap: 4px; }
+.pair-manual-label { font-size: 10px; color: var(--fg-dim); }
+.pair-code {
+  font-family: var(--font);
+  font-size: 18px;
+  letter-spacing: 3px;
+  color: var(--fg);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+@media (max-width: 560px) {
+  .pair-panel { flex-direction: column; }
+}
 </style>
