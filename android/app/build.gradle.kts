@@ -80,6 +80,10 @@ dependencies {
     // (GrapheneOS / LineageOS without gapps). ZXing is self-contained.
     implementation(libs.zxing.embedded)
 
+    // Image loading for the panel background, which is served behind auth and
+    // often over a self-signed cert — so it reuses ApiClient's OkHttp instance.
+    implementation(libs.coil.compose)
+
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
     implementation(libs.androidx.work.runtime.ktx)
