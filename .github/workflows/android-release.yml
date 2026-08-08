@@ -1,8 +1,9 @@
 name: Android release
 
 # Tagging is the trigger, so a release is always something you asked for
-# rather than a side effect of pushing to master. workflow_dispatch is there
-# for rebuilding a release without moving a tag.
+# rather than a side effect of pushing to master. A tag that changes nothing
+# under android/ is skipped by the `check` job below. workflow_dispatch is
+# there for rebuilding a release without moving a tag, and bypasses that check.
 on:
   push:
     tags:
@@ -18,7 +19,56 @@ permissions:
   contents: write # required to create the release and upload the APK
 
 jobs:
+  # An `on.push.paths` filter cannot do this: GitHub does not evaluate path
+  # filters for tag pushes at all, so the diff has to be taken here. Compare
+  # the tag against the previous one on the same history and skip the whole
+  # build when nothing under android/ moved, rather than republishing a
+  # byte-identical APK under a new version.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the diff needs history and the earlier tags
+
+      - name: Look for Android changes since the last tag
+        id: diff
+        run: |
+          # workflow_dispatch is the deliberate override: it exists to rebuild
+          # a release on demand, so it must not be second-guessed here.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch — building regardless of the diff."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAG="${{ github.ref_name }}"
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' "${TAG}^" 2>/dev/null || true)
+
+          if [ -z "$PREV" ]; then
+            echo "No earlier tag; treating $TAG as the first release."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --quiet "$PREV" "$TAG" -- android/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "### No Android changes in \`$TAG\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing under \`android/\` changed since \`$PREV\`, so no APK was built." >> "$GITHUB_STEP_SUMMARY"
+            echo "Re-run this workflow manually with the tag as input to force a build." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Android changes since $PREV:"
+            git diff --name-only "$PREV" "$TAG" -- android/
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
     runs-on: ubuntu-latest
 
     # Lifted to job level so the steps below can test it in an `if:`. Neither
