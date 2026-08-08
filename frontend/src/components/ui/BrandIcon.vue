@@ -1,28 +1,50 @@
 <template>
-  <span
-    v-if="svg"
+  <!--
+    Rendered as <img>, never v-html. An SVG loaded through <img> runs in an
+    image context where scripts and event handlers are inert, so a compromised
+    or MITM'd icon CDN can't reach the DOM. The previous version fetched the
+    markup and injected it behind a regex sanitizer that turned out to be
+    bypassable via `<img/onerror=...>` — slash is a valid attribute separator.
+  -->
+  <img
+    v-if="src"
     class="brand-icon"
     :class="{ 'brand-icon--dark': isDark }"
-    v-html="svg"
+    :src="src"
+    :alt="slug ?? ''"
     :title="slug ?? undefined"
-    :style="{ width: px, height: px }"
+    :width="size ?? 14"
+    :height="size ?? 14"
+    loading="lazy"
+    decoding="async"
+    referrerpolicy="no-referrer"
+    @error="tryNextSource"
   />
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
-import { detectBrand, fetchBrandSvg, DARK_SLUGS } from '@/utils/brandIcons'
+import { detectBrand, brandIconUrls, DARK_SLUGS } from '@/utils/brandIcons'
 
 const props = defineProps<{ name: string; size?: number }>()
 
 const slug = ref<string | null>(null)
-const svg = ref<string | null>(null)
-const isDark = computed(() => !!slug.value && DARK_SLUGS.has(slug.value))
-const px = computed(() => `${props.size ?? 14}px`)
+const sources = ref<string[]>([])
+const index = ref(0)
 
-async function load(name: string) {
+const src = computed(() => sources.value[index.value] ?? null)
+const isDark = computed(() => !!slug.value && DARK_SLUGS.has(slug.value))
+
+/** Falls through to the next CDN when one 404s or is unreachable. */
+function tryNextSource() {
+  if (index.value < sources.value.length - 1) index.value++
+  else sources.value = [] // give up quietly rather than showing a broken image
+}
+
+function load(name: string) {
   slug.value = detectBrand(name)
-  svg.value = slug.value ? await fetchBrandSvg(slug.value) : null
+  sources.value = slug.value ? brandIconUrls(slug.value) : []
+  index.value = 0
 }
 
 onMounted(() => load(props.name))
@@ -31,16 +53,11 @@ watch(() => props.name, load)
 
 <style scoped>
 .brand-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   flex-shrink: 0;
+  object-fit: contain;
   opacity: 0.85;
   border-radius: 3px;
-}
-.brand-icon :deep(svg) {
-  width: 100%;
-  height: 100%;
 }
 /* Dark-colored brand icons (black/near-black) need a light backing on dark backgrounds */
 .brand-icon--dark {

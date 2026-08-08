@@ -4,8 +4,12 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import COOKIE_NAME, get_current_user, is_allowed_ws_origin
-from app.core.security import decode_token
+from app.core.dependencies import (
+    authenticate_ws,
+    get_current_user,
+    is_allowed_ws_origin,
+    is_jti_revoked,
+)
 from app.database import get_db
 from app.models.user import User
 from app.schemas.sites import (
@@ -300,12 +304,8 @@ async def stream_logs(site_id: str, ws: WebSocket):
         await ws.close(code=4003)
         return
 
-    try:
-        payload = decode_token(ws.cookies.get(COOKIE_NAME, ""))
-        if payload.get("scope") != "full":
-            await ws.close(code=4001)
-            return
-    except ValueError:
+    jti = await authenticate_ws(ws)
+    if jti is None:
         await ws.close(code=4001)
         return
 
@@ -328,6 +328,8 @@ async def stream_logs(site_id: str, ws: WebSocket):
     await ws.accept()
     try:
         async for line in site_service.tail_log(log_paths[0]):
+            if is_jti_revoked(jti):
+                break
             try:
                 await ws.send_text(json.dumps({"line": line}))
             except WebSocketDisconnect:
