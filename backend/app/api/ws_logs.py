@@ -4,8 +4,7 @@ import os
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.core.dependencies import COOKIE_NAME, is_allowed_ws_origin
-from app.core.security import decode_token
+from app.core.dependencies import authenticate_ws, is_allowed_ws_origin, is_jti_revoked
 
 router = APIRouter(tags=["websocket"])
 
@@ -42,12 +41,11 @@ async def logs_ws(ws: WebSocket, source: str = "journalctl"):
         await ws.close(code=4003)
         return
 
-    try:
-        payload = decode_token(ws.cookies.get(COOKIE_NAME, ""))
-        if payload.get("scope") != "full":
-            await ws.close(code=4001)
-            return
-    except ValueError:
+    # authenticate_ws enforces device revocation; the hand-rolled decode this
+    # replaced checked only signature and scope, so a revoked session kept
+    # streaming /var/log/auth.log until its token expired.
+    jti = await authenticate_ws(ws)
+    if jti is None:
         await ws.close(code=4001)
         return
 
@@ -69,6 +67,11 @@ async def logs_ws(ws: WebSocket, source: str = "journalctl"):
     async def _read_lines() -> None:
         assert proc.stdout is not None
         async for raw in proc.stdout:
+            # Checked per line, not just at connect: this stream carries
+            # auth.log and syslog, and an operator who revokes a session
+            # expects it cut off now rather than whenever the token expires.
+            if is_jti_revoked(jti):
+                break
             line = raw.decode(errors="replace").rstrip("\n")
             try:
                 await ws.send_text(json.dumps({"type": "line", "text": line}))

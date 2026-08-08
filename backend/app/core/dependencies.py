@@ -96,12 +96,28 @@ _jti_cache: dict[str, float] = {}  # jti -> checked_at (monotonic)
 _jti_cache_lock = Lock()
 
 
+# Revoked jtis, so already-open WebSockets can be dropped mid-stream. A
+# connect-time check alone would let an existing stream run until its token
+# expired — up to 8 hours of live metrics and /var/log/auth.log for a session
+# the operator believed they had just cut off.
+_revoked_jtis: set[str] = set()
+
+
 def invalidate_jti(jti: str | None) -> None:
     """Drop a cached revocation result — call when revoking a device."""
     if not jti:
         return
     with _jti_cache_lock:
         _jti_cache.pop(jti, None)
+        _revoked_jtis.add(jti)
+
+
+def is_jti_revoked(jti: str | None) -> bool:
+    """Cheap in-memory check for long-lived streams to poll between frames."""
+    if not jti:
+        return False
+    with _jti_cache_lock:
+        return jti in _revoked_jtis
 
 
 def _jti_recently_verified(jti: str) -> bool:
@@ -169,6 +185,49 @@ async def get_current_user(
     if not user:
         raise CREDENTIALS_ERROR
     return user
+
+
+async def authenticate_ws(ws: WebSocket) -> str | None:
+    """Validate a WebSocket handshake's session cookie.
+
+    Returns the token's jti (or "" when the token predates jti tracking), or
+    None if the connection must be rejected.
+
+    Exists because the three WebSocket endpoints each decoded the cookie by
+    hand and checked only the signature and scope — never revocation. Clicking
+    "Revoke" in Settings therefore cut off HTTP within the cache TTL while
+    leaving live metrics and the system log stream open until the token
+    expired. WebSockets need their own entry point because they carry no
+    Request, so the HTTP dependency can't be reused directly.
+    """
+    token = ws.cookies.get(COOKIE_NAME, "")
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        return None
+    if payload.get("scope") != "full":
+        return None
+    if not payload.get("sub"):
+        return None
+
+    jti: str | None = payload.get("jti")
+    if not jti:
+        # Pre-dates jti tracking; signature and scope are all there is to check.
+        return ""
+    if is_jti_revoked(jti):
+        return None
+    if not _jti_recently_verified(jti):
+        from app.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Device).where(Device.jti == jti))
+            device = result.scalar_one_or_none()
+            if device is None or device.revoked:
+                return None
+        _remember_jti(jti)
+    return jti
 
 
 async def require_auth(

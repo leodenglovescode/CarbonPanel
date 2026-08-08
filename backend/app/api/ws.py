@@ -3,8 +3,7 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.broadcast import connection_manager
-from app.core.dependencies import COOKIE_NAME, is_allowed_ws_origin
-from app.core.security import decode_token
+from app.core.dependencies import authenticate_ws, is_allowed_ws_origin
 from app.services.metrics.collector import metrics_collector
 
 router = APIRouter(tags=["websocket"])
@@ -18,12 +17,10 @@ async def websocket_endpoint(ws: WebSocket):
 
     # Authenticate via the httpOnly session cookie — the browser sends it
     # automatically on the WS handshake, no token in the URL/query string.
-    try:
-        payload = decode_token(ws.cookies.get(COOKIE_NAME, ""))
-        if payload.get("scope") != "full":
-            await ws.close(code=4001)
-            return
-    except ValueError:
+    # authenticate_ws also enforces device revocation, which the hand-rolled
+    # decode this replaced did not.
+    jti = await authenticate_ws(ws)
+    if jti is None:
         await ws.close(code=4001)
         return
 
@@ -31,7 +28,7 @@ async def websocket_endpoint(ws: WebSocket):
     # Preferences are scoped to this connection. They used to be written
     # straight onto the collector singleton, so whichever tab spoke last set
     # the sort order and refresh rate for every other connected client.
-    metrics_collector.register_ws(ws)
+    metrics_collector.register_ws(ws, jti)
 
     try:
         while True:

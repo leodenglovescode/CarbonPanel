@@ -12,6 +12,19 @@ class ConnectionManager:
     def disconnect(self, ws: WebSocket) -> None:
         self.active.discard(ws)
 
+    async def close(self, ws: WebSocket, code: int = 1000) -> None:
+        """Drop a connection and stop tracking it.
+
+        Used to cut off a session whose device was revoked while its socket
+        was still open — closing without discarding would leave a dead entry
+        being iterated on every broadcast.
+        """
+        self.active.discard(ws)
+        try:
+            await ws.close(code=code)
+        except Exception:
+            pass
+
     async def send_to(self, ws: WebSocket, data: str) -> bool:
         """Send to one connection, dropping it if the send fails.
 

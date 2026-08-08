@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from threading import Lock
 
 from app.core.broadcast import connection_manager
+from app.core.dependencies import is_jti_revoked
 from app.schemas.metrics import (
     CpuMetrics,
     DiskMetrics,
@@ -41,6 +42,9 @@ class ClientPrefs:
     interval: float = 2.0
     sort_by: str = "cpu"
     limit: int = 25
+    # Token id behind this connection, so a revoked session can be dropped
+    # mid-stream rather than streaming on until its token expires.
+    jti: str = ""
 
 
 class MetricsCollector:
@@ -79,8 +83,8 @@ class MetricsCollector:
 
     # ── client registration ────────────────────────────────────────────────
 
-    def register_ws(self, key: object) -> ClientPrefs:
-        prefs = ClientPrefs(interval=self._default_interval)
+    def register_ws(self, key: object, jti: str = "") -> ClientPrefs:
+        prefs = ClientPrefs(interval=self._default_interval, jti=jti)
         with self._lock:
             self._ws_clients[key] = prefs
         return prefs
@@ -241,6 +245,13 @@ class MetricsCollector:
         payloads: dict[tuple[str, int], str] = {}
         for ws, prefs in targets:
             prefs = prefs or ClientPrefs(interval=self._default_interval)
+            # The broadcast loop already visits every connection each tick, so
+            # it is the cheapest place to enforce revocation on sockets that
+            # are already open.
+            if prefs.jti and is_jti_revoked(prefs.jti):
+                self.unregister_ws(ws)
+                await connection_manager.close(ws, code=4001)
+                continue
             cache_key = (prefs.sort_by, prefs.limit)
             payload = payloads.get(cache_key)
             if payload is None:
