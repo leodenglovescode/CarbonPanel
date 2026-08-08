@@ -1,0 +1,84 @@
+package dev.carbonpanel.pairing
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.util.AttributeSet
+import com.journeyapps.barcodescanner.ViewfinderView
+
+/**
+ * Viewfinder matching the rest of the app.
+ *
+ * ZXing's stock view draws a red laser line across a plain rectangle, which
+ * looks nothing like the panel and reads as a debug overlay. This replaces it
+ * with a dimmed surround and accent corner brackets — the same shape used on
+ * the pairing screen, so the two read as one flow.
+ */
+class CarbonViewfinderView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+) : ViewfinderView(context, attrs) {
+
+    private val scrim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(160, 0, 0, 0)
+    }
+    private val bracket = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ACCENT
+        style = Paint.Style.STROKE
+        strokeWidth = 6f
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val hairline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(70, 0, 255, 136)
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        refreshSizes()
+        val frame = framingRect ?: return
+
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val f = RectF(frame)
+        val radius = 20f
+
+        // Dim everything outside the framing rect so the eye lands on the
+        // window rather than the whole camera feed.
+        canvas.save()
+        canvas.clipOutRect(f)
+        canvas.drawRect(0f, 0f, w, h, scrim)
+        canvas.restore()
+
+        canvas.drawRoundRect(f, radius, radius, hairline)
+
+        // Corner brackets, one per corner, drawn as two strokes each.
+        val arm = minOf(f.width(), f.height()) * 0.16f
+        val corners = listOf(
+            Triple(f.left, f.top, Pair(1f, 1f)),
+            Triple(f.right, f.top, Pair(-1f, 1f)),
+            Triple(f.left, f.bottom, Pair(1f, -1f)),
+            Triple(f.right, f.bottom, Pair(-1f, -1f)),
+        )
+        for ((x, y, dir) in corners) {
+            val (dx, dy) = dir
+            canvas.drawLine(x, y + dy * 2, x, y + dy * arm, bracket)
+            canvas.drawLine(x + dx * 2, y, x + dx * arm, y, bracket)
+        }
+
+        // Deliberately no laser line and no animation: a QR decodes the
+        // instant it's in frame, so a sweeping beam implies progress that
+        // isn't happening and just adds a redraw every frame.
+        postInvalidateDelayed(
+            REDRAW_DELAY_MS,
+            frame.left, frame.top, frame.right, frame.bottom,
+        )
+    }
+
+    private companion object {
+        const val ACCENT = 0xFF00FF88.toInt()
+        const val REDRAW_DELAY_MS = 120L
+    }
+}

@@ -15,6 +15,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import dev.carbonpanel.pairing.PairState
+import dev.carbonpanel.pairing.ScannerActivity
 import dev.carbonpanel.pairing.PairingViewModel
 import dev.carbonpanel.ui.components.ErrorBanner
 import dev.carbonpanel.ui.components.InlineSpinner
@@ -84,6 +87,7 @@ fun PairingScreen(
     fun launchScanner() {
         scanLauncher.launch(
             ScanOptions()
+                .setCaptureActivity(ScannerActivity::class.java)
                 .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                 .setPrompt("Point at the code in Settings → Paired Devices")
                 .setBeepEnabled(false)
@@ -97,15 +101,23 @@ fun PairingScreen(
 
     if (state is PairState.Paired) onPaired()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.height(48.dp))
+    // Centred vertically when the content fits, scrollable when it doesn't.
+    // A plain verticalScroll column measures against unbounded height, so
+    // Arrangement.Center has nothing to centre within and everything piles up
+    // at the top — which is what it was doing. Constraining the minimum height
+    // to the viewport gives the arrangement something to work against.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val viewportHeight = maxHeight
 
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = viewportHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
         Viewfinder()
 
         Spacer(Modifier.height(28.dp))
@@ -234,7 +246,8 @@ fun PairingScreen(
             )
         }
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(8.dp))
+        }
     }
 }
 

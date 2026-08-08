@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Inner layout for DecoratedBarcodeView. The ids are fixed by the library —
+  it looks them up by name — so only the viewfinder implementation and the
+  status text styling change here.
+-->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <com.journeyapps.barcodescanner.BarcodeView
+        android:id="@+id/zxing_barcode_surface"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <dev.carbonpanel.pairing.CarbonViewfinderView
+        android:id="@+id/zxing_viewfinder_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:id="@+id/zxing_status_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="72dp"
+        android:gravity="center"
+        android:background="@android:color/transparent"
+        android:text="Point the camera at the code"
+        android:textColor="#D8E0DC"
+        android:textSize="13sp"
+        android:fontFamily="monospace" />
+
+</merge>
