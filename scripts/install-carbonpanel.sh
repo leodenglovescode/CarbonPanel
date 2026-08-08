@@ -1050,6 +1050,66 @@ install_or_update() {
   local install_mode="$1"
   local source_type ref release_url release_id release_dir commit installed_at
 
+  # Resolve the target first. Everything below is either expensive (apt,
+  # cloning, building) or has side effects on the host, and none of it is
+  # worth doing before we know whether there is anything to deploy.
+  log "Asking GitHub what's poppin..."
+  mapfile -t resolved < <(resolve_requested_reference)
+  source_type="${resolved[0]}"
+  ref="${resolved[1]:-}"
+  release_url="${resolved[2]:-}"
+
+  [[ -n "$ref" ]] || die "couldn't figure out what version to install — check your internet connection and that ${REPO_URL} is reachable"
+
+  # Stop here if the deployed commit already matches the remote tip.
+  #
+  # Previously every `update` ran the whole pipeline — apt, clone, virtualenv,
+  # pip install, npm install, frontend build, redeploy, restart — and only
+  # afterwards printed "You're on the latest". That is ~45s and a gigabyte of
+  # peak memory to reach a no-op, and it restarted a healthy panel to install
+  # the code it was already running. One ls-remote answers the question.
+  if [[ "$install_mode" == "update" && -z "${CARBONPANEL_FORCE:-}" ]]; then
+    local current_commit remote_commit
+    current_commit="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" commit)"
+    remote_commit="$(git ls-remote "$REPO_URL" "refs/heads/$ref" 2>/dev/null | awk '{print $1}')"
+    # Only short-circuit on a definite match. An unreachable remote or a ref
+    # that isn't a branch leaves remote_commit empty, and guessing "nothing to
+    # do" from a failed lookup would silently skip a real update.
+    if [[ -n "$current_commit" && -n "$remote_commit" && "$current_commit" == "$remote_commit" ]]; then
+      ok "Already on the latest (${current_commit:0:8}) — nothing to do ✨"
+      note "Run with ${BOLD}--force${NC} to rebuild and redeploy anyway."
+      if [[ -d "$SHARED_DIR" ]]; then
+        check_for_updates >/dev/null 2>&1 || true
+      fi
+      return 0
+    fi
+  fi
+
+  # Re-exec before the preamble, not after.
+  #
+  # This process is running whatever version of THIS SCRIPT was on disk when
+  # it started. build_release() overwrites $CONTROL_SCRIPT further down, but
+  # bash already parsed this process's functions into memory and won't pick up
+  # the new file mid-run — so an update that changes install logic (new nginx
+  # directives, new systemd units, ...) would deploy with the OLD logic once
+  # and only take effect on the next update. Re-exec into the target ref's own
+  # copy so build/deploy/config generation matches what is being deployed.
+  #
+  # Doing this before the preamble matters: it used to sit after it, so apt,
+  # the service account, the layout and the TLS cert were all done twice per
+  # invocation — once in this process and again in the re-exec'd child.
+  if [[ -z "${CARBONPANEL_REEXECED:-}" ]]; then
+    local bootstrap_dir
+    bootstrap_dir="$(mktemp -d)"
+    if git clone --quiet --depth 1 --branch "$ref" "$REPO_URL" "$bootstrap_dir" >/dev/null 2>&1 \
+       && [[ -f "$bootstrap_dir/scripts/install-carbonpanel.sh" ]]; then
+      CARBONPANEL_REEXECED=1 CARBONPANEL_FORCE="${CARBONPANEL_FORCE:-}" \
+        exec bash "$bootstrap_dir/scripts/install-carbonpanel.sh" "$install_mode" --ref "$ref"
+    fi
+    rm -rf "$bootstrap_dir"
+    warn "Couldn't bootstrap the latest install script — continuing with the version already running."
+  fi
+
   log "Sniffing for port squatters on :${APP_PORT}..."
   ensure_port_available
   log "Grabbing system dependencies from apt..."
@@ -1064,34 +1124,6 @@ install_or_update() {
   log "Minting a self-signed TLS cert..."
   ensure_tls_cert
   ensure_cookie_secure_flag
-
-  log "Asking GitHub what's poppin..."
-  mapfile -t resolved < <(resolve_requested_reference)
-  source_type="${resolved[0]}"
-  ref="${resolved[1]:-}"
-  release_url="${resolved[2]:-}"
-
-  [[ -n "$ref" ]] || die "couldn't figure out what version to install — check your internet connection and that ${REPO_URL} is reachable"
-
-  # This process is running whatever version of THIS SCRIPT was already on
-  # disk when it started. build_release() overwrites $CONTROL_SCRIPT with the
-  # new version further down, but bash already parsed this process's function
-  # bodies into memory at startup and won't pick up the new file mid-run — so
-  # an update that changes install-script logic (new nginx directives, new
-  # systemd units, ...) would silently deploy with the OLD logic this one
-  # time and only take effect on the NEXT update. Re-exec into the target
-  # ref's own copy of the script so build/deploy/config generation always
-  # matches what's actually about to be deployed.
-  if [[ -z "${CARBONPANEL_REEXECED:-}" ]]; then
-    local bootstrap_dir
-    bootstrap_dir="$(mktemp -d)"
-    if git clone --quiet --depth 1 --branch "$ref" "$REPO_URL" "$bootstrap_dir" >/dev/null 2>&1 \
-       && [[ -f "$bootstrap_dir/scripts/install-carbonpanel.sh" ]]; then
-      CARBONPANEL_REEXECED=1 exec bash "$bootstrap_dir/scripts/install-carbonpanel.sh" "$install_mode" --ref "$ref"
-    fi
-    rm -rf "$bootstrap_dir"
-    warn "Couldn't bootstrap the latest install script — continuing with the version already running."
-  fi
 
   log "Yanking the code down (${BOLD}${ref}${NC})..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"
@@ -1430,6 +1462,14 @@ while [[ $# -gt 0 ]]; do
     --ref)
       REQUESTED_REF="${2:-}"
       shift 2
+      ;;
+    --force|-f)
+      # Rebuild and redeploy even when the deployed commit already matches.
+      # This is how you recover a corrupted virtualenv or a half-finished
+      # deploy, so the same-commit skip must always be overridable.
+      CARBONPANEL_FORCE=1
+      export CARBONPANEL_FORCE
+      shift
       ;;
     *)
       die "Unknown argument: $1"
