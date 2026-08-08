@@ -28,9 +28,10 @@ async def websocket_endpoint(ws: WebSocket):
         return
 
     await connection_manager.connect(ws)
-
-    # Send client preferences for process sorting
-    prefs = {"process_sort": "cpu", "process_limit": 25}
+    # Preferences are scoped to this connection. They used to be written
+    # straight onto the collector singleton, so whichever tab spoke last set
+    # the sort order and refresh rate for every other connected client.
+    metrics_collector.register_ws(ws)
 
     try:
         while True:
@@ -38,20 +39,17 @@ async def websocket_endpoint(ws: WebSocket):
                 data = await ws.receive_text()
                 msg = json.loads(data)
                 if msg.get("type") == "set_prefs":
-                    if "process_sort" in msg:
-                        prefs["process_sort"] = msg["process_sort"]
-                    if "process_limit" in msg:
-                        prefs["process_limit"] = int(msg["process_limit"])
                     metrics_collector.set_prefs(
-                        sort_by=prefs["process_sort"],
-                        limit=prefs["process_limit"],
+                        ws,
+                        sort_by=msg.get("process_sort"),
+                        limit=msg.get("process_limit"),
                     )
                 elif msg.get("type") == "set_interval":
-                    seconds = float(msg.get("seconds", 2.0))
-                    metrics_collector.set_interval(seconds)
+                    metrics_collector.set_interval(ws, msg.get("seconds", 2.0))
             except WebSocketDisconnect:
                 break
             except Exception:
                 break
     finally:
+        metrics_collector.unregister_ws(ws)
         connection_manager.disconnect(ws)
