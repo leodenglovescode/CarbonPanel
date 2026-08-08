@@ -42,6 +42,16 @@ def _service_is_active(service_name: str) -> bool:
     return result.returncode == 0
 
 
+def is_update_in_progress() -> bool:
+    """True while the update unit is actually running.
+
+    The authoritative answer to "can another install start", replacing a
+    fixed time window that could only ever be a guess at how long an install
+    takes.
+    """
+    return _service_is_active(UPDATE_SERVICE)
+
+
 def _service_unit_exists(service_name: str) -> bool:
     """Return True only if the systemd unit file is installed on this host."""
     try:
