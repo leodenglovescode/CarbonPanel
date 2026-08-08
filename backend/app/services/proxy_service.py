@@ -1,26 +1,9 @@
 from __future__ import annotations
 
-import json
-import os
 import urllib.request
-from pathlib import Path
 from typing import Any
 
-def _default_settings_path() -> Path:
-    # Honour explicit override first.
-    if override := os.getenv("CARBONPANEL_SETTINGS_FILE"):
-        return Path(override)
-    # In a production install, write alongside the other shared state files.
-    # os.access(W_OK) matters, not just is_dir(): a dev checkout running as a
-    # regular user on the same host as a real install would otherwise pick a
-    # shared/ directory it has no permission to actually write into.
-    shared = Path(os.getenv("CARBONPANEL_INSTALL_ROOT", "/opt/carbonpanel")) / "shared"
-    if shared.is_dir() and os.access(shared, os.W_OK):
-        return shared / "settings.json"
-    # Dev / non-installed fallback.
-    return Path.home() / ".config" / "carbonpanel" / "settings.json"
-
-_SETTINGS_FILE = _default_settings_path()
+from app.services.settings_store import get_key, set_key
 
 DEFAULT_PROXY: dict[str, Any] = {
     "enabled": False,
@@ -30,26 +13,12 @@ DEFAULT_PROXY: dict[str, Any] = {
 }
 
 
-def _read() -> dict[str, Any]:
-    try:
-        return json.loads(_SETTINGS_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _write(data: dict[str, Any]) -> None:
-    _SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _SETTINGS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
 def get_proxy() -> dict[str, Any]:
-    return _read().get("proxy", dict(DEFAULT_PROXY))
+    return get_key("proxy", dict(DEFAULT_PROXY))
 
 
 def set_proxy(config: dict[str, Any]) -> None:
-    data = _read()
-    data["proxy"] = config
-    _write(data)
+    set_key("proxy", config)
 
 
 def build_opener() -> urllib.request.OpenerDirector | None:

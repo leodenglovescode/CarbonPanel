@@ -16,7 +16,7 @@ MAX_DIMENSION = 2560  # long-edge cap; plenty for any display background
 
 def _images_dir() -> Path:
     # Mirrors the resolution order used for other shared runtime state
-    # (see proxy_service._default_settings_path) so installs keep every
+    # (see settings_store._default_settings_path) so installs keep every
     # piece of mutable config under the same root.
     #
     # os.access(W_OK) matters, not just is_dir(): a dev checkout running as
