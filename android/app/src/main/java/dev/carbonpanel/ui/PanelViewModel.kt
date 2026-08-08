@@ -10,8 +10,7 @@ import dev.carbonpanel.repo.PollState
 import dev.carbonpanel.ui.components.isPseudoMount
 import dev.carbonpanel.ui.theme.AccentChoice
 import dev.carbonpanel.ui.theme.ThemeMode
-import androidx.glance.appwidget.updateAll
-import dev.carbonpanel.widget.StatusWidget
+import dev.carbonpanel.widget.WidgetBridge
 import dev.carbonpanel.widget.StatusWidgetWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -489,18 +488,21 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
         prefs.widgetDisk = mountpoint
         _widgetDisk.value = mountpoint
         StatusWidgetWorker.refreshNow(getApplication())
+        repaintWidget()
     }
 
     fun setWidgetIface(iface: String) {
         prefs.widgetIface = iface
         _widgetIface.value = iface
         StatusWidgetWorker.refreshNow(getApplication())
+        repaintWidget()
     }
 
     fun setWidgetNetUnit(unit: NetUnit) {
         prefs.widgetNetUnit = unit.name
         _widgetNetUnit.value = unit
         StatusWidgetWorker.refreshNow(getApplication())
+        repaintWidget()
     }
 
     fun setWidgetRefresh(minutes: Int) {
@@ -511,6 +513,7 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshWidgetNow() {
         StatusWidgetWorker.refreshNow(getApplication())
+        repaintWidget()
         say("Widget refresh queued")
     }
 
@@ -566,7 +569,12 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
         // Failures are surfaced rather than swallowed. A silent runCatching
         // here meant a widget that refused to repaint left no trace anywhere,
         // which is the worst possible combination.
-        runCatching { StatusWidget().updateAll(getApplication()) }
+        // Pushes the current appearance into Glance's store and redraws.
+        // updateAll() alone is not enough: the composable observes Glance
+        // state, not SharedPreferences, so without a state write there is
+        // nothing to invalidate and a live session simply re-sends the old
+        // RemoteViews.
+        runCatching { WidgetBridge.push(getApplication()) }
             .onFailure { say("Could not repaint widget: ${it.message}") }
     }
 
