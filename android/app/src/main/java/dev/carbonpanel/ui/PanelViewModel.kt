@@ -563,7 +563,11 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
      * process and can't observe the app's theme state, so it has to be told.
      */
     private fun repaintWidget() = viewModelScope.launch {
+        // Failures are surfaced rather than swallowed. A silent runCatching
+        // here meant a widget that refused to repaint left no trace anywhere,
+        // which is the worst possible combination.
         runCatching { StatusWidget().updateAll(getApplication()) }
+            .onFailure { say("Could not repaint widget: ${it.message}") }
     }
 
     fun unpair() = repo.unpair()

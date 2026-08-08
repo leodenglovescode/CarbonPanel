@@ -60,15 +60,21 @@ class StatusWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val prefs = Prefs.get(context)
-        val state = WidgetState.decode(prefs.widgetState)
-        val unit = NetUnit.from(prefs.widgetNetUnit)
-        val serverName = state?.serverName?.ifBlank { null } ?: prefs.serverName ?: "CarbonPanel"
-        val paired = prefs.isPaired
-        // Same dark/light/system setting the app uses — see WidgetPalette.
-        val palette = WidgetPalette.forContext(context)
-
         provideContent {
+            // Everything is read inside provideContent, not outside it.
+            // Values captured outside are fixed at the moment provideGlance
+            // runs, so a recomposition triggered by anything else — a resize,
+            // a launcher reload — redraws with the palette from whenever the
+            // widget was last *rebuilt* rather than the current preference.
+            // That is what made theme changes look like they hadn't applied.
+            val prefs = Prefs.get(context)
+            val state = WidgetState.decode(prefs.widgetState)
+            val unit = NetUnit.from(prefs.widgetNetUnit)
+            val serverName =
+                state?.serverName?.ifBlank { null } ?: prefs.serverName ?: "CarbonPanel"
+            val paired = prefs.isPaired
+            val palette = WidgetPalette.forContext(context)
+
             val size = LocalSize.current
             val layout = rememberLayout(size.width, size.height, state?.gpuPresent == true)
 
@@ -240,10 +246,12 @@ private data class Layout(
 )
 
 // Bitmaps reach the launcher inside a Binder transaction capped near 1MB for
-// the whole RemoteViews tree. Four rings at full 3x density would exceed that
-// and throw TransactionTooLargeException, so bitmap resolution is capped and
-// the Image scales it. A slight upscale on very large widgets beats crashing.
-private const val MAX_RING_PX = 200
+// the whole RemoteViews tree, and the launcher holds them resident for as long
+// as the widget is placed. At 200px the four rings measured 1.1MB of bitmap
+// memory in `dumpsys appwidget` — updating without error, but with no headroom
+// and more launcher memory than a status widget deserves. 160px is ~410KB and
+// is at most a 1.4x upscale at typical widget sizes.
+private const val MAX_RING_PX = 160
 
 @Composable
 private fun rememberLayout(width: Dp, height: Dp, hasGpu: Boolean): Layout {

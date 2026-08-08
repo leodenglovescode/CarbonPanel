@@ -8,14 +8,14 @@
 
     <!-- track -->
     <path
-        android:strokeColor="#243029"
+        android:strokeColor="@color/widget_preview_track"
         android:strokeWidth="6"
         android:fillColor="#00000000"
         android:pathData="M26,4 A22,22 0 1,1 25.99,4" />
 
     <!-- ~70% sweep, starting at 12 o'clock -->
     <path
-        android:strokeColor="#00FF88"
+        android:strokeColor="@color/widget_preview_accent"
         android:strokeWidth="6"
         android:strokeLineCap="round"
         android:fillColor="#00000000"

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Colours for the widget picker preview only.
+
+  The live widget resolves its palette at runtime from the user's theme
+  setting (see WidgetPalette). The preview cannot: it is a static layout the
+  system inflates before the widget exists, with no access to app
+  preferences. Day/night qualifiers are the most it can follow — the chosen
+  accent is a stored runtime value and is unreachable from here, so the
+  preview always shows the brand accent.
+-->
+<resources>
+    <color name="widget_preview_ground">#F6F8F7</color>
+    <color name="widget_preview_card">#E9EEEC</color>
+    <color name="widget_preview_track">#D6DEDA</color>
+    <color name="widget_preview_fg">#141A18</color>
+    <color name="widget_preview_accent">#00A85A</color>
+</resources>
