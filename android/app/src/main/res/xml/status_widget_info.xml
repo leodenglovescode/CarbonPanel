@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  updatePeriodMillis is deliberately 0: the platform ignores anything under 30
+  minutes anyway, and WorkManager's periodic floor is 15 minutes. Refreshes are
+  driven by StatusWidgetWorker instead, plus an immediate update whenever the
+  app itself fetches fresh metrics. A widget here shows last-known state with a
+  timestamp, not a live gauge — see StatusWidget.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="60dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />
