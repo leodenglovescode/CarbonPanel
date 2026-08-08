@@ -1,5 +1,6 @@
 package dev.carbonpanel.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.datastore.preferences.core.Preferences
@@ -347,4 +348,21 @@ private fun Gauge(
 
 class StatusWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = StatusWidget()
+
+    /**
+     * Fetch as soon as a widget is placed.
+     *
+     * Periodic work has a 15-minute floor and defaults to 30, and enqueuing it
+     * does not run it now — so without this a freshly added widget sits on
+     * "No data yet" for up to half an hour while the app itself shows live
+     * numbers.
+     */
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        StatusWidgetWorker.refreshNow(context)
+    }
 }
