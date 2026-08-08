@@ -73,6 +73,11 @@ class SystemMetrics(BaseModel):
     hostname: str
     uptime_seconds: float
     boot_time_ts: float
+    # ts alone is epoch seconds and carries no zone, so a client cannot tell
+    # the server's local time from it — only that an instant occurred. These
+    # let a client show the server's wall clock and label the offset.
+    timezone: str = ""
+    utc_offset_seconds: int = 0
 
 
 class HistoryPoint(BaseModel):
