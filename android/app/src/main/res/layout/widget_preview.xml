@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static preview shown in the widget picker.
+
+  Glance renders at runtime, so the picker has nothing to show until the widget
+  is placed — it fell back to a bare app icon, which is why the widget looked
+  like an afterthought before it was even added. This is a plain layout that
+  approximates the real thing: four rings and a throughput line.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/widget_preview_bg"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CARBONPANEL"
+        android:textColor="#00FF88"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        android:gravity="center">
+
+        <ImageView
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/widget_preview_ring"
+            android:contentDescription="CPU" />
+
+        <ImageView
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/widget_preview_ring"
+            android:contentDescription="RAM" />
+
+        <ImageView
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/widget_preview_ring"
+            android:contentDescription="GPU" />
+
+        <ImageView
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:src="@drawable/widget_preview_ring"
+            android:contentDescription="DISK" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_preview_row"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="7dp"
+        android:text="eno2:   ↓ 152 mbps   ↑ 80 mbps"
+        android:textColor="#D8E0DC"
+        android:textSize="12sp"
+        android:fontFamily="monospace" />
+</LinearLayout>

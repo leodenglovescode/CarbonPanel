@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static stand-in for a ring gauge, used only by the picker preview. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="52dp"
+    android:height="52dp"
+    android:viewportWidth="52"
+    android:viewportHeight="52">
+
+    <!-- track -->
+    <path
+        android:strokeColor="#243029"
+        android:strokeWidth="6"
+        android:fillColor="#00000000"
+        android:pathData="M26,4 A22,22 0 1,1 25.99,4" />
+
+    <!-- ~70% sweep, starting at 12 o'clock -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M26,4 A22,22 0 1,1 8.9,41.7" />
+</vector>

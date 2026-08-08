@@ -1,17 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   updatePeriodMillis is deliberately 0: the platform ignores anything under 30
-  minutes anyway, and WorkManager's periodic floor is 15 minutes. Refreshes are
-  driven by StatusWidgetWorker instead, plus an immediate update whenever the
-  app itself fetches fresh metrics. A widget here shows last-known state with a
-  timestamp, not a live gauge — see StatusWidget.
+  minutes anyway. Refreshes are driven by StatusWidgetWorker on a user-chosen
+  interval instead, so the cadence is configurable rather than hardcoded here.
+
+  previewLayout gives the widget picker something real to show. Glance renders
+  at runtime, so without it the picker falls back to the app icon and the widget
+  looks broken before it has even been placed.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
-    android:minHeight="60dp"
-    android:targetCellWidth="3"
+    android:minHeight="90dp"
+    android:targetCellWidth="4"
     android:targetCellHeight="2"
+    android:minResizeWidth="140dp"
+    android:minResizeHeight="70dp"
+    android:maxResizeWidth="640dp"
+    android:maxResizeHeight="320dp"
     android:updatePeriodMillis="0"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:previewLayout="@layout/widget_preview"
+    android:initialLayout="@layout/widget_preview"
     android:description="@string/widget_description" />
