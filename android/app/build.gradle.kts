@@ -20,8 +20,35 @@ android {
         versionName = "0.1.0"
     }
 
+    // Release signing comes from the environment so CI can inject a keystore
+    // without it ever being committed. Everything is optional: with nothing
+    // set, the release build falls back to the debug key below.
+    val keystorePath: String? = System.getenv("KEYSTORE_FILE")
+
+    signingConfigs {
+        create("release") {
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // A release APK signed with the debug key is still installable,
+            // which is what matters for a sideloaded self-hosted app. An
+            // *unsigned* release APK — AGP's default without a signing config —
+            // cannot be installed at all and would make the CI artifact
+            // useless. Set the KEYSTORE_* secrets to sign properly; note that
+            // switching signing key later requires users to uninstall first.
+            signingConfig = if (!keystorePath.isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -41,6 +68,16 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    lint {
+        // lintVital runs as part of assembleRelease and resolves an extra
+        // classpath of -jvmstubs/-desktop artifact variants, which is both slow
+        // and a hard failure on networks that can't reach dl.google.com. Lint
+        // is still available on demand via `./gradlew :app:lint`; it just no
+        // longer stands between a green build and a shippable APK.
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     packaging {

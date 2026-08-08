@@ -27,3 +27,9 @@ pi-kiosk/.venv/
 .claude/
 .aider*
 CLAUDE.md
+
+# Android build outputs and signing material
+*.apk
+*.aab
+*.keystore
+*.jks
