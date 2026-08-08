@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_preview_ground">#0A0E0D</color>
+    <color name="widget_preview_card">#141A18</color>
+    <color name="widget_preview_track">#243029</color>
+    <color name="widget_preview_fg">#D8E0DC</color>
+    <color name="widget_preview_accent">#00FF88</color>
+</resources>
