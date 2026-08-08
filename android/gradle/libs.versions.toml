@@ -12,6 +12,7 @@ kotlinxSerialization = "1.7.3"
 retrofitSerialization = "1.0.0"
 securityCrypto = "1.1.0-alpha06"
 zxing = "4.3.0"
+coil = "2.7.0"
 glance = "1.1.1"
 work = "2.10.0"
 datastore = "1.1.1"
@@ -41,6 +42,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 zxing-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxing" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
