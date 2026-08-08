@@ -27,6 +27,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Styled replacement for ZXing's stock capture screen. -->
+        <activity
+            android:name=".pairing.ScannerActivity"
+            android:exported="false"
+            android:screenOrientation="fullSensor"
+            android:stateNotNeeded="true"
+            android:theme="@style/Theme.CarbonPanel"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+
         <receiver
             android:name=".widget.StatusWidgetReceiver"
             android:exported="false">

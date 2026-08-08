@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Replaces ZXing's stock capture layout, which is a bare camera rectangle with
+  a red laser line and looks nothing like the rest of the app.
+
+  DecoratedBarcodeView is kept — it wires up the camera, orientation and decode
+  lifecycle — but points at our own viewfinder, with the heading and hint laid
+  over the preview instead of a status line stranded mid-frame.
+
+  FrameLayout rather than ConstraintLayout: this is two text views stacked over
+  a full-bleed preview, which doesn't justify pulling in another dependency.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0E0D">
+
+    <com.journeyapps.barcodescanner.DecoratedBarcodeView
+        android:id="@+id/zxing_barcode_scanner"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:zxing_scanner_layout="@layout/scanner_barcode" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingTop="56dp"
+        android:paddingHorizontal="40dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan pairing code"
+            android:textColor="#00FF88"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:shadowColor="#000000"
+            android:shadowRadius="8"
+            android:shadowDx="0"
+            android:shadowDy="1" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="Open the web panel and go to Settings → Paired Devices"
+            android:textColor="#C2CCC8"
+            android:textSize="12sp"
+            android:lineSpacingExtra="3dp"
+            android:fontFamily="monospace"
+            android:shadowColor="#000000"
+            android:shadowRadius="8"
+            android:shadowDx="0"
+            android:shadowDy="1" />
+    </LinearLayout>
+
+</FrameLayout>
