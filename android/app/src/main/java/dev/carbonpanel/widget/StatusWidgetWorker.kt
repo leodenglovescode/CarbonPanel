@@ -1,7 +1,6 @@
 package dev.carbonpanel.widget
 
 import android.content.Context
-import androidx.glance.appwidget.updateAll
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -62,7 +61,7 @@ class StatusWidgetWorker(
 
             val gpu = snap.gpu?.takeIf { it.available }?.devices?.firstOrNull()
 
-            prefs.widgetState = WidgetState.encode(
+            val encoded = WidgetState.encode(
                 WidgetState(
                     serverName = snap.system?.hostname?.ifBlank { null }
                         ?: prefs.serverName.orEmpty(),
@@ -85,7 +84,11 @@ class StatusWidgetWorker(
                     stale = false,
                 ),
             )
-            StatusWidget().updateAll(applicationContext)
+            prefs.widgetState = encoded
+            // Through the bridge, not updateAll() alone — the widget composes
+            // from Glance state, so the state has to be written for the
+            // composition to invalidate.
+            WidgetBridge.push(applicationContext, encoded)
             Result.success()
         } catch (_: Throwable) {
             markStale(prefs)
@@ -99,8 +102,9 @@ class StatusWidgetWorker(
      */
     private suspend fun markStale(prefs: Prefs) {
         WidgetState.decode(prefs.widgetState)?.let {
-            prefs.widgetState = WidgetState.encode(it.copy(stale = true))
-            runCatching { StatusWidget().updateAll(applicationContext) }
+            val encoded = WidgetState.encode(it.copy(stale = true))
+            prefs.widgetState = encoded
+            runCatching { WidgetBridge.push(applicationContext, encoded) }
         }
     }
 

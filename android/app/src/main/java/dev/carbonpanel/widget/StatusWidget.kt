@@ -2,12 +2,14 @@ package dev.carbonpanel.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.datastore.preferences.core.Preferences
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
+import androidx.glance.currentState
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
@@ -20,6 +22,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -59,21 +62,30 @@ class StatusWidget : GlanceAppWidget() {
     // measured size instead of snapping between a few hand-declared buckets.
     override val sizeMode = SizeMode.Exact
 
+    // Composing from Glance's own store rather than reading SharedPreferences
+    // directly. currentState is observable Compose state, so a change actually
+    // invalidates the running composition — a plain preference read is not
+    // observed by anything, and with a live SessionWorker the composable is
+    // simply skipped and the previous RemoteViews re-sent. See WidgetBridge.
+    override val stateDefinition = PreferencesGlanceStateDefinition
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
-            // Everything is read inside provideContent, not outside it.
-            // Values captured outside are fixed at the moment provideGlance
-            // runs, so a recomposition triggered by anything else — a resize,
-            // a launcher reload — redraws with the palette from whenever the
-            // widget was last *rebuilt* rather than the current preference.
-            // That is what made theme changes look like they hadn't applied.
-            val prefs = Prefs.get(context)
-            val state = WidgetState.decode(prefs.widgetState)
-            val unit = NetUnit.from(prefs.widgetNetUnit)
+            val store = currentState<Preferences>()
+            val appPrefs = Prefs.get(context)
+
+            val state = WidgetState.decode(
+                WidgetBridge.snapshot(store) ?: appPrefs.widgetState,
+            )
+            val unit = NetUnit.from(WidgetBridge.netUnit(store))
             val serverName =
-                state?.serverName?.ifBlank { null } ?: prefs.serverName ?: "CarbonPanel"
-            val paired = prefs.isPaired
-            val palette = WidgetPalette.forContext(context)
+                state?.serverName?.ifBlank { null } ?: appPrefs.serverName ?: "CarbonPanel"
+            val paired = appPrefs.isPaired
+            val palette = WidgetPalette.from(
+                context = context,
+                themeMode = WidgetBridge.theme(store),
+                accentName = WidgetBridge.accent(store),
+            )
 
             val size = LocalSize.current
             val layout = rememberLayout(size.width, size.height, state?.gpuPresent == true)

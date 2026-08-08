@@ -31,9 +31,19 @@ data class WidgetPalette(
         val Red = Color(0xFFFF4444)
         val Blue = Color(0xFF4DA6FF)
 
+        /** Convenience for callers outside a composition (e.g. the worker). */
         fun forContext(context: Context): WidgetPalette {
             val prefs = Prefs.get(context)
-            val mode = runCatching { ThemeMode.valueOf(prefs.themeMode) }
+            return from(context, prefs.themeMode, prefs.accent)
+        }
+
+        /**
+         * Resolves from explicitly supplied values rather than reading
+         * preferences itself, so the widget can pass what it read from Glance
+         * state — the only values a running composition actually observes.
+         */
+        fun from(context: Context, themeMode: String, accentName: String): WidgetPalette {
+            val mode = runCatching { ThemeMode.valueOf(themeMode) }
                 .getOrDefault(ThemeMode.System)
 
             val dark = when (mode) {
@@ -46,7 +56,7 @@ data class WidgetPalette(
                         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             }
 
-            val choice = AccentChoice.from(prefs.accent)
+            val choice = AccentChoice.from(accentName)
             // Material You seeds itself from the wallpaper at runtime and has no
             // fixed colour to copy here, so the widget falls back to the brand
             // accent rather than guessing.
