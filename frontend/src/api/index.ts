@@ -313,14 +313,47 @@ export const proxyApi = {
 export interface DeviceInfo {
   id: string
   name: string
+  kind: string
   ip_address: string | null
   last_seen: string
   created_at: string
+  expires_at: string | null
 }
 
 export const devicesApi = {
   list: () => api.get<DeviceInfo[]>('/devices'),
   revoke: (id: string) => api.delete(`/devices/${id}`),
+}
+
+export interface PairingEndpoint {
+  url: string
+  kind: 'custom' | 'overlay' | 'current' | 'lan' | 'public'
+  label: string
+}
+
+export interface PairingEndpoints {
+  discovered: PairingEndpoint[]
+  extra: string[]
+}
+
+export interface PairingStart {
+  code: string
+  expires_in: number
+  endpoints: PairingEndpoint[]
+  selected: string[]
+  qr_png_b64: string
+}
+
+export interface PairingStatus {
+  status: 'pending' | 'claimed' | 'expired'
+  device_name: string | null
+}
+
+export const pairingApi = {
+  endpoints: () => api.get<PairingEndpoints>('/pairing/endpoints'),
+  setEndpoints: (extra: string[]) => api.put<PairingEndpoints>('/pairing/endpoints', { extra }),
+  start: (endpoints?: string[]) => api.post<PairingStart>('/pairing/start', { endpoints }),
+  status: (code: string) => api.get<PairingStatus>(`/pairing/status/${code}`),
 }
 
 export interface BookmarkInfo {
