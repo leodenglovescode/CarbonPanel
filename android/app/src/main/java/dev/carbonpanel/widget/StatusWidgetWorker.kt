@@ -1,6 +1,7 @@
 package dev.carbonpanel.widget
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -33,6 +34,7 @@ class StatusWidgetWorker(
 
         val resolved = ApiClient.resolve(applicationContext)
         if (resolved == null) {
+            Log.w(TAG, "No reachable endpoint; widget keeps its previous reading")
             markStale(prefs)
             return Result.retry()
         }
@@ -90,7 +92,11 @@ class StatusWidgetWorker(
             // composition to invalidate.
             WidgetBridge.push(applicationContext, encoded)
             Result.success()
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            // Logged rather than swallowed: this runs with no UI attached, so
+            // a silent failure looks identical to a widget that was never
+            // scheduled, and the two need completely different fixes.
+            Log.w(TAG, "Widget refresh failed", t)
             markStale(prefs)
             Result.retry()
         }
@@ -109,6 +115,7 @@ class StatusWidgetWorker(
     }
 
     companion object {
+        private const val TAG = "CarbonWidget"
         private const val WORK_NAME = "carbonpanel-widget-refresh"
 
         fun ensureScheduled(context: Context) = schedule(context, replace = false)

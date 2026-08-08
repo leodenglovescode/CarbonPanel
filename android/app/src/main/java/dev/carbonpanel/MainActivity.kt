@@ -47,11 +47,20 @@ import dev.carbonpanel.ui.PanelViewModel
 import dev.carbonpanel.ui.components.Backdrop
 import dev.carbonpanel.ui.screens.*
 import dev.carbonpanel.ui.theme.CarbonTheme
+import dev.carbonpanel.widget.StatusWidgetWorker
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Opening the app is the strongest signal that its numbers are about
+        // to be looked at, and the widget refreshes on a 30-minute cadence.
+        // One request here keeps the two from disagreeing on the same screen.
+        // Guarded on isPaired so the pairing flow doesn't fire a doomed fetch —
+        // the claim path triggers its own refresh once a token exists.
+        if (Prefs.get(this).isPaired) StatusWidgetWorker.refreshNow(this)
+
         setContent { CarbonPanelRoot() }
     }
 }

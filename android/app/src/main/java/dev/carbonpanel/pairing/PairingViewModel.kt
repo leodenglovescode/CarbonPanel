@@ -8,6 +8,7 @@ import dev.carbonpanel.data.ClaimRequest
 import dev.carbonpanel.data.Prefs
 import dev.carbonpanel.data.QrPayload
 import dev.carbonpanel.net.ApiClient
+import dev.carbonpanel.widget.StatusWidgetWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -102,6 +103,10 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
                     prefs.endpoints = usable
                     prefs.lastGoodEndpoint = url
                     ApiClient.clearCache()
+                    // Any widget placed before pairing is showing "Not paired".
+                    // Nothing else would clear it until the next periodic run,
+                    // which is up to 30 minutes away.
+                    StatusWidgetWorker.refreshNow(getApplication())
                     _state.value = PairState.Paired(
                         serverName = prefs.serverName ?: "CarbonPanel",
                         username = claim.username,
