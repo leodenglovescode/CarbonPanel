@@ -47,9 +47,14 @@ jobs:
       # without them the build falls back to the debug key, which still
       # produces an installable APK (see app/build.gradle.kts). Changing the
       # signing key later means users must uninstall before updating.
+      # Condition reads `secrets`, not `env`. A step's own `env:` block is not
+      # in scope for its `if:` — that expression is evaluated first, so
+      # `env.KEYSTORE_BASE64` is always empty and the step never runs. The
+      # failure is silent: signing falls back to the debug key and publishes a
+      # debug-signed APK while the secrets sit there unused.
       - name: Decode keystore
         id: keystore
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
@@ -64,6 +69,22 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew --no-daemon :app:assembleRelease
+
+      # Proves which key actually signed the APK. Without this, a
+      # misconfigured secret degrades silently to debug signing and nobody
+      # notices until users can't install the next update in place.
+      - name: Verify signature
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/certs.txt
+          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
+            if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+              echo "::error::Signing secrets are set but the APK is debug-signed."
+              exit 1
+            fi
+            echo "::warning::APK is debug-signed. Set the KEYSTORE_* secrets to sign with your own key."
+          fi
 
       - name: Name the artifact after the tag
         id: artifact
