@@ -24,7 +24,7 @@ from app.config import settings
 # Crockford-ish base32: no I/L/O/U/0/1 so a code stays unambiguous if someone
 # reads it off the screen and types it instead of scanning.
 _ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
-_CODE_LEN = 8
+_CODE_LEN = 12
 
 
 @dataclass

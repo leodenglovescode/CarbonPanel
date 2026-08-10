@@ -21,6 +21,8 @@ data class QrPayload(
     val c: String,
     val e: List<String> = emptyList(),
     val n: String? = null,
+    val f: String? = null,
+    val p: List<String> = emptyList(),
 )
 
 @Serializable
@@ -423,15 +425,6 @@ data class ChangeProfileRequest(
 )
 
 @Serializable data class SuccessResponse(val success: Boolean = false)
-
-@Serializable
-data class TotpSetupResponse(
-    val secret: String = "",
-    val otpauth_uri: String = "",
-    val qr_png_b64: String = "",
-)
-
-@Serializable data class TotpConfirmRequest(val totp_code: String)
 
 // ── System / updates ───────────────────────────────────────────────────────
 

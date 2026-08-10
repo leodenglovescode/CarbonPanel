@@ -24,7 +24,8 @@ async def upload_background_image(
     file: UploadFile,
     _: User = Depends(get_current_user),
 ):
-    raw = await file.read()
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "Image too large — max 20 MB")
     try:

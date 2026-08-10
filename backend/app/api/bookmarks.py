@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,10 +13,25 @@ router = APIRouter(prefix="/bookmarks", tags=["bookmarks"])
 
 
 class BookmarkIn(BaseModel):
-    title: str
-    url: str
-    icon_url: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    url: str = Field(max_length=2048)
+    icon_url: str | None = Field(default=None, max_length=2048)
     sort_order: int = 0
+
+    @field_validator("url", "icon_url")
+    @classmethod
+    def validate_web_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or "@" in parsed.netloc
+            or any(ord(char) < 33 for char in value)
+        ):
+            raise ValueError("URL must use http:// or https:// and include a host")
+        return value
 
 
 class BookmarkOut(BookmarkIn):

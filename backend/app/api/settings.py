@@ -5,11 +5,12 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import brute_force
-from app.core.dependencies import get_current_user
+from app.core.dependencies import current_token_jti, get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     ChangeProfileRequest,
+    StepUpRequest,
     SuccessResponse,
     TOTPConfirmRequest,
     TOTPSetupResponse,
@@ -73,12 +74,15 @@ async def test_proxy_settings(_: User = Depends(get_current_user)):
 
 @router.put("/profile", response_model=SuccessResponse)
 async def change_profile(
-    request: ChangeProfileRequest,
+    request_data: ChangeProfileRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await auth_service.change_profile(current_user, request, db)
+        await auth_service.change_profile(
+            current_user, request_data, current_token_jti(request), db
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -87,12 +91,27 @@ async def change_profile(
     return SuccessResponse()
 
 
-@router.get("/2fa/setup", response_model=TOTPSetupResponse)
+@router.post("/2fa/setup", response_model=TOTPSetupResponse)
 async def setup_2fa(
+    request_data: StepUpRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await auth_service.setup_2fa(current_user, db)
+    ip, key = _2fa_brute_force_key(http_request, current_user)
+    _check_2fa_banned(ip, key)
+    try:
+        auth_service.verify_step_up(
+            current_user,
+            request_data.current_password,
+            request_data.current_totp_code,
+        )
+        result = await auth_service.setup_2fa(current_user, db)
+        brute_force.record_success(ip, key)
+        return result
+    except ValueError as exc:
+        brute_force.record_failure(ip, key)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
 
 # TOTP codes are 6 digits (1-in-1M per guess) — without a lockout here, a
@@ -125,7 +144,13 @@ async def enable_2fa(
     ip, key = _2fa_brute_force_key(http_request, current_user)
     _check_2fa_banned(ip, key)
     try:
-        await auth_service.enable_2fa(current_user, request.totp_code, db)
+        await auth_service.enable_2fa(
+            current_user,
+            request.current_password,
+            request.totp_code,
+            current_token_jti(http_request),
+            db,
+        )
         brute_force.record_success(ip, key)
     except ValueError as exc:
         brute_force.record_failure(ip, key)
@@ -146,7 +171,13 @@ async def disable_2fa(
     ip, key = _2fa_brute_force_key(http_request, current_user)
     _check_2fa_banned(ip, key)
     try:
-        await auth_service.disable_2fa(current_user, request.totp_code, db)
+        await auth_service.disable_2fa(
+            current_user,
+            request.current_password,
+            request.totp_code,
+            current_token_jti(http_request),
+            db,
+        )
         brute_force.record_success(ip, key)
     except ValueError as exc:
         brute_force.record_failure(ip, key)

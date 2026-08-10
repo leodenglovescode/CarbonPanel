@@ -39,7 +39,7 @@ async def get_current(
     limit: int = Query(default=25, ge=1, le=500),
     user_id: str = Depends(require_auth),
 ):
-    """Latest metrics over plain HTTP.
+    """Latest metrics over the request/response API.
 
     Serves the collector's cached values — it never triggers collection, so the
     cost of a request is independent of how fast clients poll. Native clients

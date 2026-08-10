@@ -162,6 +162,8 @@ async def login_totp(
 
 
 async def setup_2fa(user: User, db: AsyncSession) -> TOTPSetupResponse:
+    if user.totp_enabled:
+        raise ValueError("Disable existing 2FA before configuring a new authenticator")
     secret = pyotp.random_base32()
     totp = pyotp.TOTP(secret)
     uri = totp.provisioning_uri(name=user.username, issuer_name="CarbonPanel")
@@ -178,7 +180,51 @@ async def setup_2fa(user: User, db: AsyncSession) -> TOTPSetupResponse:
     return TOTPSetupResponse(secret=secret, otpauth_uri=uri, qr_png_b64=qr_b64)
 
 
-async def enable_2fa(user: User, totp_code: str, db: AsyncSession) -> None:
+def verify_step_up(
+    user: User,
+    current_password: str,
+    current_totp_code: str | None = None,
+) -> None:
+    """Re-authenticate before security-sensitive actions."""
+    if not verify_password(current_password, user.password_hash):
+        raise ValueError("Current password is incorrect")
+    if user.totp_enabled:
+        if not user.totp_secret or not current_totp_code:
+            raise ValueError("Current 2FA code is required")
+        if not pyotp.TOTP(user.totp_secret).verify(current_totp_code, valid_window=1):
+            raise ValueError("Current 2FA code is invalid")
+
+
+async def revoke_other_sessions(
+    user_id: str,
+    keep_jti: str | None,
+    db: AsyncSession,
+) -> None:
+    """Revoke every browser/device token except the caller's current session."""
+    from app.core.dependencies import invalidate_jti
+
+    result = await db.execute(
+        select(Device).where(
+            Device.user_id == user_id,
+            Device.revoked == False,  # noqa: E712
+        )
+    )
+    for device in result.scalars():
+        if keep_jti and device.jti == keep_jti:
+            continue
+        device.revoked = True
+        invalidate_jti(device.jti)
+        db.add(device)
+
+
+async def enable_2fa(
+    user: User,
+    current_password: str,
+    totp_code: str,
+    keep_jti: str | None,
+    db: AsyncSession,
+) -> None:
+    verify_step_up(user, current_password)
     if not user.pending_totp_secret:
         raise ValueError("No pending TOTP setup. Call setup first.")
 
@@ -190,10 +236,16 @@ async def enable_2fa(user: User, totp_code: str, db: AsyncSession) -> None:
     user.pending_totp_secret = None
     user.totp_enabled = True
     db.add(user)
+    await revoke_other_sessions(user.id, keep_jti, db)
     await db.commit()
 
 
-async def change_profile(user: User, request: ChangeProfileRequest, db: AsyncSession) -> None:
+async def change_profile(
+    user: User,
+    request: ChangeProfileRequest,
+    keep_jti: str | None,
+    db: AsyncSession,
+) -> None:
     if not verify_password(request.current_password, user.password_hash):
         raise ValueError("Current password is incorrect")
 
@@ -209,10 +261,19 @@ async def change_profile(user: User, request: ChangeProfileRequest, db: AsyncSes
         user.password_hash = hash_password(request.new_password)
 
     db.add(user)
+    if request.new_username or request.new_password:
+        await revoke_other_sessions(user.id, keep_jti, db)
     await db.commit()
 
 
-async def disable_2fa(user: User, totp_code: str, db: AsyncSession) -> None:
+async def disable_2fa(
+    user: User,
+    current_password: str,
+    totp_code: str,
+    keep_jti: str | None,
+    db: AsyncSession,
+) -> None:
+    verify_step_up(user, current_password, totp_code)
     if not user.totp_enabled or not user.totp_secret:
         raise ValueError("2FA is not enabled")
 
@@ -224,4 +285,5 @@ async def disable_2fa(user: User, totp_code: str, db: AsyncSession) -> None:
     user.totp_secret = None
     user.pending_totp_secret = None
     db.add(user)
+    await revoke_other_sessions(user.id, keep_jti, db)
     await db.commit()

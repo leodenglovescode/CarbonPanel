@@ -30,8 +30,9 @@ First login walks you through an onboarding wizard to set a real password and op
 enable 2FA.
 
 > CarbonPanel manages the host it runs on — systemd services, real process/disk access,
-> nginx sites — so it runs as a native systemd service rather than in a container. A prior
-> Docker deployment path has been removed for this reason.
+> nginx sites — so the supported production path is the native systemd installer. The
+> retained `docker/` nginx snippets are legacy integration helpers only; they require an
+> external TLS-terminating proxy and are not a standalone deployment.
 
 nginx serves the panel over HTTPS with a self-signed certificate generated at install time
 (covering the server's hostname and detected IPs). Your browser will warn that it isn't
@@ -55,15 +56,17 @@ Updates clone the new release, run DB migrations, health-check, and auto-rollbac
 
 ## Configuration
 
-All settings are written to `backend/.env` (local dev / install script).
+Local development reads `backend/.env`; managed installs read
+`/opt/carbonpanel/shared/backend.env`.
 
 | Variable | Default | Description |
 |---|---|---|
 | `SECRET_KEY` | `dev-secret-...` | JWT signing key — **change this in production** |
 | `ADMIN_USERNAME` | `admin` | Initial admin username |
-| `ADMIN_PASSWORD` | `changeme` | Initial admin password |
+| `ADMIN_PASSWORD` | `changeme` | Initial admin password; updates never reset an existing account |
 | `APP_PORT` | `8787` | Port nginx listens on (HTTPS) |
-| `COOKIE_SECURE` | `true` (install script) / `false` (default) | Marks the session cookie HTTPS-only — the install script sets this once it provisions TLS |
+| `COOKIE_SECURE` | `true` (install script) / `false` (local default) | Marks the session cookie HTTPS-only |
+| `TLS_CERT_FILE` | unset (local) | PEM certificate whose SHA-256 fingerprint is embedded in Android pairing QR codes |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./carbonpanel.db` | Database connection string |
 | `METRICS_INTERVAL_SECONDS` | `2.0` | How often metrics are collected |
 | `PROCESS_LIMIT` | `25` | Max processes shown in the dashboard |
@@ -81,6 +84,7 @@ All settings are written to `backend/.env` (local dev / install script).
 - **JWT auth** with optional **TOTP 2FA**
 - **HTTPS by default** — self-signed cert generated at install time, no plaintext credentials on the wire
 - **Guided onboarding** — first login walks through setting a password and 2FA setup
+- **Native Android client** — HTTPS-only bearer auth; installer self-signed certificates are pinned from the pairing QR
 - **In-panel updates** — version check via GitHub API, one-click update from the Settings page
 
 ---
@@ -88,16 +92,14 @@ All settings are written to `backend/.env` (local dev / install script).
 ## Local Development
 
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-make setup   # create venv, install deps, migrate DB, seed admin
+make setup   # generate secrets, install locked deps, migrate DB, seed admin
 make dev     # run backend + frontend together
 ```
 
 | URL | Service |
 |---|---|
 | `http://localhost:5173` | Frontend (Vite HMR) |
-| `http://localhost:8000/api/v1` | Backend API |
+| `http://localhost:8010/api/v1` | Backend API |
 
 Other commands: `make backend`, `make frontend`, `make lint`
 

@@ -1,14 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class TOTPLoginRequest(BaseModel):
-    session_token: str
-    totp_code: str
+    session_token: str = Field(min_length=1, max_length=4096)
+    totp_code: str = Field(pattern=r"^\d{6}$")
 
 
 class TOTPRequiredResponse(BaseModel):
@@ -30,7 +30,13 @@ class TOTPSetupResponse(BaseModel):
 
 
 class TOTPConfirmRequest(BaseModel):
-    totp_code: str
+    current_password: str = Field(min_length=1, max_length=1024)
+    totp_code: str = Field(pattern=r"^\d{6}$")
+
+
+class StepUpRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=1024)
+    current_totp_code: str | None = Field(default=None, pattern=r"^\d{6}$")
 
 
 class SuccessResponse(BaseModel):
@@ -38,6 +44,6 @@ class SuccessResponse(BaseModel):
 
 
 class ChangeProfileRequest(BaseModel):
-    current_password: str
-    new_username: str | None = None
-    new_password: str | None = None
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_username: str | None = Field(default=None, min_length=1, max_length=64)
+    new_password: str | None = Field(default=None, min_length=8, max_length=72)

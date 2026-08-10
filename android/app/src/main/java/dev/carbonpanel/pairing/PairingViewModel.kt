@@ -46,25 +46,31 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
             )
             return
         }
-        if (payload.v != 1) {
+        if (payload.v != 2) {
             _state.value = PairState.Failed(
-                "This pairing code was made by a newer version of CarbonPanel. Update the app."
+                "This pairing code uses an unsupported security version. Generate a new code."
             )
             return
         }
-        pair(payload.e, payload.c, payload.n)
+        pair(payload.e, payload.c, payload.n, payload.f, payload.p)
     }
 
     fun pairManually(baseUrl: String, code: String) {
         val url = baseUrl.trim().trimEnd('/')
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            _state.value = PairState.Failed("Address must start with http:// or https://")
+        if (!ApiClient.isPermittedEndpoint(url)) {
+            _state.value = PairState.Failed("Address must be a valid https:// URL")
             return
         }
-        pair(listOf(url), code.trim().uppercase(), null)
+        pair(listOf(url), code.trim().uppercase(), null, null, emptyList())
     }
 
-    private fun pair(endpoints: List<String>, code: String, serverName: String?) {
+    private fun pair(
+        endpoints: List<String>,
+        code: String,
+        serverName: String?,
+        certificateFingerprint: String?,
+        pinnedHosts: List<String>,
+    ) {
         if (endpoints.isEmpty()) {
             _state.value = PairState.Failed("The pairing code contains no server address.")
             return
@@ -75,10 +81,37 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
             val usable = endpoints.filter { ApiClient.isPermittedEndpoint(it) }
             if (usable.isEmpty()) {
                 _state.value = PairState.Failed(
-                    "Every address in this code is plain HTTP on a public network. " +
-                        "Put TLS in front of the panel, or pair over a VPN address."
+                    "This pairing code has no valid HTTPS server address."
                 )
                 return@launch
+            }
+
+            val normalizedFingerprint = certificateFingerprint
+                ?.replace(":", "")
+                ?.uppercase()
+            if (normalizedFingerprint != null &&
+                !normalizedFingerprint.matches(Regex("^[0-9A-F]{64}$"))
+            ) {
+                _state.value = PairState.Failed("The pairing code has an invalid certificate pin.")
+                return@launch
+            }
+            val allowedPinHosts = pinnedHosts.map { it.lowercase() }.toSet()
+            val hosts = usable.mapNotNull { runCatching { java.net.URI(it).host }.getOrNull() }
+                .filter { it.lowercase() in allowedPinHosts }
+                .distinct()
+            val previousPins = hosts.associateWith { prefs.pinnedCert(it) }
+            if (normalizedFingerprint != null) {
+                hosts.forEach { prefs.setPinnedCert(it, normalizedFingerprint) }
+                ApiClient.clearCache()
+            }
+
+            fun restorePins() {
+                if (normalizedFingerprint == null) return
+                previousPins.forEach { (host, oldPin) ->
+                    if (oldPin == null) prefs.removePinnedCert(host)
+                    else prefs.setPinnedCert(host, oldPin)
+                }
+                ApiClient.clearCache()
             }
 
             // Endpoints arrive best-first, but only some are reachable from
@@ -118,12 +151,14 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
                 // will fail too. Surfacing the last error is the honest outcome.
                 val error = result?.exceptionOrNull()
                 if (error != null && error.message?.contains("400") == true) {
+                    restorePins()
                     _state.value = PairState.Failed(
                         "That pairing code was already used or has expired. Generate a new one."
                     )
                     return@launch
                 }
             }
+            restorePins()
             _state.value = PairState.Failed(
                 "Couldn't reach the server at any of its addresses:\n" +
                     usable.joinToString("\n") { "  • $it" }

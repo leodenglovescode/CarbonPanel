@@ -307,9 +307,16 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
         if (refresh) bookmarks.markRefreshing()
         bookmarks.applyResult(repo.bookmarks())
     }
-    fun addBookmark(title: String, url: String) = withBusy("bookmark") {
-        repo.createBookmark(title, url).onFailure { say(it.message ?: "Could not add bookmark") }
-        bookmarks.applyResult(repo.bookmarks())
+    fun addBookmark(title: String, url: String) {
+        val parsed = runCatching { java.net.URI(url) }.getOrNull()
+        if (parsed?.scheme !in setOf("http", "https") || parsed?.host.isNullOrBlank()) {
+            say("Bookmark URL must use http:// or https://")
+            return
+        }
+        withBusy("bookmark") {
+            repo.createBookmark(title, url).onFailure { say(it.message ?: "Could not add bookmark") }
+            bookmarks.applyResult(repo.bookmarks())
+        }
     }
     fun deleteBookmark(id: String) = withBusy(id) {
         repo.deleteBookmark(id).onFailure { say(it.message ?: "Could not delete") }
@@ -389,23 +396,6 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshEndpoints() {
         _endpoints.value = prefs.endpoints
         _activeEndpoint.value = prefs.lastGoodEndpoint
-    }
-
-    fun addEndpoint(raw: String) {
-        val url = raw.trim().trimEnd('/')
-        when {
-            url.isEmpty() -> return
-            !url.startsWith("http://") && !url.startsWith("https://") ->
-                say("Address must start with http:// or https://")
-            !ApiClient.isPermittedEndpoint(url) ->
-                say("Refusing plain HTTP to a public address — use https:// or a VPN address")
-            url in _endpoints.value -> say("Already in the list")
-            else -> {
-                prefs.endpoints = _endpoints.value + url
-                refreshEndpoints()
-                testEndpoint(url)
-            }
-        }
     }
 
     fun removeEndpoint(url: String) {

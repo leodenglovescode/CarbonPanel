@@ -11,7 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import java.net.InetAddress
+import java.net.URI
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
@@ -68,7 +68,7 @@ object ApiClient {
 
     private fun okHttp(context: Context): OkHttpClient {
         val prefs = Prefs.get(context)
-        val trustManager = TofuTrustManager(prefs)
+        val trustManager = PinnedTrustManager(prefs)
         val sslContext = SSLContext.getInstance("TLS").apply {
             init(null, arrayOf(trustManager), java.security.SecureRandom())
         }
@@ -135,38 +135,13 @@ object ApiClient {
         null
     }
 
-    /**
-     * Refuse cleartext to anything that isn't plainly a private or overlay
-     * address.
-     *
-     * The manifest permits cleartext app-wide because a network-security-config
-     * cannot express "private ranges only" (no CIDR support), so the narrowing
-     * happens here: an http:// endpoint pointing at a public address would put
-     * the bearer token on the open internet in plaintext, and no self-hosted
-     * setup needs that.
-     */
+    /** Bearer tokens are never sent over cleartext, even on a private network. */
     fun isPermittedEndpoint(url: String): Boolean {
-        if (url.startsWith("https://", ignoreCase = true)) return true
-        if (!url.startsWith("http://", ignoreCase = true)) return false
-
-        val host = runCatching { java.net.URI(url).host }.getOrNull() ?: return false
-        val bare = host.trim('[', ']')
-        if (bare.equals("localhost", ignoreCase = true)) return true
-
-        val addr = runCatching { InetAddress.getByName(bare) }.getOrNull() ?: return false
-        if (addr.isLoopbackAddress || addr.isSiteLocalAddress || addr.isLinkLocalAddress) return true
-
-        // Tailscale/Headscale CGNAT range (100.64.0.0/10), which Java does not
-        // classify as site-local.
-        val bytes = addr.address
-        if (bytes.size == 4) {
-            val first = bytes[0].toInt() and 0xFF
-            val second = bytes[1].toInt() and 0xFF
-            if (first == 100 && second in 64..127) return true
-        }
-        // IPv6 unique-local (fc00::/7), which covers Tailscale's fd7a:… prefix.
-        if (bytes.size == 16 && (bytes[0].toInt() and 0xFE) == 0xFC) return true
-
-        return false
+        val parsed = runCatching { URI(url) }.getOrNull() ?: return false
+        return parsed.scheme.equals("https", ignoreCase = true) &&
+            !parsed.host.isNullOrBlank() &&
+            parsed.userInfo == null &&
+            parsed.rawQuery == null &&
+            parsed.rawFragment == null
     }
 }
