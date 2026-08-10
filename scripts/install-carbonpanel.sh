@@ -16,6 +16,7 @@ CURRENT_LINK="$INSTALL_ROOT/current"
 PREVIOUS_LINK="$INSTALL_ROOT/previous"
 BACKEND_ENV_FILE="$SHARED_DIR/backend.env"
 STATUS_FILE="$SHARED_DIR/update-status.json"
+UPDATE_LOCK_FILE="$SHARED_DIR/update.lock"
 CONTROL_SCRIPT="$BIN_DIR/carbonpanelctl"
 TLS_DIR="$SHARED_DIR/tls"
 TLS_CERT="$TLS_DIR/cert.pem"
@@ -169,6 +170,10 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 path.parent.mkdir(parents=True, exist_ok=True)
+try:
+    previous = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    previous = {}
 
 data = {
     "repo_url": os.environ.get("CP_STATUS_REPO_URL") or None,
@@ -185,10 +190,194 @@ data = {
     "notes_url": os.environ.get("CP_STATUS_NOTES_URL") or None,
     "update_available": os.environ.get("CP_STATUS_UPDATE_AVAILABLE", "false").lower() == "true",
 }
-tmp = path.with_suffix(".tmp")
+# Version-result writes and live progress writes share one document. Preserve
+# operation identity/progress across a completed version check so the browser
+# never loses the update it is following during the final verification phase.
+for key in (
+    "check_id", "check_state", "check_started_at", "check_finished_at",
+    "operation_id", "operation_kind", "operation_state",
+    "operation_started_at", "operation_updated_at", "operation_finished_at",
+    "progress_phase", "progress_label", "progress_percent", "restart_pending",
+    "restart_performed",
+):
+    if key in previous:
+        data[key] = previous[key]
+
+tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
 tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 tmp.replace(path)
 PY
+}
+
+patch_status_file() {
+  python3 - "$STATUS_FILE" "$@" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+path.parent.mkdir(parents=True, exist_ok=True)
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    data = {}
+
+for item in sys.argv[2:]:
+    key, value = item.split("=", 1)
+    if value == "__null__":
+        data[key] = None
+    elif key in {"progress_percent"}:
+        data[key] = int(value)
+    elif key in {"restart_pending", "restart_performed", "update_available"}:
+        data[key] = value.lower() == "true"
+    else:
+        data[key] = value
+
+data["status_updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+tmp.replace(path)
+PY
+  chmod 644 "$STATUS_FILE"
+}
+
+new_operation_id() {
+  python3 - <<'PY'
+import uuid
+print(uuid.uuid4().hex)
+PY
+}
+
+UPDATE_LOCK_HELD=false
+[[ "${CARBONPANEL_LOCK_HELD:-}" == "true" ]] && UPDATE_LOCK_HELD=true
+UPDATE_OPERATION_ID=""
+UPDATE_OPERATION_STARTED_AT=""
+UPDATE_OPERATION_ACTIVE=false
+UPDATE_RESTART_PERFORMED=false
+CHECK_OPERATION_ID=""
+CHECK_OPERATION_STARTED_AT=""
+CHECK_OPERATION_ACTIVE=false
+
+acquire_update_lock() {
+  if [[ "$UPDATE_LOCK_HELD" == "true" ]]; then
+    return 0
+  fi
+  mkdir -p "$SHARED_DIR"
+  exec 9>"$UPDATE_LOCK_FILE"
+  flock -n 9 || return 1
+  UPDATE_LOCK_HELD=true
+  export CARBONPANEL_LOCK_HELD=true
+}
+
+begin_update_progress() {
+  local queued_id queued_state queued_started queued_restart_performed
+  queued_id="$(read_json_file_field "$STATUS_FILE" operation_id)"
+  queued_state="$(read_json_file_field "$STATUS_FILE" operation_state)"
+  queued_started="$(read_json_file_field "$STATUS_FILE" operation_started_at)"
+  queued_restart_performed="$(read_json_file_field "$STATUS_FILE" restart_performed)"
+  if [[ -n "$queued_id" ]] && {
+    [[ "$queued_state" == "queued" ]] ||
+      [[ "$queued_state" == "running" && -n "${CARBONPANEL_REEXECED:-}" ]]
+  }; then
+    UPDATE_OPERATION_ID="$queued_id"
+    UPDATE_OPERATION_STARTED_AT="${queued_started:-$(now_iso)}"
+    if [[ "$queued_restart_performed" == "True" || "$queued_restart_performed" == "true" ]]; then
+      UPDATE_RESTART_PERFORMED=true
+    fi
+  else
+    UPDATE_OPERATION_ID="$(new_operation_id)"
+    UPDATE_OPERATION_STARTED_AT="$(now_iso)"
+    UPDATE_RESTART_PERFORMED=false
+  fi
+  UPDATE_OPERATION_ACTIVE=true
+  set_update_progress 2 resolving "Resolving the target revision" false
+}
+
+set_update_progress() {
+  local percent="$1" phase="$2" label="$3" restart_pending="${4:-false}"
+  [[ -n "$UPDATE_OPERATION_ID" ]] || return 0
+  [[ "$restart_pending" == "true" ]] && UPDATE_RESTART_PERFORMED=true
+  patch_status_file \
+    "operation_id=$UPDATE_OPERATION_ID" \
+    "operation_kind=update" \
+    "operation_state=running" \
+    "operation_started_at=$UPDATE_OPERATION_STARTED_AT" \
+    "operation_updated_at=$(now_iso)" \
+    "operation_finished_at=__null__" \
+    "progress_phase=$phase" \
+    "progress_label=$label" \
+    "progress_percent=$percent" \
+    "restart_pending=$restart_pending" \
+    "restart_performed=$UPDATE_RESTART_PERFORMED" \
+    "status=installing" \
+    "error=__null__"
+}
+
+finish_update_progress() {
+  local state="$1" label="$2" status_value="$3"
+  local percent=100
+  [[ "$state" == "succeeded" ]] || percent="$(read_json_file_field "$STATUS_FILE" progress_percent)"
+  [[ "$percent" =~ ^[0-9]+$ ]] || percent=1
+  patch_status_file \
+    "operation_id=$UPDATE_OPERATION_ID" \
+    "operation_kind=update" \
+    "operation_state=$state" \
+    "operation_started_at=$UPDATE_OPERATION_STARTED_AT" \
+    "operation_updated_at=$(now_iso)" \
+    "operation_finished_at=$(now_iso)" \
+    "progress_phase=$state" \
+    "progress_label=$label" \
+    "progress_percent=$percent" \
+    "restart_pending=false" \
+    "restart_performed=$UPDATE_RESTART_PERFORMED" \
+    "status=$status_value"
+  UPDATE_OPERATION_ACTIVE=false
+}
+
+update_operation_exit_guard() {
+  local rc=$?
+  if [[ "$CHECK_OPERATION_ACTIVE" == "true" && "$rc" -ne 0 ]]; then
+    finish_check_progress failed check_failed || true
+  fi
+  if [[ "$UPDATE_OPERATION_ACTIVE" == "true" && "$rc" -ne 0 ]]; then
+    finish_update_progress failed "Update stopped unexpectedly" update_failed || true
+  fi
+}
+
+begin_check_progress() {
+  local queued_id queued_state queued_started
+  queued_id="$(read_json_file_field "$STATUS_FILE" check_id)"
+  queued_state="$(read_json_file_field "$STATUS_FILE" check_state)"
+  queued_started="$(read_json_file_field "$STATUS_FILE" check_started_at)"
+  if [[ "$queued_state" == "queued" && -n "$queued_id" ]]; then
+    CHECK_OPERATION_ID="$queued_id"
+    CHECK_OPERATION_STARTED_AT="${queued_started:-$(now_iso)}"
+  else
+    CHECK_OPERATION_ID="$(new_operation_id)"
+    CHECK_OPERATION_STARTED_AT="$(now_iso)"
+  fi
+  CHECK_OPERATION_ACTIVE=true
+  trap update_operation_exit_guard EXIT
+  patch_status_file \
+    "check_id=$CHECK_OPERATION_ID" \
+    "check_state=running" \
+    "check_started_at=$CHECK_OPERATION_STARTED_AT" \
+    "check_finished_at=__null__" \
+    "status=checking" \
+    "error=__null__"
+}
+
+finish_check_progress() {
+  local state="$1" status_value="$2"
+  patch_status_file \
+    "check_id=$CHECK_OPERATION_ID" \
+    "check_state=$state" \
+    "check_started_at=$CHECK_OPERATION_STARTED_AT" \
+    "check_finished_at=$(now_iso)" \
+    "status=$status_value"
+  CHECK_OPERATION_ACTIVE=false
 }
 
 write_release_metadata() {
@@ -564,15 +753,16 @@ BUILD_STEP_CURRENT=0
 # output captured to a temp file — dumped only on failure. Replaces raw
 # pip/npm streaming, which is unreadable noise once captured non-interactively.
 build_step() {
-  local label="$1"; shift
+  local progress="$1" label="$2"; shift 2
   BUILD_STEP_CURRENT=$((BUILD_STEP_CURRENT + 1))
+  set_update_progress "$progress" build "$label" false
   if [[ -t 1 ]]; then
-    local pct=$((BUILD_STEP_CURRENT * 100 / BUILD_STEP_TOTAL))
+    local terminal_pct=$((BUILD_STEP_CURRENT * 100 / BUILD_STEP_TOTAL))
     local width=24
-    local filled=$((pct * width / 100))
+    local filled=$((terminal_pct * width / 100))
     local bar
     bar="$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' $((width - filled)) '')"
-    printf "\r\033[K  ${CYAN}[%s]${NC} %3d%%  %s" "$bar" "$pct" "$label"
+    printf "\r\033[K  ${CYAN}[%s]${NC} %3d%%  %s" "$bar" "$terminal_pct" "$label"
   else
     log "[$BUILD_STEP_CURRENT/$BUILD_STEP_TOTAL] $label"
   fi
@@ -594,12 +784,12 @@ build_release() {
   local release_dir="$1"
   BUILD_STEP_CURRENT=0
 
-  build_step "Creating backend virtualenv..." python3 -m venv "$release_dir/backend/.venv"
-  build_step "Upgrading pip tooling..." "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
-  build_step "Installing backend dependencies..." "$release_dir/backend/.venv/bin/pip" install -r "$release_dir/backend/requirements.lock"
-  build_step "Installing backend package..." "$release_dir/backend/.venv/bin/pip" install --no-deps -e "$release_dir/backend"
-  build_step "Installing frontend dependencies..." npm --prefix "$release_dir/frontend" ci
-  build_step "Building frontend..." npm --prefix "$release_dir/frontend" run build
+  build_step 52 "Creating backend virtualenv" python3 -m venv "$release_dir/backend/.venv"
+  build_step 58 "Upgrading Python packaging tools" "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
+  build_step 66 "Installing backend dependencies" "$release_dir/backend/.venv/bin/pip" install -r "$release_dir/backend/requirements.lock"
+  build_step 72 "Installing backend package" "$release_dir/backend/.venv/bin/pip" install --no-deps -e "$release_dir/backend"
+  build_step 80 "Installing frontend dependencies" npm --prefix "$release_dir/frontend" ci
+  build_step 88 "Building frontend" npm --prefix "$release_dir/frontend" run build
   [[ -t 1 ]] && printf '\n'
 
   run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
@@ -913,6 +1103,7 @@ deploy_release() {
 
   switch_symlink "$CURRENT_LINK" "$release_dir"
 
+  set_update_progress 92 deploy "Running database migrations" false
   if ! run_database_tasks "$release_dir" "$first_install"; then
     warn "Database step choked — rolling back, don't panic"
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
@@ -925,11 +1116,13 @@ deploy_release() {
   write_backend_service
   write_update_services
   run_silent systemctl daemon-reload
+  set_update_progress 96 restarting "Restarting backend and validating health" true
   run_silent systemctl restart "$BACKEND_SERVICE"
   run_silent systemctl restart nginx
 
   if ! wait_for_http "http://127.0.0.1:$BACKEND_PORT/docs"; then
     warn "Health check came back dead — rolling back to the last good version"
+    set_update_progress 97 rollback "Health check failed; restoring previous release" false
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
     run_silent systemctl daemon-reload
@@ -939,6 +1132,7 @@ deploy_release() {
     return 1
   fi
 
+  set_update_progress 98 verifying "Backend is healthy; finalizing update" false
   chown_shared_db
   persist_success_status "$version" "$commit" "$source_type" "$installed_at" "$release_url"
   cleanup_old_releases
@@ -946,6 +1140,8 @@ deploy_release() {
 
 check_for_updates() {
   local source_type ref release_url checked_at current_version current_commit current_source_type latest_dir latest_commit update_available status_value error_value
+  acquire_update_lock || die "Another update or version check is already running."
+  begin_check_progress
   mapfile -t resolved < <(resolve_requested_reference)
   source_type="${resolved[0]}"
   ref="${resolved[1]}"
@@ -1007,7 +1203,9 @@ check_for_updates() {
     write_json_file "$STATUS_FILE"
 
     chmod 644 "$STATUS_FILE"
-    die "Unable to fetch latest version metadata after 3 attempts."
+    finish_check_progress failed check_failed
+    warn "Unable to fetch latest version metadata after 3 attempts."
+    return 1
   fi
 
   latest_commit="$(git -C "$latest_dir" rev-parse HEAD)"
@@ -1048,6 +1246,7 @@ check_for_updates() {
   write_json_file "$STATUS_FILE"
 
   chmod 644 "$STATUS_FILE"
+  finish_check_progress succeeded "$status_value"
 
   if [[ "$update_available" == "true" ]]; then
     ok "New drop available: ${BOLD}${ref}${NC} — hit update to grab it 🆕"
@@ -1060,9 +1259,19 @@ install_or_update() {
   local install_mode="$1"
   local source_type ref release_url release_id release_dir commit installed_at
 
+  if [[ "$install_mode" == "update" ]]; then
+    begin_update_progress
+    trap update_operation_exit_guard EXIT
+    if ! acquire_update_lock; then
+      finish_update_progress failed "Another update or version check is running" update_failed
+      die "Another update or version check is already running."
+    fi
+  fi
+
   # Resolve the target first. Everything below is either expensive (apt,
   # cloning, building) or has side effects on the host, and none of it is
   # worth doing before we know whether there is anything to deploy.
+  set_update_progress 3 resolving "Checking the configured update source" false
   log "Asking GitHub what's poppin..."
   mapfile -t resolved < <(resolve_requested_reference)
   source_type="${resolved[0]}"
@@ -1070,6 +1279,7 @@ install_or_update() {
   release_url="${resolved[2]:-}"
 
   [[ -n "$ref" ]] || die "couldn't figure out what version to install — check your internet connection and that ${REPO_URL} is reachable"
+  set_update_progress 6 verifying "Comparing installed and remote revisions" false
 
   # Stop here if the deployed commit already matches the remote tip.
   #
@@ -1089,8 +1299,9 @@ install_or_update() {
       ok "Already on the latest (${current_commit:0:8}) — nothing to do ✨"
       note "Run with ${BOLD}--force${NC} to rebuild and redeploy anyway."
       if [[ -d "$SHARED_DIR" ]]; then
-        check_for_updates >/dev/null 2>&1 || true
+        persist_success_status "$ref" "$current_commit" "$source_type" "$(now_iso)" "$release_url"
       fi
+      finish_update_progress succeeded "Already on the latest revision" up_to_date
       return 0
     fi
   fi
@@ -1109,6 +1320,7 @@ install_or_update() {
   # the service account, the layout and the TLS cert were all done twice per
   # invocation — once in this process and again in the re-exec'd child.
   if [[ -z "${CARBONPANEL_REEXECED:-}" ]]; then
+    set_update_progress 9 bootstrap "Loading the target revision's updater" false
     local bootstrap_dir
     bootstrap_dir="$(mktemp -d)"
     if git clone --quiet --depth 1 --branch "$ref" "$REPO_URL" "$bootstrap_dir" >/dev/null 2>&1 \
@@ -1120,21 +1332,28 @@ install_or_update() {
     warn "Couldn't bootstrap the latest install script — continuing with the version already running."
   fi
 
+  set_update_progress 12 preflight "Checking port availability" false
   log "Sniffing for port squatters on :${APP_PORT}..."
   ensure_port_available
+  set_update_progress 18 system_dependencies "Installing system dependencies" false
   log "Grabbing system dependencies from apt..."
   install_os_prerequisites
+  set_update_progress 32 service_account "Preparing the service account" false
   log "Conjuring the CarbonPanel service account..."
   ensure_service_account
   ensure_nginx_log_access
+  set_update_progress 35 layout "Preparing install directories" false
   log "Staking out territory on disk..."
   ensure_layout
+  set_update_progress 38 configuration "Writing secure configuration" false
   log "Locking in your secrets and config..."
   ensure_backend_env
+  set_update_progress 41 tls "Validating the TLS certificate" false
   log "Minting a self-signed TLS cert..."
   ensure_tls_cert
   ensure_security_env_flags
 
+  set_update_progress 45 clone "Cloning the target revision" false
   log "Yanking the code down (${BOLD}${ref}${NC})..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"
   release_dir="$(clone_release "$ref" "$release_id")"
@@ -1157,8 +1376,10 @@ install_or_update() {
   write_json_file "$STATUS_FILE"
   chmod 644 "$STATUS_FILE"
 
+  set_update_progress 50 build "Preparing release build" false
   build_release "$release_dir"
 
+  set_update_progress 90 deploy "Deploying the new release" false
   log "Deploying the new release..."
   if ! deploy_release "$release_dir" "$ref" "$commit" "$source_type" "$release_url" "$installed_at"; then
     CP_STATUS_REPO_URL="$REPO_URL" \
@@ -1176,11 +1397,15 @@ install_or_update() {
     CP_STATUS_UPDATE_AVAILABLE="true" \
     write_json_file "$STATUS_FILE"
     chmod 644 "$STATUS_FILE"
+    finish_update_progress failed "Deployment failed; previous release restored" rollback_complete
     die "Deployment failed and rollback was applied."
   fi
 
   systemd_reload_enable
-  check_for_updates
+  if ! check_for_updates; then
+    warn "The update installed successfully, but the final GitHub version check failed."
+  fi
+  finish_update_progress succeeded "Update installed successfully" installed
 
   ok "CarbonPanel ${ref} is live! (${commit:0:8})"
   if [[ -f "$SHARED_DIR/first-install.txt" && "$install_mode" == "install" ]]; then

@@ -60,9 +60,15 @@ async function maybePromptForUpdate() {
   try {
     const { data } = await systemApi.version()
 
-    if (!data.latest_version || !data.update_available || data.update_in_progress) return
+    if (
+      !data.latest_version ||
+      !data.update_available ||
+      data.update_in_progress ||
+      data.check_in_progress
+    ) return
 
-    if (localStorage.getItem(UPDATE_PROMPT_STORAGE_KEY) === data.latest_version) return
+    const promptRevision = data.latest_commit ?? data.latest_version
+    if (localStorage.getItem(UPDATE_PROMPT_STORAGE_KEY) === promptRevision) return
 
     const shouldInstall = await dialog.confirm({
       title: 'Update available',
@@ -71,7 +77,7 @@ async function maybePromptForUpdate() {
     })
 
     if (!shouldInstall) {
-      localStorage.setItem(UPDATE_PROMPT_STORAGE_KEY, data.latest_version)
+      localStorage.setItem(UPDATE_PROMPT_STORAGE_KEY, promptRevision)
       return
     }
 

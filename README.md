@@ -50,7 +50,17 @@ Use the **Settings → Install Update** button in the panel, or SSH in and run:
 sudo carbonpanelctl update
 ```
 
-Updates clone the new release, run DB migrations, health-check, and auto-rollback on failure. To roll back manually: `sudo carbonpanelctl rollback`.
+The Web UI follows the specific update job it starts and displays server-reported
+progress for each real phase (system packages, backend/frontend dependencies,
+build, migration, deployment, and health check). Immediately before the backend
+restarts, it shows a 60-second countdown and reloads automatically when the
+restart window ends. Historical service logs are diagnostic only and never
+advance the progress bar.
+
+Update checks and installs are serialized so a timer cannot overwrite an
+interactive result. Each manual check is matched to its own result instead of
+reusing stale status. Updates auto-rollback on failed deployment or health check.
+To roll back manually: `sudo carbonpanelctl rollback`.
 
 ---
 

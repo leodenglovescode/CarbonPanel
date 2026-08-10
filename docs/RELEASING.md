@@ -1,17 +1,20 @@
 # CarbonPanel release checklist
 
-CarbonPanel updates are designed to track **GitHub releases first**, then **git tags**, then the default branch only as a fallback.
+Managed Web Panel installs track the branch recorded in
+`.carbonpanel-release.json` (normally `master`) and compare the installed commit
+to that branch tip. GitHub releases and version tags are Android release
+artifacts; they are deliberately not used as the Web Panel update source.
 
-## Recommended release flow
+## Recommended Web Panel release flow
 
-1. Make sure `backend/pyproject.toml` has the new app version.
-2. Optionally keep `frontend/package.json` aligned to the same version.
-3. Merge your changes into the branch you release from.
-4. Create and push a git tag:
-   - `git tag v0.1.0`
-   - `git push origin v0.1.0`
-5. Publish a GitHub release for that tag.
-6. CarbonPanel servers can then detect the new release during their daily check.
+1. Merge and push the tested changes to the branch managed installs track.
+2. Verify a managed panel reports the new branch commit as available.
+3. Install from **Settings → Version & Updates** and watch the server-reported
+   phase progress through the 60-second backend restart window.
+4. Confirm the installed and latest commits match after reload.
+
+A formal version tag and GitHub release can still be published for release notes
+or an Android APK, but neither is required for managed Web Panel updates.
 
 ## How to publish a GitHub release
 
@@ -71,7 +74,7 @@ Example:
 Upgrade notes:
 - Source installs now live under /opt/carbonpanel
 - nginx serves the frontend and proxies /api and /ws
-- A daily systemd timer checks GitHub releases
+- A daily systemd timer checks the tracked GitHub branch tip
 ```
 
 ### 4. Breaking changes
@@ -139,12 +142,12 @@ gh release view v0.1.0 --json assets -q '.assets[].name'
 You do **not** need to upload panel release assets manually. When Android
 changed, CI builds, signs, and attaches the APK automatically.
 
-The installer:
-- resolves the newest GitHub release,
-- checks out the release tag from GitHub,
-- builds the backend and frontend from source on the target server.
+The managed Web Panel installer resolves its recorded branch, compares commit
+IDs, and builds the backend and frontend from that branch on the target server.
+It does not consume the newest GitHub release or automatically switch to a tag.
 
-That means a clean tag plus a published GitHub release is enough.
+The Android release workflow is tag-driven and attaches the signed APK to the
+matching GitHub release when `android/` changed.
 
 ## Recommended version naming
 

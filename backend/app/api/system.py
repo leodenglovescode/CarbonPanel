@@ -3,7 +3,7 @@ import os
 import subprocess
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.core.dependencies import get_current_user
 from app.models.user import User
@@ -12,13 +12,14 @@ from app.services.update_runtime import (
     UPDATE_SERVICE,
     get_system_version_status,
     trigger_update_check,
+    is_check_in_progress,
     is_update_in_progress,
     trigger_update_install,
 )
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
-_VERSION_TIMEOUT = 7.0  # seconds — covers DNS + connect + read
+_VERSION_TIMEOUT = 7.0  # seconds — protects the event loop from a stuck systemctl
 # Guards only the window between triggering systemd and it reporting the unit
 # active. Overlap beyond that is prevented by is_update_in_progress().
 _TRIGGER_DEBOUNCE = 10  # seconds
@@ -26,7 +27,11 @@ _last_install_ts: float = 0.0
 
 
 @router.get("/version")
-async def get_version_status(_: User = Depends(get_current_user)):
+async def get_version_status(
+    response: Response,
+    _: User = Depends(get_current_user),
+):
+    response.headers["Cache-Control"] = "no-store"
     loop = asyncio.get_event_loop()
     try:
         return await asyncio.wait_for(
@@ -38,7 +43,7 @@ async def get_version_status(_: User = Depends(get_current_user)):
             "configured": True,
             "update_available": False,
             "update_in_progress": False,
-            "error": "GitHub API timed out — check network connectivity",
+            "error": "Version status timed out — the host may be overloaded",
             "current_version": None,
             "latest_version": None,
             "checked_at": None,
@@ -48,32 +53,37 @@ async def get_version_status(_: User = Depends(get_current_user)):
 @router.post("/check-updates", status_code=status.HTTP_202_ACCEPTED)
 async def check_updates(_: User = Depends(get_current_user)):
     loop = asyncio.get_event_loop()
-    note: str | None = None
+    if await loop.run_in_executor(None, is_update_in_progress):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An update is installing. Wait for it to finish before checking again.",
+        )
+    if await loop.run_in_executor(None, is_check_in_progress):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An update check is already running.",
+        )
     try:
-        await loop.run_in_executor(None, trigger_update_check)
+        check_id = await loop.run_in_executor(None, trigger_update_check)
     except RuntimeError as exc:
-        note = str(exc)
-
-    if note:
-        return {
-            "success": True,
-            "message": f"Update check could not start the update daemon — {note}. "
-                       "Version status is still available via the live GitHub check below.",
-        }
-    return {"success": True, "message": "Update check started."}
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    return {
+        "success": True,
+        "message": "Update check started.",
+        "check_id": check_id,
+    }
 
 
 @router.post("/install-update", status_code=status.HTTP_202_ACCEPTED)
 async def install_update(_: User = Depends(get_current_user)):
-    """Start an update install.
+    """Queue one serialized, observable update operation.
 
-    Gated on whether an install is *actually running*, not on how long ago one
-    was last triggered. Each install advances the panel one release, so a host
-    several versions behind is upgraded by installing repeatedly — and a fixed
-    five-minute lockout made that take five minutes per version even though
-    each install had long since finished. The old window was also only ever a
-    guess at install duration: too short to prevent overlap on a slow host,
-    too long on a fast one.
+    The systemd unit state plus the queued operation record are authoritative.
+    A short in-process debounce only closes the sub-second gap between two
+    requests handled by the same backend worker.
     """
     global _last_install_ts
     loop = asyncio.get_event_loop()
@@ -82,6 +92,11 @@ async def install_update(_: User = Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An update is already installing. Wait for it to finish.",
+        )
+    if await loop.run_in_executor(None, is_check_in_progress):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An update check is still running. Wait for it to finish.",
         )
 
     # systemd needs a moment to report the unit as active, so a short debounce
@@ -97,7 +112,7 @@ async def install_update(_: User = Depends(get_current_user)):
     _last_install_ts = now
 
     try:
-        await loop.run_in_executor(None, trigger_update_install)
+        operation_id = await loop.run_in_executor(None, trigger_update_install)
     except RuntimeError as exc:
         _last_install_ts = 0.0  # reset on failure so it can be retried at once
         raise HTTPException(
@@ -105,11 +120,20 @@ async def install_update(_: User = Depends(get_current_user)):
             detail=str(exc),
         ) from exc
 
-    return {"success": True, "message": "Update installation started."}
+    return {
+        "success": True,
+        "message": "Update installation started.",
+        "operation_id": operation_id,
+    }
 
 
 @router.get("/service-logs")
-async def get_service_logs(_: User = Depends(get_current_user)):
+async def get_service_logs(
+    response: Response,
+    _: User = Depends(get_current_user),
+):
+    response.headers["Cache-Control"] = "no-store"
+
     def _fetch() -> list[str]:
         cmd = [
             "journalctl",
