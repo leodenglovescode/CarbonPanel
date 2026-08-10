@@ -328,7 +328,12 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   // Most components hardcode their own px font-sizes rather than inheriting
   // --font-size, so the setting is applied as an overall UI zoom instead —
   // it scales every page's text (and spacing) uniformly, not just unstyled text.
-  rootStyle.setProperty('--ui-scale', String(resolved.fontSize / 12))
+  const uiScale = resolved.fontSize / 12
+  rootStyle.setProperty('--ui-scale', String(uiScale))
+  // CSS zoom scales viewport-based lengths too. Keep the app's rendered box
+  // exactly viewport-sized so pages do not create document-level scrollbars.
+  rootStyle.setProperty('--ui-scale-compensation', `${100 / uiScale}%`)
+  rootStyle.setProperty('--ui-viewport-height', `${100 / uiScale}dvh`)
   rootStyle.setProperty('--accent-dim', toRgba(resolved.accent, 0.1))
   rootStyle.setProperty('--accent-border', toRgba(resolved.accent, effectiveDark ? 0.2 : 0.25))
   rootStyle.setProperty('--danger-dim', toRgba(resolved.danger, effectiveDark ? 0.1 : 0.08))

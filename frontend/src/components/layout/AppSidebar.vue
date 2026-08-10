@@ -87,6 +87,7 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -151,6 +152,7 @@ async function handleLogout() {
   border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 7px;
 }
 

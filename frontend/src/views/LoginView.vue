@@ -125,7 +125,8 @@ async function handleTotp() {
 
 <style scoped>
 .login-page {
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -146,9 +147,6 @@ async function handleTotp() {
 .login-box {
   position: relative;
   z-index: 1;
-}
-
-.login-box {
   width: 100%;
   max-width: 340px;
   display: flex;

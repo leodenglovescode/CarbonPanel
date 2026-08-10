@@ -36,7 +36,9 @@ const sidebarOpen = ref(false)
 <style scoped>
 .auth-layout {
   display: flex;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -45,11 +47,13 @@ const sidebarOpen = ref(false)
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
 .content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   container-type: inline-size;
 }

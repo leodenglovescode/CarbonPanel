@@ -40,6 +40,9 @@
   --motion-press-scale: 0.992;
   --route-enter-y: 6px;
   --route-leave-scale: 0.996;
+  --ui-scale: 1;
+  --ui-scale-compensation: 100%;
+  --ui-viewport-height: 100dvh;
 }
 
 [data-theme="light"] {
@@ -86,7 +89,7 @@ html {
 }
 
 body {
-  min-height: 100%;
+  height: 100%;
   position: relative;
   overflow-x: hidden;
 }
@@ -103,10 +106,11 @@ body {
 }
 
 #app {
-  height: 100%;
+  width: var(--ui-scale-compensation);
+  height: var(--ui-viewport-height);
   position: relative;
   z-index: 1;
-  zoom: var(--ui-scale, 1);
+  zoom: var(--ui-scale);
 }
 
 button,
