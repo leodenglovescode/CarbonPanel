@@ -41,7 +41,8 @@ frontend:
 setup:
 	@echo "--- Setting up backend ---"
 	python3 -m venv backend/.venv
-	$(PIP) install -q -e "backend/.[dev]"
+	$(PIP) install -q -r backend/requirements-dev.lock
+	$(PIP) install -q --no-deps -e backend
 	@if [ ! -f backend/.env ]; then \
 		echo "--- Generating backend/.env with random secrets (no well-known defaults) ---"; \
 		secret=$$(python3 -c "import secrets; print(secrets.token_urlsafe(48))"); \
@@ -53,8 +54,10 @@ setup:
 		echo ">>>   password: $$admin_pw"; \
 		echo ""; \
 	fi
+	@chmod 600 backend/.env
 	cd backend && ../$(ALEMBIC) upgrade head
 	cd backend && ../$(PYTHON) -m app.scripts.seed_admin
+	@chmod 600 backend/carbonpanel.db
 	@echo "--- Setting up frontend ---"
 	cd frontend && npm install
 	@echo ""

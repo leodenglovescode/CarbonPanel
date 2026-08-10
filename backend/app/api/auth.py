@@ -5,8 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import brute_force
-from app.core.dependencies import clear_auth_cookie, COOKIE_NAME, get_current_user, set_auth_cookie
-from app.core.security import decode_token
+from app.core.dependencies import (
+    clear_auth_cookie,
+    current_token_jti,
+    get_current_user,
+    invalidate_jti,
+    set_auth_cookie,
+)
 from app.database import get_db
 from app.models.device import Device
 from app.models.user import User
@@ -125,16 +130,13 @@ async def logout(
 ):
     # Revoke this session's device/jti so a stolen token can't be replayed
     # after the legitimate user logs out — not just a client-side discard.
-    token = request.cookies.get(COOKIE_NAME)
-    try:
-        jti = decode_token(token).get("jti") if token else None
-    except ValueError:
-        jti = None
+    jti = current_token_jti(request)
     if jti:
         result = await db.execute(select(Device).where(Device.jti == jti))
         device = result.scalar_one_or_none()
         if device:
             device.revoked = True
             await db.commit()
+        invalidate_jti(jti)
     clear_auth_cookie(response)
     return SuccessResponse()

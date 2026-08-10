@@ -1,22 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Self-hosted panels are routinely reached over plain HTTP on a private
-  network — a LAN address, a Tailscale/WireGuard address, or a local tunnel —
-  where there is no certificate to have. Android blocks cleartext by default,
-  so those deployments would simply fail to connect.
-
-  Cleartext is permitted app-wide rather than scoped to private ranges because
-  the server address is chosen by the user at pairing time and cannot be known
-  at build time — and network-security-config's <domain> element matches
-  hostnames only, with no CIDR support, so "private ranges only" is not
-  expressible here. Scoping is enforced in code instead: EndpointResolver
-  refuses to fall back to a cleartext endpoint on a public IP address.
-
-  HTTPS endpoints using a self-signed certificate are handled separately, by
-  pinning the fingerprint observed at pairing time — see TofuTrustManager.
--->
+<!-- Self-signed TLS is accepted only when its SHA-256 fingerprint arrived in
+     the pairing QR and was installed before the first request. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

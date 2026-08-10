@@ -620,7 +620,20 @@
             <p class="section-desc">Add an extra layer of security with a TOTP authenticator app (Google Authenticator, Authy, etc.)</p>
 
             <div v-if="!setupData" class="setup-start">
-              <BaseButton variant="ghost" @click="startSetup" :disabled="setupLoading">
+              <BaseInput
+                v-model="setupPassword"
+                label="Current Password"
+                id="setup-password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+              <p v-if="setupError" class="error-msg">{{ setupError }}</p>
+              <BaseButton
+                variant="ghost"
+                @click="startSetup"
+                :disabled="setupLoading || !setupPassword"
+              >
                 {{ setupLoading ? 'Loading…' : 'Set up 2FA' }}
               </BaseButton>
             </div>
@@ -656,8 +669,16 @@
 
           <!-- Disable flow -->
           <template v-else>
-            <p class="section-desc">2FA is active. Enter your current code to disable it.</p>
+            <p class="section-desc">2FA is active. Re-enter your password and current code to disable it.</p>
             <form class="confirm-form" @submit.prevent="handleDisable">
+              <BaseInput
+                v-model="disablePassword"
+                label="Current Password"
+                id="disable-password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
               <BaseInput
                 v-model="disableCode"
                 label="Current TOTP Code"
@@ -667,7 +688,7 @@
                 maxlength="6"
               />
               <p v-if="disableError" class="error-msg">{{ disableError }}</p>
-              <BaseButton variant="danger" :disabled="disableCode.length !== 6 || disableLoading">
+              <BaseButton variant="danger" :disabled="!disablePassword || disableCode.length !== 6 || disableLoading">
                 {{ disableLoading ? 'Disabling…' : 'Disable 2FA' }}
               </BaseButton>
             </form>
@@ -839,8 +860,8 @@
           </div>
           <p class="section-desc">
             Pair the CarbonPanel Android app by scanning a QR code. The app gets its own
-            long-lived token, revocable above at any time — no password or 2FA code is
-            ever typed on the phone.
+            long-lived token, revocable above at any time. Re-authenticate here to create
+            the code; your password and 2FA code are never sent to the phone.
           </p>
 
           <div class="pair-endpoints">
@@ -873,10 +894,31 @@
             <p v-if="endpointError" class="error-msg">{{ endpointError }}</p>
           </div>
 
+          <div class="confirm-form">
+            <BaseInput
+              v-model="pairAuthPassword"
+              label="Current Password"
+              id="pair-password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <BaseInput
+              v-if="auth.user?.totp_enabled"
+              v-model="pairAuthTotp"
+              label="Current TOTP Code"
+              id="pair-totp"
+              placeholder="000000"
+              inputmode="numeric"
+              maxlength="6"
+              required
+            />
+          </div>
+
           <div class="pair-actions">
             <button
               class="theme-btn active"
-              :disabled="pairingBusy || !selectedEndpoints.length"
+              :disabled="pairingBusy || !selectedEndpoints.length || !pairAuthPassword || (auth.user?.totp_enabled && pairAuthTotp.length !== 6)"
               @click="startPairing"
             >
               {{ pairing ? 'New code' : 'Pair a device' }}
@@ -1460,20 +1502,25 @@ async function installUpdate() {
 
 const setupData = ref<{ secret: string; otpauth_uri: string } | null>(null)
 const setupLoading = ref(false)
+const setupPassword = ref('')
+const setupError = ref('')
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 
 const confirmCode = ref('')
 const enableLoading = ref(false)
 const enableError = ref('')
 
+const disablePassword = ref('')
 const disableCode = ref('')
 const disableLoading = ref(false)
 const disableError = ref('')
 
 async function startSetup() {
+  if (!setupPassword.value) return
   setupLoading.value = true
+  setupError.value = ''
   try {
-    const res = await settingsApi.setup2fa()
+    const res = await settingsApi.setup2fa(setupPassword.value)
     setupData.value = res.data
     await nextTick()
     if (qrCanvas.value) {
@@ -1485,6 +1532,8 @@ async function startSetup() {
         color: { dark: fg, light: bg },
       })
     }
+  } catch (e: any) {
+    setupError.value = e.response?.data?.detail || 'Could not start 2FA setup'
   } finally {
     setupLoading.value = false
   }
@@ -1495,9 +1544,10 @@ async function handleEnable() {
   enableError.value = ''
   enableLoading.value = true
   try {
-    await settingsApi.enable2fa(confirmCode.value)
+    await settingsApi.enable2fa(setupPassword.value, confirmCode.value)
     await auth.loadUser()
     setupData.value = null
+    setupPassword.value = ''
     confirmCode.value = ''
   } catch (e: any) {
     enableError.value = e.response?.data?.detail || 'Invalid code'
@@ -1512,8 +1562,9 @@ async function handleDisable() {
   disableError.value = ''
   disableLoading.value = true
   try {
-    await settingsApi.disable2fa(disableCode.value)
+    await settingsApi.disable2fa(disablePassword.value, disableCode.value)
     await auth.loadUser()
+    disablePassword.value = ''
     disableCode.value = ''
   } catch (e: any) {
     disableError.value = e.response?.data?.detail || 'Invalid code'
@@ -1659,6 +1710,8 @@ const selectedEndpoints = ref<string[]>([])
 const newEndpoint = ref('')
 const endpointError = ref('')
 const pairing = ref<PairingStart | null>(null)
+const pairAuthPassword = ref('')
+const pairAuthTotp = ref('')
 const pairingBusy = ref(false)
 const pairStatus = ref<'pending' | 'claimed' | 'expired'>('pending')
 const pairedName = ref<string | null>(null)
@@ -1742,11 +1795,17 @@ async function startPairing() {
   endpointError.value = ''
   stopPairPolling()
   try {
-    const { data } = await pairingApi.start(selectedEndpoints.value)
+    const { data } = await pairingApi.start(
+      selectedEndpoints.value,
+      pairAuthPassword.value,
+      pairAuthTotp.value || undefined,
+    )
     pairing.value = data
     pairStatus.value = 'pending'
     pairedName.value = null
     pairCountdown.value = data.expires_in
+    pairAuthPassword.value = ''
+    pairAuthTotp.value = ''
 
     pairTick = setInterval(() => {
       if (pairCountdown.value > 0) pairCountdown.value--

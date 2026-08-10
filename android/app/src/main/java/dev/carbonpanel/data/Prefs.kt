@@ -92,12 +92,16 @@ class Prefs(context: Context) {
         get() = prefs.getString(KEY_DEVICE_ID, null) ?: java.util.UUID.randomUUID().toString()
             .also { prefs.edit().putString(KEY_DEVICE_ID, it).apply() }
 
-    // ── Certificate pinning (trust on first use) ───────────────────────────
+    // ── Certificate pinning (fingerprint delivered out-of-band by QR) ─────
 
     fun pinnedCert(host: String): String? = prefs.getString(pinKey(host), null)
 
     fun setPinnedCert(host: String, sha256: String) {
-        prefs.edit().putString(pinKey(host), sha256).apply()
+        prefs.edit().putString(pinKey(host), sha256).commit()
+    }
+
+    fun removePinnedCert(host: String) {
+        prefs.edit().remove(pinKey(host)).commit()
     }
 
     // ── Widget ─────────────────────────────────────────────────────────────

@@ -196,15 +196,14 @@ fun PairingScreen(
         AnimatedVisibility(visible = showManual) {
             PanelCard(Modifier.fillMaxWidth().padding(top = 12.dp), spacing = 10) {
                 MonoText(
-                    "For phones without a camera, or when the code won't scan. " +
-                        "Use an address this phone can actually reach — a VPN " +
-                        "address if you're away from home.",
+                    "For a publicly trusted HTTPS server. Self-signed certificates " +
+                        "must be paired by scanning the QR so the certificate pin is included.",
                 )
                 OutlinedTextField(
                     value = manualUrl,
                     onValueChange = { manualUrl = it },
                     label = { Text("Server address") },
-                    placeholder = { Text("http://100.64.0.2:8000") },
+                    placeholder = { Text("https://panel.example.com") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -212,7 +211,7 @@ fun PairingScreen(
                     value = manualCode,
                     onValueChange = { manualCode = it.uppercase() },
                     label = { Text("Pairing code") },
-                    placeholder = { Text("MKK3H5JC") },
+                    placeholder = { Text("MKK3H5JCT9QW") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Characters,

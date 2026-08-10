@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import warnings
 from pathlib import Path
 from typing import Literal
 
@@ -12,6 +13,7 @@ Target = Literal["app", "login"]
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB — validated before decoding
 MAX_OUTPUT_BYTES = 2 * 1024 * 1024  # 2 MB — compressed output ceiling
 MAX_DIMENSION = 2560  # long-edge cap; plenty for any display background
+MAX_SOURCE_PIXELS = 40_000_000
 
 
 def _images_dir() -> Path:
@@ -49,7 +51,13 @@ def compress_to_jpeg(
 
     Raises on unreadable/corrupt input — callers should turn that into a 400.
     """
-    img = Image.open(io.BytesIO(raw))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        img = Image.open(io.BytesIO(raw))
+        width, height = img.size
+        if width <= 0 or height <= 0 or width * height > MAX_SOURCE_PIXELS:
+            raise ValueError("Image dimensions are too large")
+        img.load()
     img = ImageOps.exif_transpose(img)  # respect camera orientation before it's lost
     img = img.convert("RGB")  # drop alpha/palette so JPEG encoding is always valid
 

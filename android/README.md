@@ -1,90 +1,94 @@
 # CarbonPanel for Android
 
-Native Kotlin/Compose client for a CarbonPanel server. Renders locally and
-talks to the panel over plain HTTP — no WebView, no embedded web UI.
+Native Kotlin/Jetpack Compose client for a CarbonPanel server. It renders
+locally and talks to the API over HTTPS; it is not a WebView.
 
 ## Build
 
-```bash
+~~~bash
 cd android
-./gradlew :app:assembleDebug        # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew installDebug              # to a connected device
-```
+./gradlew :app:assembleDebug
+./gradlew installDebug
+~~~
 
-Requires JDK 17+ and an Android SDK with platform 36. `local.properties` must
-point at the SDK (`sdk.dir=/path/to/Android/Sdk`); it is gitignored because the
-path is per-machine.
+The debug APK is written to app/build/outputs/apk/debug/app-debug.apk. Building
+requires JDK 17+ and an Android SDK with platform 36. local.properties must set
+sdk.dir to the local SDK path.
 
-## How pairing works
+## Pairing and authentication
 
-There is no login screen. The phone never sees a password or a TOTP code.
+The app has no password login screen. Pairing starts in the authenticated web
+panel:
 
-1. In the web panel: **Settings → Paired Devices → Pair a device**.
-2. The server generates a single-use code (5 minute lifetime) and renders it as
-   a QR containing `{v, c, e, n}` — version, code, **endpoint list**, server name.
-3. The app scans it and `POST`s the code to `/api/v1/pairing/claim`, receiving a
-   90-day bearer token scoped to a revocable device row.
-4. Revoke any time from the same settings page; revocation takes effect
-   immediately.
+1. Open **Settings → Paired Devices**.
+2. Re-enter the current password and, when enabled, the current TOTP code.
+3. Select one or more HTTPS server addresses and generate the QR.
+4. Scan the QR in the Android app.
+5. The app exchanges the five-minute, single-use code for a 90-day bearer
+   token represented by a revocable device row.
 
-### Why the QR carries a list of endpoints
+The QR contains compact fields for its version, one-time code, endpoint list,
+server name, optional SHA-256 TLS certificate fingerprint, and the hosts to
+which that fingerprint applies: {v, c, e, n, f, p}. Passwords and TOTP codes
+never enter the QR or the phone.
 
-The server only knows the address *your browser* used to reach it — usually a
-LAN IP. A phone that leaves the house can't use that. So pairing hands over
-every address the server believes it has, ordered by how likely they are to
-work from elsewhere:
+Revoke the Android token from **Settings → Active Sessions**. Revocation takes
+effect immediately for request/response calls and open streams.
 
-| kind | example | notes |
-|---|---|---|
-| `custom` | `https://panel.example.com` | entered by hand in Settings |
-| `overlay` | `100.64.0.2`, `10.99.0.2` | Tailscale / WireGuard — works anywhere |
-| `current` | the address the browser used | fast at home |
-| `lan` | `192.168.1.x` | home only |
-| `public` | routable address | only offered over HTTPS |
+## Endpoints
 
-`EndpointResolver` tries the last-known-good address first, then walks the list.
-Moving between wifi and mobile data re-resolves automatically.
+Pairing can include multiple HTTPS endpoints because a LAN address may stop
+working when the phone leaves home. Operator-configured public or overlay
+addresses are tried first, followed by the current browser address and local
+interfaces. The app remembers the last working address and tries it first next
+time.
 
-## Battery model
-
-- **Foreground**: HTTP polling, interval selectable down to 0.4s. Collected
-  under `SharingStarted.WhileSubscribed`, so it stops when the app leaves the
-  screen. No service, no wakelock, no persistent socket.
-- **Background**: nothing, except one WorkManager job every 15 minutes to
-  refresh the home-screen widget.
-- The dashboard requests `fields=cpu,memory,gpu,disks,system` — omitting the
-  process table cuts the payload by roughly two thirds.
+Add or change endpoints in the web panel, then re-pair so the phone receives
+the updated authenticated list and certificate binding. Android does not allow
+adding arbitrary endpoints after pairing.
 
 ## TLS and self-signed certificates
 
-Self-hosted panels usually run plain HTTP on a private network or HTTPS with a
-self-signed certificate. `TofuTrustManager` handles the latter:
+Cleartext traffic is disabled in both the manifest and network security
+configuration. The bearer token is never sent over HTTP, including private LAN
+and VPN addresses.
 
-1. Chain validates against system CAs → accept, pin nothing.
-2. A fingerprint is already pinned for the host → require an exact match;
-   a change is a hard failure.
-3. No pin yet → record it and accept (trust on first use).
+Publicly trusted HTTPS certificates use Android's system CA validation.
+Managed installs use a self-signed certificate; the backend embeds its SHA-256
+fingerprint in the QR. The app stores that fingerprint for every QR endpoint
+before making the first request and requires an exact match. There is no
+trust-on-first-use fallback.
 
-Cleartext is permitted app-wide in the manifest because
-`network-security-config` cannot express "private ranges only" (it matches
-hostnames, not CIDR). `ApiClient.isPermittedEndpoint` enforces the narrowing
-instead: an `http://` endpoint on a public address is refused.
+Manual code entry is only suitable for a publicly trusted HTTPS certificate,
+because it cannot carry the self-signed certificate fingerprint. An endpoint
+whose host is absent from the configured certificate's subject alternative
+names also needs publicly trusted TLS; the backend only attaches the QR pin to
+hosts that the certificate identifies. If a managed install's certificate is
+intentionally replaced, re-pair the device.
 
-## Scope
+Pairing payload version 2 introduced HTTPS-only, QR-bound certificate trust.
+After upgrading from an older HTTP-capable app, re-pair if the saved endpoint
+list contains no usable HTTPS address.
 
-v1 covers **Dashboard**, **Docker**, and **System Services** — glanceable status
-plus the two things worth doing from a phone. Settings, Cron and Sites stay in
-the web UI.
+## Battery model
 
-Not implemented: push notifications (needs a transport decision — ntfy or FCM),
-alert rules, log streaming.
+- **Foreground:** request/response polling with a selectable interval down to
+  0.4 seconds. Collection stops when no UI observes it.
+- **Background:** no persistent service or socket. WorkManager refreshes the
+  home-screen widget at Android's supported periodic interval.
+- Dashboard requests omit the process table unless that screen needs it.
+
+## App scope
+
+The native client includes status, Docker containers, system services, disks,
+sites, cron jobs, listening ports, processes, shell sessions, bookmarks,
+webhooks, update logs, appearance/widget settings, device revocation, and
+server connectivity controls. Password and 2FA management remain in the web
+panel.
 
 ## Toolchain notes
 
-AGP 9 has **built-in Kotlin support**; applying `org.jetbrains.kotlin.android`
-alongside it is an error. `buildToolsVersion` is pinned so the build doesn't
-try to fetch a revision at build time.
-
-`gradle.properties` forces IPv4 and raises HTTP timeouts — needed on networks
-where the proxy has no IPv6 transit and `dl.google.com` is slow. Both are safe
-to remove elsewhere.
+AGP 9 has built-in Kotlin support; do not also apply
+org.jetbrains.kotlin.android. Release versions come from vMAJOR.MINOR.PATCH
+tags in CI, and an APK is produced only when Android files changed since the
+previous tag.

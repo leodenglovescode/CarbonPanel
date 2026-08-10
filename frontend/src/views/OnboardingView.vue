@@ -81,7 +81,15 @@
         <p class="step-desc">Add a TOTP authenticator app (Google Authenticator, Authy, etc.) as a second factor.</p>
 
         <div v-if="!setupData" class="setup-start">
-          <BaseButton variant="ghost" :disabled="setupLoading" @click="startTotpSetup">
+          <BaseInput
+            v-model="totpPassword"
+            label="Current password"
+            id="ob-totp-password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+          <BaseButton variant="ghost" :disabled="setupLoading || !totpPassword" @click="startTotpSetup">
             {{ setupLoading ? 'Loading…' : 'Set up 2FA' }}
           </BaseButton>
         </div>
@@ -190,6 +198,7 @@ async function saveAccount() {
       newPassword.value || undefined,
     )
     await auth.loadUser()
+    totpPassword.value = newPassword.value || currentPassword.value
     next()
   } catch (e: any) {
     accountError.value = e.response?.data?.detail || 'Failed to save changes.'
@@ -201,16 +210,18 @@ async function saveAccount() {
 // Step 2: 2FA
 const setupData = ref<TOTPSetupResponse | null>(null)
 const setupLoading = ref(false)
+const totpPassword = ref('')
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const confirmCode = ref('')
 const totpError = ref('')
 const totpLoading = ref(false)
 
 async function startTotpSetup() {
+  if (!totpPassword.value) return
   setupLoading.value = true
   totpError.value = ''
   try {
-    const res = await settingsApi.setup2fa()
+    const res = await settingsApi.setup2fa(totpPassword.value)
     setupData.value = res.data
     await nextTick()
     if (qrCanvas.value) {
@@ -234,7 +245,7 @@ async function confirmTotp() {
   totpError.value = ''
   totpLoading.value = true
   try {
-    await settingsApi.enable2fa(confirmCode.value)
+    await settingsApi.enable2fa(totpPassword.value, confirmCode.value)
     await auth.loadUser()
     next()
   } catch (e: any) {

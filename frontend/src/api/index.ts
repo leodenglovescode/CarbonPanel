@@ -27,8 +27,8 @@ const api = axios.create({
 const DEVICE_ID_STORAGE_KEY = 'cp_device_id'
 function generateId(): string {
   // crypto.randomUUID() throws outside secure contexts (HTTPS/localhost) —
-  // this panel is commonly self-hosted over plain HTTP on a LAN IP, so a
-  // fresh browser with no cached device id would throw here on every
+  // local or legacy non-secure origins can still lack randomUUID(), so a
+  // fresh browser with no cached device id would otherwise throw on every
   // request, including login, before the request ever left the browser.
   // getRandomValues() has no such restriction.
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -108,9 +108,12 @@ export const authApi = {
 }
 
 export const settingsApi = {
-  setup2fa: () => api.get<TOTPSetupResponse>('/settings/2fa/setup'),
-  enable2fa: (totp_code: string) => api.post('/settings/2fa/enable', { totp_code }),
-  disable2fa: (totp_code: string) => api.post('/settings/2fa/disable', { totp_code }),
+  setup2fa: (current_password: string, current_totp_code?: string) =>
+    api.post<TOTPSetupResponse>('/settings/2fa/setup', { current_password, current_totp_code }),
+  enable2fa: (current_password: string, totp_code: string) =>
+    api.post('/settings/2fa/enable', { current_password, totp_code }),
+  disable2fa: (current_password: string, totp_code: string) =>
+    api.post('/settings/2fa/disable', { current_password, totp_code }),
   changeProfile: (current_password: string, new_username?: string, new_password?: string) =>
     api.put('/settings/profile', { current_password, new_username, new_password }),
 }
@@ -341,6 +344,7 @@ export interface PairingStart {
   expires_in: number
   endpoints: PairingEndpoint[]
   selected: string[]
+  certificate_fingerprint: string | null
   qr_png_b64: string
 }
 
@@ -352,7 +356,15 @@ export interface PairingStatus {
 export const pairingApi = {
   endpoints: () => api.get<PairingEndpoints>('/pairing/endpoints'),
   setEndpoints: (extra: string[]) => api.put<PairingEndpoints>('/pairing/endpoints', { extra }),
-  start: (endpoints?: string[]) => api.post<PairingStart>('/pairing/start', { endpoints }),
+  start: (
+    endpoints: string[],
+    current_password: string,
+    current_totp_code?: string,
+  ) => api.post<PairingStart>('/pairing/start', {
+    endpoints,
+    current_password,
+    current_totp_code,
+  }),
   status: (code: string) => api.get<PairingStatus>(`/pairing/status/${code}`),
 }
 

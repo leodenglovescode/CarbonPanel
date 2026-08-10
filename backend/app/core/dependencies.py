@@ -1,5 +1,6 @@
 import time
 from threading import Lock
+from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Request, Response, WebSocket, status
 from sqlalchemy import select
@@ -28,23 +29,15 @@ def is_allowed_ws_origin(ws: WebSocket) -> bool:
         return False
     if origin in settings.cors_origins:
         return True
-    # Same-origin deployment (prod: frontend + backend behind one nginx
-    # origin; dev: vite's proxy forwards the original Host untouched) —
-    # Origin should match the Host the handshake actually arrived on.
-    origin_host = origin.split("://", 1)[-1]
-    host_header = ws.headers.get("host", "")
-    if origin_host == host_header:
-        return True
-    # Some reverse proxies forward Host without the port even when the
-    # client's Origin includes one (nginx's $host variable strips it, unlike
-    # $http_host — an easy config mistake that silently rejected every
-    # WebSocket on any deployment using a non-default port). Compare
-    # hostnames alone as a fallback rather than failing closed on that; the
-    # hostname still has to match exactly, so this doesn't weaken the
-    # cross-origin check itself.
-    origin_hostname = origin_host.rsplit(":", 1)[0]
-    host_hostname = host_header.rsplit(":", 1)[0]
-    return bool(origin_hostname) and origin_hostname == host_hostname
+    parsed = urlsplit(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    forwarded_proto = ws.headers.get("x-forwarded-proto", "")
+    scheme = forwarded_proto.split(",", 1)[0].strip() or (
+        "https" if ws.url.scheme == "wss" else "http"
+    )
+    host = ws.headers.get("host", "")
+    return f"{parsed.scheme}://{parsed.netloc}" == f"{scheme}://{host}"
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
@@ -80,6 +73,34 @@ def _extract_token(request: Request) -> str | None:
     if scheme.lower() == "bearer" and param:
         return param.strip()
     return None
+
+
+def current_token_jti(request: Request) -> str | None:
+    """Return the authenticated token id without trusting it for auth decisions."""
+    token = _extract_token(request)
+    if not token:
+        return None
+    try:
+        return decode_token(token).get("jti")
+    except ValueError:
+        return None
+
+
+def is_allowed_http_origin(request: Request) -> bool:
+    """Validate browser origins for cookie-authenticated state changes."""
+    origin = request.headers.get("origin")
+    if origin in settings.cors_origins:
+        return True
+    if not origin:
+        return request.headers.get("sec-fetch-site") == "same-origin"
+
+    parsed = urlsplit(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    scheme = forwarded_proto.split(",", 1)[0].strip() or request.url.scheme
+    host = request.headers.get("host", "")
+    return f"{parsed.scheme}://{parsed.netloc}" == f"{scheme}://{host}"
 
 
 # --- Revocation-check cache -------------------------------------------------
@@ -163,9 +184,12 @@ async def _authenticate(request: Request, db: AsyncSession) -> str:
     if not user_id:
         raise CREDENTIALS_ERROR
 
-    # JTI revocation check — only enforced when jti is present in the token
+    # Every full token issued by supported releases has a JTI. Accepting old
+    # JTI-less tokens would make password/2FA session revocation impossible.
     jti: str | None = payload.get("jti")
-    if jti and not _jti_recently_verified(jti):
+    if not jti:
+        raise CREDENTIALS_ERROR
+    if not _jti_recently_verified(jti):
         result = await db.execute(select(Device).where(Device.jti == jti))
         device = result.scalar_one_or_none()
         if device is None or device.revoked:
@@ -214,8 +238,7 @@ async def authenticate_ws(ws: WebSocket) -> str | None:
 
     jti: str | None = payload.get("jti")
     if not jti:
-        # Pre-dates jti tracking; signature and scope are all there is to check.
-        return ""
+        return None
     if is_jti_revoked(jti):
         return None
     if not _jti_recently_verified(jti):

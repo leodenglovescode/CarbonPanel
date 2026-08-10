@@ -461,6 +461,8 @@ ensure_backend_env() {
 SECRET_KEY=$secret
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=$admin_password
+COOKIE_SECURE=true
+TLS_CERT_FILE=$TLS_CERT
 DATABASE_URL=sqlite+aiosqlite:////opt/carbonpanel/shared/carbonpanel.db
 CORS_ORIGINS='["https://127.0.0.1:$APP_PORT","https://localhost:$APP_PORT"]'
 METRICS_INTERVAL_SECONDS=1.0
@@ -532,9 +534,13 @@ ensure_tls_cert() {
 # Existing installs from before HTTPS was the default won't have this set —
 # patch it into an already-written env file too, not just fresh ones, so an
 # update actually finishes hardening the cookie instead of leaving it half done.
-ensure_cookie_secure_flag() {
+ensure_security_env_flags() {
   grep -q '^COOKIE_SECURE=' "$BACKEND_ENV_FILE" 2>/dev/null || \
     printf 'COOKIE_SECURE=true\n' >> "$BACKEND_ENV_FILE"
+  grep -q '^TLS_CERT_FILE=' "$BACKEND_ENV_FILE" 2>/dev/null || \
+    printf 'TLS_CERT_FILE=%s\n' "$TLS_CERT" >> "$BACKEND_ENV_FILE"
+  chmod 640 "$BACKEND_ENV_FILE"
+  chown root:"$SERVICE_GROUP" "$BACKEND_ENV_FILE"
 }
 
 clone_release() {
@@ -550,7 +556,7 @@ clone_release() {
   printf '%s\n' "$destination"
 }
 
-BUILD_STEP_TOTAL=5
+BUILD_STEP_TOTAL=6
 BUILD_STEP_CURRENT=0
 
 # Render a "[####------] 40%  <label>" bar in place (on a tty) or a plain
@@ -590,7 +596,8 @@ build_release() {
 
   build_step "Creating backend virtualenv..." python3 -m venv "$release_dir/backend/.venv"
   build_step "Upgrading pip tooling..." "$release_dir/backend/.venv/bin/pip" install --upgrade pip setuptools wheel
-  build_step "Installing backend dependencies..." "$release_dir/backend/.venv/bin/pip" install -e "$release_dir/backend"
+  build_step "Installing backend dependencies..." "$release_dir/backend/.venv/bin/pip" install -r "$release_dir/backend/requirements.lock"
+  build_step "Installing backend package..." "$release_dir/backend/.venv/bin/pip" install --no-deps -e "$release_dir/backend"
   build_step "Installing frontend dependencies..." npm --prefix "$release_dir/frontend" ci
   build_step "Building frontend..." npm --prefix "$release_dir/frontend" run build
   [[ -t 1 ]] && printf '\n'
@@ -631,9 +638,10 @@ server {
 
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "same-origin" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https://cdn.simpleicons.org https://api.iconify.design; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
 
     location /api/ {
         proxy_pass http://127.0.0.1:$BACKEND_PORT;
@@ -663,11 +671,13 @@ server {
     # after an update — always revalidate it. The hashed files under
     # /assets/ are safe to cache forever since a new deploy gets new names.
     location = /index.html {
-        add_header Cache-Control "no-cache, must-revalidate" always;
+        # Use expires rather than a nested add_header so nginx keeps inheriting
+        # every security header declared at server scope.
+        expires epoch;
     }
 
     location /assets/ {
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        expires 1y;
         try_files \$uri =404;
     }
 
@@ -1123,7 +1133,7 @@ install_or_update() {
   ensure_backend_env
   log "Minting a self-signed TLS cert..."
   ensure_tls_cert
-  ensure_cookie_secure_flag
+  ensure_security_env_flags
 
   log "Yanking the code down (${BOLD}${ref}${NC})..."
   release_id="$(date -u +%Y%m%d%H%M%S)-$(safe_name "$ref")"

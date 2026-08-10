@@ -116,9 +116,28 @@ Short summary of the release.
 - Managed installs can automatically roll back on failed startup
 ```
 
+## Android release workflow
+
+The Android release workflow only publishes an APK when both conditions hold:
+
+1. The pushed tag is exactly vMAJOR.MINOR.PATCH.
+2. The diff from the previous v* tag includes a file under android/.
+
+versionCode and versionName are derived from the tag in CI. Do not add a
+GitHub Actions paths filter to tag pushes; the workflow's check job performs
+the Android diff explicitly. A skipped Android build is a successful release,
+and the next tag still compares against the previous tag.
+
+After publishing, verify the asset:
+
+~~~bash
+gh release view v0.1.0 --json assets -q '.assets[].name'
+~~~
+
 ## Notes about assets
 
-You do **not** need to upload release assets for the current installer flow.
+You do **not** need to upload panel release assets manually. When Android
+changed, CI builds, signs, and attaches the APK automatically.
 
 The installer:
 - resolves the newest GitHub release,

@@ -32,8 +32,6 @@ import dev.carbonpanel.data.SiteResponse
 import dev.carbonpanel.data.SiteTrafficResponse
 import dev.carbonpanel.data.SuccessResponse
 import dev.carbonpanel.data.SystemServiceInfo
-import dev.carbonpanel.data.TotpConfirmRequest
-import dev.carbonpanel.data.TotpSetupResponse
 import dev.carbonpanel.data.UnmountRequest
 import dev.carbonpanel.data.UserInfo
 import dev.carbonpanel.data.VersionStatus
@@ -253,15 +251,6 @@ interface Api {
 
     @PUT("api/v1/settings/profile")
     suspend fun changeProfile(@Body body: ChangeProfileRequest): SuccessResponse
-
-    @GET("api/v1/settings/2fa/setup")
-    suspend fun setup2fa(): TotpSetupResponse
-
-    @POST("api/v1/settings/2fa/enable")
-    suspend fun enable2fa(@Body body: TotpConfirmRequest): SuccessResponse
-
-    @POST("api/v1/settings/2fa/disable")
-    suspend fun disable2fa(@Body body: TotpConfirmRequest): SuccessResponse
 
     @GET("api/v1/settings/proxy")
     suspend fun proxy(): ProxyConfig

@@ -137,8 +137,11 @@ fun BookmarksScreen(viewModel: PanelViewModel) {
                 Modifier
                     .fillMaxWidth()
                     .clickable {
-                        runCatching {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, bm.url.toUri()))
+                        val uri = bm.url.toUri()
+                        if (uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()) {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                            }
                         }
                     },
                 spacing = 4,

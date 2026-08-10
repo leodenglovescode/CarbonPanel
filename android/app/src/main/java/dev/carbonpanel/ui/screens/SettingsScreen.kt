@@ -14,11 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,13 +68,7 @@ fun SettingsScreen(viewModel: PanelViewModel, onUnpair: () -> Unit) {
         viewModel.refreshEndpoints()
     }
 
-    var addingEndpoint by remember { mutableStateOf(false) }
     var confirmUnpair by remember { mutableStateOf(false) }
-
-    if (addingEndpoint) AddEndpointDialog(
-        onAdd = { viewModel.addEndpoint(it); addingEndpoint = false },
-        onDismiss = { addingEndpoint = false },
-    )
 
     if (confirmUnpair) ConfirmDialog(
         title = "Unpair device",
@@ -107,16 +99,7 @@ fun SettingsScreen(viewModel: PanelViewModel, onUnpair: () -> Unit) {
         }
 
         // ── server addresses ───────────────────────────────────────────────
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SectionLabel("Server addresses")
-                TextButton(onClick = { addingEndpoint = true }) { Text("Add") }
-            }
-        }
+        item { SectionLabel("Server addresses") }
         item {
             PanelCard {
                 MonoText(
@@ -429,35 +412,4 @@ private fun AccentSwatch(choice: AccentChoice, selected: Boolean, onClick: () ->
             Text("You", style = MaterialTheme.typography.labelSmall, color = Color.Black)
         }
     }
-}
-
-@Composable
-private fun AddEndpointDialog(onAdd: (String) -> Unit, onDismiss: () -> Unit) {
-    var url by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add server address", style = MaterialTheme.typography.titleMedium) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Address") },
-                    placeholder = { Text("https://panel.example.com") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                MonoText(
-                    "Include the port if it isn't 80 or 443. Plain http:// is only " +
-                        "accepted for private and VPN addresses.",
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onAdd(url) }, enabled = url.isNotBlank()) { Text("Add") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(10.dp),
-    )
 }

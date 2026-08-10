@@ -1,5 +1,6 @@
 """Seed the admin user. Run with: python -m app.scripts.seed_admin"""
 
+import argparse
 import asyncio
 import uuid
 
@@ -12,7 +13,7 @@ from app.database import AsyncSessionLocal, Base, engine
 from app.models.user import User
 
 
-async def seed() -> None:
+async def seed(reset_password: bool = False) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -22,9 +23,15 @@ async def seed() -> None:
         )
         existing = result.scalar_one_or_none()
         if existing:
-            existing.password_hash = hash_password(settings.admin_password)
-            await db.commit()
-            print(f"Updated password for '{settings.admin_username}'.")
+            if reset_password:
+                existing.password_hash = hash_password(settings.admin_password)
+                await db.commit()
+                print(f"Reset password for '{settings.admin_username}'.")
+            else:
+                print(
+                    f"Admin user '{settings.admin_username}' already exists; "
+                    "password left unchanged."
+                )
             return
 
         user = User(
@@ -38,4 +45,11 @@ async def seed() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    parser = argparse.ArgumentParser(description="Create the initial CarbonPanel admin user.")
+    parser.add_argument(
+        "--reset-password",
+        action="store_true",
+        help="Explicitly replace an existing admin password with ADMIN_PASSWORD.",
+    )
+    args = parser.parse_args()
+    asyncio.run(seed(reset_password=args.reset_password))
