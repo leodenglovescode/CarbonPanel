@@ -41,7 +41,6 @@
   --route-enter-y: 6px;
   --route-leave-scale: 0.996;
   --ui-scale: 1;
-  --ui-scale-compensation: 100%;
   --ui-viewport-height: 100dvh;
 }
 
@@ -106,7 +105,7 @@ body {
 }
 
 #app {
-  width: var(--ui-scale-compensation);
+  width: 100%;
   height: var(--ui-viewport-height);
   position: relative;
   z-index: 1;

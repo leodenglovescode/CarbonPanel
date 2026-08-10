@@ -332,7 +332,6 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   rootStyle.setProperty('--ui-scale', String(uiScale))
   // CSS zoom scales viewport-based lengths too. Keep the app's rendered box
   // exactly viewport-sized so pages do not create document-level scrollbars.
-  rootStyle.setProperty('--ui-scale-compensation', `${100 / uiScale}%`)
   rootStyle.setProperty('--ui-viewport-height', `${100 / uiScale}dvh`)
   rootStyle.setProperty('--accent-dim', toRgba(resolved.accent, 0.1))
   rootStyle.setProperty('--accent-border', toRgba(resolved.accent, effectiveDark ? 0.2 : 0.25))
