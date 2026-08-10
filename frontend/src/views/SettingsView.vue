@@ -498,31 +498,49 @@
             <span
               :class="[
                 'badge',
-                versionInfo?.update_available ? 'badge-green' : 'badge-gray',
+                versionInfo?.update_available &&
+                  !versionInfo?.update_in_progress &&
+                  !versionInfo?.check_in_progress
+                  ? 'badge-green'
+                  : 'badge-gray',
               ]"
             >
               {{
-                versionInfo?.update_in_progress
-                  ? 'Installing'
-                  : versionInfo?.update_available
-                    ? 'Update available'
-                    : 'Up to date'
+                restarting || versionInfo?.restart_pending
+                  ? 'Restarting'
+                  : versionInfo?.update_in_progress
+                    ? 'Installing'
+                    : versionInfo?.check_in_progress
+                      ? 'Checking'
+                      : versionInfo?.update_available
+                        ? 'Update available'
+                        : 'Up to date'
               }}
             </span>
           </div>
           <p class="section-desc">
-            CarbonPanel checks GitHub for new releases every day. You can also check manually and
-            start an interactive update from here.
+            CarbonPanel checks the installed GitHub branch for new commits every day. You can also
+            check manually and start an interactive update from here.
           </p>
 
           <div class="version-grid">
             <div class="info-row">
               <span class="info-lbl">Current</span>
-              <span class="info-val">{{ versionInfo?.current_version ?? 'Unknown' }}</span>
+              <span class="info-val">
+                {{ versionInfo?.current_version ?? 'Unknown' }}
+                <span v-if="versionInfo?.current_commit" class="commit-id">
+                  {{ versionInfo.current_commit.slice(0, 8) }}
+                </span>
+              </span>
             </div>
             <div class="info-row">
               <span class="info-lbl">Latest</span>
-              <span class="info-val">{{ versionInfo?.latest_version ?? 'Not checked yet' }}</span>
+              <span class="info-val">
+                {{ versionInfo?.latest_version ?? 'Not checked yet' }}
+                <span v-if="versionInfo?.latest_commit" class="commit-id">
+                  {{ versionInfo.latest_commit.slice(0, 8) }}
+                </span>
+              </span>
             </div>
             <div class="info-row">
               <span class="info-lbl">Checked</span>
@@ -547,16 +565,21 @@
 
           <template v-else>
             <div class="version-actions">
-              <BaseButton variant="ghost" :disabled="versionActionLoading" @click="checkForUpdates">
-                {{ versionActionLoading ? 'Working…' : 'Check for Updates' }}
+              <BaseButton
+                variant="ghost"
+                :disabled="versionActionLoading || !!versionInfo?.update_in_progress"
+                @click="checkForUpdates"
+              >
+                {{ versionInfo?.check_in_progress ? 'Checking…' : 'Check for Updates' }}
               </BaseButton>
 
               <BaseButton
                 variant="primary"
                 :disabled="
                   versionActionLoading ||
-                  !versionInfo?.update_available ||
-                  !!versionInfo?.update_in_progress
+                    !versionInfo?.update_available ||
+                    !!versionInfo?.update_in_progress ||
+                    !!versionInfo?.check_in_progress
                 "
                 @click="installUpdate"
               >
@@ -581,10 +604,19 @@
             </div>
 
             <div v-if="installing" class="update-progress">
-              <div class="update-progress-track">
+              <div class="update-progress-copy">
+                <span class="update-progress-label">{{ updateStepLabel }}</span>
+                <span class="update-progress-percent">{{ updateProgressPercent }}%</span>
+              </div>
+              <div
+                class="update-progress-track"
+                role="progressbar"
+                :aria-valuenow="updateProgressPercent"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
                 <div class="update-progress-fill" :style="{ width: updateProgressPercent + '%' }" />
               </div>
-              <span class="update-progress-label">{{ updateStepLabel }}</span>
             </div>
 
             <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
@@ -1305,35 +1337,50 @@ async function loadVersionInfo(): Promise<boolean> {
 }
 
 async function checkForUpdates() {
+  if (versionInfo.value?.update_in_progress) return
+
   versionActionLoading.value = true
   versionError.value = ''
   versionSuccess.value = ''
-  await fetchServiceLogs()
 
   try {
-    const res = await systemApi.checkUpdates()
-    versionSuccess.value = res.data.message || 'Checking for updates…'
+    const { data } = await systemApi.checkUpdates()
+    const expectedCheckId = data.check_id
+    versionSuccess.value = data.message || 'Checking for updates…'
 
-    // Poll until the check service finishes (up to 45s)
-    const deadline = Date.now() + 45_000
+    let matchedRequest = false
+    const deadline = Date.now() + 90_000
     while (Date.now() < deadline) {
-      await wait(2000)
-      await Promise.all([loadVersionInfo(), fetchServiceLogs()])
-      const info = versionInfo.value
-      if (!info?.check_in_progress) break
-    }
-    await fetchServiceLogs()
+      await wait(1000)
+      const [reachable] = await Promise.all([loadVersionInfo(), fetchServiceLogs()])
+      if (!reachable) {
+        throw new Error('Backend became unreachable during the update check')
+      }
 
-    if (versionInfo.value?.check_in_progress) {
-      // deadline hit while still running — leave the "Checking…" message as-is
-    } else if (versionInfo.value?.status === 'check_failed') {
-      // The check itself failed (e.g. GitHub unreachable) — say so plainly
-      // instead of falling through to "Already up to date", which would
-      // otherwise just restate whatever the last successful check found,
-      // possibly hours old, with no hint that this attempt didn't work.
+      const info = versionInfo.value
+      if (!info || info.check_id !== expectedCheckId) continue
+      matchedRequest = true
+      if (
+        info.check_state === 'queued' ||
+        info.check_state === 'running' ||
+        info.check_in_progress
+      ) {
+        continue
+      }
+      break
+    }
+
+    const info = versionInfo.value
+    if (!matchedRequest || info?.check_id !== expectedCheckId) {
       versionSuccess.value = ''
-      versionError.value = versionInfo.value.error || 'Check failed — GitHub was unreachable.'
-    } else if (versionInfo.value?.update_available) {
+      versionError.value = 'The updater did not acknowledge this check. No version result was assumed.'
+    } else if (info.check_state === 'failed' || info.status === 'check_failed') {
+      versionSuccess.value = ''
+      versionError.value = info.error || 'Update check failed — GitHub was unreachable.'
+    } else if (info.check_state !== 'succeeded') {
+      versionSuccess.value = ''
+      versionError.value = 'The update check is still running. Its result will appear here when it finishes.'
+    } else if (info.update_available) {
       versionSuccess.value = 'Update available!'
     } else {
       versionSuccess.value = 'Already up to date.'
@@ -1343,7 +1390,7 @@ async function checkForUpdates() {
     const network = e.code === 'ECONNABORTED'
       ? 'Request timed out — backend may be unreachable'
       : e.message
-        ? `Network error: ${e.message}`
+        ? `Update check failed: ${e.message}`
         : null
     versionError.value = detail || network || 'Failed to start update check'
   } finally {
@@ -1351,127 +1398,139 @@ async function checkForUpdates() {
   }
 }
 
-// Named steps install_or_update() logs, in order — used to turn the plain
-// log tail into real progress instead of an indeterminate spinner. Not a
-// fabricated percentage: each entry only lights up once its matching line
-// has actually appeared in the polled service logs.
-const UPDATE_STEPS = [
-  { match: 'sniffing for port squatters', label: 'Checking port availability' },
-  { match: 'grabbing system dependencies', label: 'Installing system dependencies' },
-  { match: 'conjuring the carbonpanel service account', label: 'Setting up service account' },
-  { match: 'staking out territory on disk', label: 'Preparing install directories' },
-  { match: 'locking in your secrets', label: 'Writing configuration' },
-  { match: "asking github what's poppin", label: 'Checking GitHub for the latest version' },
-  { match: 'yanking the code down', label: 'Cloning release' },
-  { match: "teaching python what's what", label: 'Installing backend dependencies' },
-  { match: 'bundling the frontend heat', label: 'Building frontend' },
-  { match: 'deploying the new release', label: 'Deploying & restarting services' },
-] as const
-
 const installing = ref(false)
 
-const updateStepIndex = computed(() => {
-  if (!installing.value) return -1
-  let idx = -1
-  for (const line of serviceLogs.value) {
-    for (let i = 0; i < UPDATE_STEPS.length; i++) {
-      if (line.includes(UPDATE_STEPS[i].match)) idx = Math.max(idx, i)
-    }
-  }
-  return idx
+// This value comes directly from the updater status file. It advances only
+// when the server enters a real phase; old journal entries and browser timers
+// cannot move it.
+const updateProgressPercent = computed(() => {
+  const value = versionInfo.value?.progress_percent
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 1
+  return Math.min(100, Math.max(0, Math.round(value)))
 })
 
-const updateProgressPercent = computed(() =>
-  updateStepIndex.value >= 0
-    ? Math.round(((updateStepIndex.value + 1) / UPDATE_STEPS.length) * 100)
-    : 4,
-)
-
 const updateStepLabel = computed(() =>
-  updateStepIndex.value >= 0 ? UPDATE_STEPS[updateStepIndex.value].label : 'Starting…',
+  versionInfo.value?.progress_label || 'Waiting for updater status',
 )
 
 // ── Restart countdown ────────────────────────────────────────────────────
-// Partway through an install the backend process actually restarts, which
-// makes every in-flight request fail for a few seconds — that reads as a
-// dead page unless it's explained. Once that happens (or once the install
-// finishes cleanly and we need to pick up the freshly-built frontend
-// bundle), this ticks a visible countdown and health-checks in the
-// background, reloading as soon as the backend answers again — extending
-// the wait instead of giving up if it's not back yet.
+// The updater announces the restart immediately before it stops the backend.
+// Keep a full 60-second explanation visible even if the backend returns early;
+// only then probe and reload. Slow restarts extend in ten-second increments.
 const restarting = ref(false)
 const restartCountdown = ref(0)
 let restartTimer: ReturnType<typeof setInterval> | null = null
+let restartProbeInFlight = false
 
 function stopRestartCountdown() {
   if (restartTimer) {
     clearInterval(restartTimer)
     restartTimer = null
   }
+  restartProbeInFlight = false
 }
 
-function startRestartCountdown(seconds = 30) {
+function startRestartCountdown(seconds = 60) {
   if (restarting.value) return
   restarting.value = true
   restartCountdown.value = seconds
   stopRestartCountdown()
   restartTimer = setInterval(async () => {
-    restartCountdown.value -= 1
-    if (restartCountdown.value > 0) return
+    if (restartCountdown.value > 0) {
+      restartCountdown.value -= 1
+    }
+    if (restartCountdown.value > 0 || restartProbeInFlight) return
+
+    restartProbeInFlight = true
     const reachable = await loadVersionInfo()
+    restartProbeInFlight = false
     if (reachable) {
       stopRestartCountdown()
       window.location.reload()
     } else {
-      restartCountdown.value = 10 // not back yet — keep retrying every 10s
+      restartCountdown.value = 10
     }
   }, 1000)
 }
 
 onUnmounted(stopRestartCountdown)
 
-// Shared by a freshly-triggered install and by resuming one already running
-// server-side (see onMounted below) — so navigating away and back mid-install
-// still shows live progress instead of a reset, empty-looking page.
-async function pollInstallProgress() {
+async function pollInstallProgress(operationId: string) {
   installing.value = true
-  const deadline = Date.now() + 6 * 60_000
+  let matchedRequest = false
+  const deadline = Date.now() + 20 * 60_000
+
   while (Date.now() < deadline && !restarting.value) {
-    const reachable = await loadVersionInfo()
-    await fetchServiceLogs()
+    const [reachable] = await Promise.all([loadVersionInfo(), fetchServiceLogs()])
     if (!reachable) {
-      startRestartCountdown()
+      startRestartCountdown(60)
       return
     }
-    if (!versionInfo.value?.update_in_progress) break
-    await wait(3000)
-  }
-  if (restarting.value) return
 
-  if (versionInfo.value?.update_in_progress) {
-    versionSuccess.value = 'Still installing — check back in a bit.'
+    const info = versionInfo.value
+    if (!info || info.operation_id !== operationId) {
+      await wait(1000)
+      continue
+    }
+    matchedRequest = true
+
+    if (info.restart_pending) {
+      versionSuccess.value = 'The new release is ready. The backend is restarting now.'
+      startRestartCountdown(60)
+      return
+    }
+    if (info.operation_state === 'failed') {
+      versionSuccess.value = ''
+      versionError.value = info.error || info.progress_label || 'Update failed.'
+      installing.value = false
+      return
+    }
+    if (info.operation_state === 'succeeded') {
+      if (info.restart_performed) {
+        versionSuccess.value = 'Update installed. Waiting for the restart window before reloading…'
+        startRestartCountdown(60)
+      } else {
+        versionSuccess.value = info.progress_label || 'Already up to date.'
+        installing.value = false
+        await loadVersionInfo()
+      }
+      return
+    }
+    if (
+      info.operation_state === 'queued' ||
+      info.operation_state === 'running' ||
+      info.update_in_progress
+    ) {
+      await wait(2000)
+      continue
+    }
+
+    versionSuccess.value = ''
+    versionError.value = 'The updater stopped without reporting a final result.'
+    installing.value = false
     return
   }
 
-  if (versionInfo.value?.update_available) {
-    versionSuccess.value = 'Update finished, but a newer version is already available — check again.'
-    return
+  if (!restarting.value) {
+    versionSuccess.value = ''
+    versionError.value = matchedRequest
+      ? 'The update is still running after 20 minutes. Check the service logs below.'
+      : 'The updater did not acknowledge this installation request.'
+    installing.value = false
   }
-
-  // Finished while staying reachable the whole time (a fast restart the poll
-  // interval never caught) — still reload, since this tab's JS bundle is
-  // stale against the newly deployed frontend either way.
-  versionSuccess.value = "Update installed — reloading to pick up the new version…"
-  startRestartCountdown(5)
 }
 
 async function installUpdate() {
-  if (!versionInfo.value?.update_available || versionInfo.value.update_in_progress) return
+  if (
+    !versionInfo.value?.update_available ||
+    versionInfo.value.update_in_progress ||
+    versionInfo.value.check_in_progress
+  ) return
 
   const targetVersion = versionInfo.value.latest_version ?? 'the latest version'
   const confirmed = await dialog.confirm({
     title: 'Install update',
-    message: `Install CarbonPanel ${targetVersion} now? The app will restart automatically during the update.`,
+    message: `Install CarbonPanel ${targetVersion} now? Live server progress will remain visible, followed by a 60-second restart countdown.`,
     confirmLabel: 'Install',
   })
 
@@ -1480,23 +1539,21 @@ async function installUpdate() {
   versionActionLoading.value = true
   versionError.value = ''
   versionSuccess.value = ''
-
-  await fetchServiceLogs()
+  installing.value = true
 
   try {
-    await systemApi.installUpdate()
-    versionSuccess.value = 'Installing update…'
-    await wait(1200)
-    await pollInstallProgress()
+    const { data } = await systemApi.installUpdate()
+    versionSuccess.value = data.message || 'Installing update…'
+    await pollInstallProgress(data.operation_id)
   } catch (e: any) {
     const detail = e.response?.data?.detail || e.response?.data?.message
     const network = e.code === 'ECONNABORTED'
       ? 'Request timed out — backend may be unreachable'
       : e.message ? `Network error: ${e.message}` : null
     versionError.value = detail || network || 'Failed to start update installation'
+    installing.value = false
   } finally {
     versionActionLoading.value = false
-    if (!restarting.value) installing.value = false
   }
 }
 
@@ -1926,8 +1983,17 @@ onMounted(async () => {
   // An install kicked off from this page (or another tab/session) can still
   // be running server-side after this component remounts — resume showing
   // live progress instead of a blank slate.
-  if (versionInfo.value?.update_in_progress) {
-    void pollInstallProgress()
+  const operationId = versionInfo.value?.operation_id
+  const operationState = versionInfo.value?.operation_state
+  if (
+    operationId &&
+    (versionInfo.value?.update_in_progress ||
+      operationState === 'queued' ||
+      operationState === 'running')
+  ) {
+    installing.value = true
+    if (versionInfo.value?.restart_pending) startRestartCountdown(60)
+    else void pollInstallProgress(operationId)
   }
 })
 </script>
@@ -2110,6 +2176,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.commit-id {
+  margin-left: 5px;
+  color: var(--fg-dim);
+  font-size: 10px;
 }
 
 .version-actions {
@@ -2301,13 +2373,19 @@ onMounted(async () => {
 
 .update-progress {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 7px;
   margin-top: 4px;
   animation: slide-in 150ms ease;
 }
+.update-progress-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .update-progress-track {
-  flex: 1;
+  width: 100%;
   height: 6px;
   border-radius: 3px;
   background: var(--bg-input);
@@ -2321,10 +2399,18 @@ onMounted(async () => {
   transition: width var(--bar-transition);
 }
 .update-progress-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 11px;
   color: var(--fg-muted);
   white-space: nowrap;
+}
+.update-progress-percent {
   flex-shrink: 0;
+  font-size: 11px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .restart-countdown {

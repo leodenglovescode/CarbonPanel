@@ -148,12 +148,30 @@ export interface SystemVersionResponse {
   error: string | null
   release_url: string | null
   notes_url: string | null
+  check_id: string | null
+  check_state: 'queued' | 'running' | 'succeeded' | 'failed' | null
+  check_started_at: string | null
+  check_finished_at: string | null
+  operation_id: string | null
+  operation_kind: 'update' | null
+  operation_state: 'queued' | 'running' | 'succeeded' | 'failed' | null
+  operation_started_at: string | null
+  operation_updated_at: string | null
+  operation_finished_at: string | null
+  progress_phase: string | null
+  progress_label: string | null
+  progress_percent: number | null
+  restart_pending: boolean
+  restart_performed: boolean
 }
 
 export const systemApi = {
-  version: () => api.get<SystemVersionResponse>('/system/version', { timeout: 10_000 }),
-  checkUpdates: () => api.post<{ success: boolean; message: string }>('/system/check-updates', null, { timeout: 30_000 }),
-  installUpdate: () => api.post<{ success: boolean; message: string }>('/system/install-update'),
+  version: () => api.get<SystemVersionResponse>('/system/version', {
+    timeout: 10_000,
+    params: { _ts: Date.now() },
+  }),
+  checkUpdates: () => api.post<{ success: boolean; message: string; check_id: string }>('/system/check-updates', null, { timeout: 30_000 }),
+  installUpdate: () => api.post<{ success: boolean; message: string; operation_id: string }>('/system/install-update'),
   serviceLogs: () => api.get<{ lines: string[] }>('/system/service-logs', { timeout: 12_000 }),
 }
 
