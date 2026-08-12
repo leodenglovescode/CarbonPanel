@@ -28,9 +28,7 @@ class WebhookCreate(BaseModel):
     email_from: str | None = None
     email_to: str | None = None
     enabled: bool = True
-    events: list[str] = Field(
-        default_factory=lambda: list(webhook_service.EVENT_NAMES)
-    )
+    events: list[str] = Field(default_factory=lambda: list(webhook_service.EVENT_NAMES))
 
 
 class WebhookUpdate(BaseModel):
@@ -180,6 +178,27 @@ async def create_webhook(
         events=",".join(_validate_events(body.events)),
     )
     db.add(hook)
+    await db.flush()
+
+    delivery = await webhook_service.deliver_channel(
+        hook,
+        "test",
+        {
+            "metric": "manual",
+            "value": 0,
+            "threshold": 0,
+            "severity": "info",
+            "unit": "",
+        },
+    )
+    if not delivery.success:
+        await db.rollback()
+        detail = delivery.error or "Notification delivery failed"
+        raise HTTPException(
+            502,
+            f"Channel was not saved because its test delivery failed: {detail}",
+        )
+
     await db.commit()
     await db.refresh(hook)
     return WebhookResponse.from_orm_obj(hook)
