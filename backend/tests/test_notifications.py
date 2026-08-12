@@ -1,8 +1,9 @@
 import json
 
 import pytest
+from fastapi import HTTPException
 
-from app.api.webhooks import WebhookResponse
+from app.api.webhooks import WebhookCreate, WebhookResponse, create_webhook
 from app.core.crypto import decrypt
 from app.models.types import EncryptedString
 from app.models.webhook import Webhook
@@ -46,6 +47,58 @@ def test_notification_response_never_returns_credentials() -> None:
     assert "smtp_username" not in payload
     assert "smtp_password" not in payload
     assert "secret-token" not in json.dumps(payload)
+
+
+@pytest.mark.asyncio
+async def test_channel_is_rolled_back_when_initial_delivery_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeSession:
+        def __init__(self):
+            self.channel = None
+            self.committed = False
+            self.rolled_back = False
+
+        def add(self, channel):
+            self.channel = channel
+
+        async def flush(self):
+            self.channel.id = "candidate-id"
+
+        async def rollback(self):
+            self.rolled_back = True
+
+        async def commit(self):
+            self.committed = True
+
+        async def refresh(self, channel):
+            pass
+
+    async def fail_delivery(channel, event, payload):
+        return webhook_service.DeliveryResult(
+            channel.id,
+            False,
+            error="connection refused",
+        )
+
+    monkeypatch.setattr(webhook_service, "deliver_channel", fail_delivery)
+    db = FakeSession()
+
+    with pytest.raises(HTTPException, match="was not saved") as exc_info:
+        await create_webhook(
+            WebhookCreate(
+                kind="ntfy",
+                url="http://127.0.0.1:8766",
+                topic="server-alerts",
+                token="secret-token",
+            ),
+            None,
+            db,
+        )
+
+    assert exc_info.value.status_code == 502
+    assert db.rolled_back is True
+    assert db.committed is False
 
 
 def test_ntfy_accepts_local_server_but_generic_webhook_keeps_loopback_blocked(
