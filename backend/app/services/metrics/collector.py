@@ -6,6 +6,7 @@ from threading import Lock
 
 from app.core.broadcast import connection_manager
 from app.core.dependencies import is_jti_revoked
+from app.services.alert_service import alert_evaluator
 from app.schemas.metrics import (
     CpuMetrics,
     DiskMetrics,
@@ -190,6 +191,10 @@ class MetricsCollector:
             started = time.monotonic()
             try:
                 await self._collect()
+                try:
+                    await alert_evaluator.check(self.snapshot())
+                except Exception:
+                    pass
                 await self._broadcast()
             except Exception:
                 pass

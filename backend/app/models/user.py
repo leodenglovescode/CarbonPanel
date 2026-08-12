@@ -3,30 +3,9 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator
 
-from app.core.crypto import decrypt, encrypt
 from app.database import Base
-
-
-class EncryptedString(TypeDecorator):
-    """Transparently encrypts/decrypts a string column at the ORM boundary."""
-
-    impl = String
-    cache_ok = True
-
-    def process_bind_param(self, value, dialect):
-        return None if value is None else encrypt(value)
-
-    def process_result_value(self, value, dialect):
-        if value is None:
-            return None
-        try:
-            return decrypt(value)
-        except Exception:
-            # Undecryptable (e.g. SECRET_KEY rotated since this was written) —
-            # treat as absent rather than raising, so login doesn't 500.
-            return None
+from app.models.types import EncryptedString
 
 
 class User(Base):

@@ -447,9 +447,9 @@
         <div id="section-alerts" class="section">
           <div class="section-header">
             <span class="section-title">Alert Thresholds</span>
-            <span class="badge badge-gray">Toast on exceed</span>
+            <span class="badge badge-gray">Always-on monitoring</span>
           </div>
-          <p class="section-desc">Set a % threshold for CPU, RAM, or any disk. A toast notification fires when exceeded. Set to 0 to disable.</p>
+          <p class="section-desc">Configure thresholds and severity for CPU, RAM, disks, GPUs, GPU temperature, and per-interface network throughput. The server sends configured notifications even when the dashboard is closed.</p>
 
           <div class="disk-scope">
             <span class="style-lbl">Disk alert source</span>
@@ -475,20 +475,61 @@
             </p>
           </div>
 
-          <div v-for="metric in alertMetrics" :key="metric.key" class="alert-row">
-            <span class="alert-lbl">{{ metric.label }}</span>
-            <input
-              type="range"
-              class="interval-slider"
-              :value="alerts.thresholds[metric.key]"
-              min="0"
-              max="100"
-              step="5"
-              @input="e => alerts.setThreshold(metric.key, parseInt((e.target as HTMLInputElement).value))"
-            />
-            <span class="alert-val">
-              {{ alerts.thresholds[metric.key] === 0 ? 'Off' : alerts.thresholds[metric.key] + '%' }}
-            </span>
+          <div class="alert-rules">
+            <div v-for="metric in alertMetrics" :key="metric.key" class="alert-rule">
+              <div class="alert-rule-header">
+                <div>
+                  <span class="alert-rule-label">{{ metric.label }}</span>
+                  <p class="alert-rule-desc">{{ metric.description }}</p>
+                </div>
+                <span
+                  :class="[
+                    'alert-severity-badge',
+                    `severity-${alerts.severities[metric.key]}`,
+                  ]"
+                >{{ alerts.severities[metric.key] }}</span>
+              </div>
+              <div class="alert-rule-controls">
+                <label class="alert-threshold-field">
+                  <span class="style-lbl">Threshold</span>
+                  <span class="alert-threshold-input-wrap">
+                    <input
+                      type="number"
+                      class="alert-threshold-input"
+                      :value="alerts.thresholds[metric.key]"
+                      min="0"
+                      :max="metric.max"
+                      :step="metric.step"
+                      @input="alerts.setThreshold(
+                        metric.key,
+                        Number.parseFloat(($event.target as HTMLInputElement).value),
+                      )"
+                    />
+                    <span class="alert-threshold-unit">{{ metric.unit }}</span>
+                  </span>
+                  <span class="alert-off-note">
+                    {{ alerts.thresholds[metric.key] === 0 ? 'Disabled' : 'Set to 0 to disable' }}
+                  </span>
+                </label>
+                <div class="alert-severity-control">
+                  <span class="style-lbl">Severity</span>
+                  <div class="theme-toggle-row">
+                    <button
+                      v-for="severity in severityOptions"
+                      :key="severity.value"
+                      type="button"
+                      :class="[
+                        'theme-btn',
+                        'severity-btn',
+                        `severity-${severity.value}`,
+                        { active: alerts.severities[metric.key] === severity.value },
+                      ]"
+                      @click="alerts.setSeverity(metric.key, severity.value)"
+                    >{{ severity.label }}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -803,7 +844,7 @@
           </div>
         </div>
 
-        <!-- Webhooks Section -->
+        <!-- Notifications Section -->
         <div id="section-webhooks" class="section">
           <div class="section-header">
             <span class="section-title">{{ t('settings.webhooks') }}</span>
@@ -815,8 +856,21 @@
 
           <div v-for="wh in webhooks" :key="wh.id" class="webhook-row">
             <div class="webhook-info">
-              <span class="webhook-label">{{ wh.label || 'Webhook' }}</span>
-              <span class="webhook-url">{{ wh.url }}</span>
+              <span class="webhook-label-line">
+                <span class="webhook-label">{{ wh.label || channelKindLabel(wh.kind) }}</span>
+                <span class="notification-kind">{{ channelKindLabel(wh.kind) }}</span>
+              </span>
+              <span class="webhook-url">{{ channelTarget(wh) }}</span>
+              <div class="notification-event-chips">
+                <button
+                  v-for="event in webhookEventOptions"
+                  :key="event.value"
+                  type="button"
+                  :class="['notification-event-chip', { active: wh.events.includes(event.value) }]"
+                  :title="event.label"
+                  @click="toggleWebhookEvent(wh, event.value)"
+                >{{ event.short }}</button>
+              </div>
             </div>
             <div class="webhook-actions">
               <button
@@ -829,24 +883,130 @@
           </div>
 
           <div class="webhook-add-form">
-            <BaseInput
-              v-model="newWebhookUrl"
-              :label="t('settings.webhookUrl')"
-              id="wh-url"
-              placeholder="https://discord.com/api/webhooks/..."
-            />
+            <div class="wh-events">
+              <span class="style-lbl">{{ t('settings.notificationType') }}</span>
+              <div class="theme-toggle-row">
+                <button
+                  v-for="kind in notificationKinds"
+                  :key="kind.value"
+                  type="button"
+                  :class="['theme-btn', { active: newWebhookKind === kind.value }]"
+                  @click="selectNotificationKind(kind.value)"
+                >{{ kind.label }}</button>
+              </div>
+            </div>
+
             <BaseInput
               v-model="newWebhookLabel"
               :label="t('settings.webhookLabel')"
               id="wh-label"
-              placeholder="My webhook"
+              :placeholder="t('settings.notificationLabelPlaceholder')"
             />
+
+            <BaseInput
+              v-if="newWebhookKind === 'webhook'"
+              v-model="newWebhookUrl"
+              :label="t('settings.webhookUrl')"
+              id="wh-url"
+              placeholder="https://example.com/hooks/carbonpanel"
+            />
+
+            <template v-if="newWebhookKind === 'ntfy'">
+              <BaseInput
+                v-model="newWebhookUrl"
+                :label="t('settings.ntfyServer')"
+                id="ntfy-server"
+                placeholder="http://127.0.0.1:8080"
+              />
+              <BaseInput
+                v-model="newNtfyTopic"
+                :label="t('settings.ntfyTopic')"
+                id="ntfy-topic"
+                placeholder="carbonpanel-alerts"
+              />
+              <BaseInput
+                v-model="newNtfyToken"
+                :label="t('settings.ntfyToken')"
+                id="ntfy-token"
+                type="password"
+                :placeholder="t('settings.optionalToken')"
+                autocomplete="new-password"
+              />
+              <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
+            </template>
+
+            <template v-if="newWebhookKind === 'email'">
+              <div class="smtp-grid">
+                <BaseInput
+                  v-model="newSmtpHost"
+                  :label="t('settings.smtpHost')"
+                  id="smtp-host"
+                  placeholder="smtp.example.com"
+                />
+                <BaseInput
+                  v-model="newSmtpPort"
+                  :label="t('settings.smtpPort')"
+                  id="smtp-port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                />
+              </div>
+              <div class="wh-events">
+                <span class="style-lbl">{{ t('settings.smtpSecurity') }}</span>
+                <div class="theme-toggle-row">
+                  <button
+                    v-for="mode in smtpSecurityModes"
+                    :key="mode.value"
+                    type="button"
+                    :class="['theme-btn', { active: newSmtpSecurity === mode.value }]"
+                    @click="selectSmtpSecurity(mode.value)"
+                  >{{ mode.label }}</button>
+                </div>
+              </div>
+              <div class="smtp-grid">
+                <BaseInput
+                  v-model="newEmailFrom"
+                  :label="t('settings.emailFrom')"
+                  id="email-from"
+                  type="email"
+                  placeholder="carbonpanel@example.com"
+                />
+                <BaseInput
+                  v-model="newEmailTo"
+                  :label="t('settings.emailTo')"
+                  id="email-to"
+                  type="email"
+                  placeholder="admin@example.com"
+                />
+              </div>
+              <div class="smtp-grid">
+                <BaseInput
+                  v-model="newSmtpUsername"
+                  :label="t('settings.smtpUsername')"
+                  id="smtp-username"
+                  autocomplete="username"
+                  :placeholder="t('settings.optionalUsername')"
+                />
+                <BaseInput
+                  v-model="newSmtpPassword"
+                  :label="t('settings.smtpPassword')"
+                  id="smtp-password"
+                  type="password"
+                  autocomplete="new-password"
+                  :placeholder="t('settings.optionalPassword')"
+                />
+              </div>
+              <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
+            </template>
+
             <div class="wh-events">
               <span class="style-lbl">{{ t('settings.webhookEvents') }}</span>
               <div class="theme-toggle-row">
                 <button
                   v-for="ev in webhookEventOptions"
                   :key="ev.value"
+                  type="button"
                   :class="['theme-btn', { active: newWebhookEvents.includes(ev.value) }]"
                   @click="toggleEvent(ev.value)"
                 >{{ ev.label }}</button>
@@ -854,8 +1014,8 @@
             </div>
             <p v-if="webhookError" class="error-msg">{{ webhookError }}</p>
             <p v-if="webhookSuccess" class="success-msg">{{ webhookSuccess }}</p>
-            <BaseButton variant="ghost" :disabled="!newWebhookUrl || webhookLoading" @click="addWebhook">
-              {{ webhookLoading ? 'Saving…' : t('settings.addWebhook') }}
+            <BaseButton variant="ghost" :disabled="!canAddNotification || webhookLoading" @click="addWebhook">
+              {{ webhookLoading ? t('settings.saving') : t('settings.addWebhook') }}
             </BaseButton>
           </div>
         </div>
@@ -1088,13 +1248,13 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMetricsStore } from '@/stores/metrics'
 import { useThemeStore, type AnimationLevel } from '@/stores/theme'
-import { useAlertsStore } from '@/stores/alerts'
+import { useAlertsStore, type AlertRuleKey, type AlertSeverity } from '@/stores/alerts'
 import { useBackgroundStore } from '@/stores/background'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type WebhookCreate, type NotificationKind, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -1199,10 +1359,27 @@ async function removeImage(target: 'app' | 'login') {
   }
 }
 
-const alertMetrics = [
-  { key: 'cpu'  as const, label: 'CPU' },
-  { key: 'ram'  as const, label: 'RAM' },
-  { key: 'disk' as const, label: 'Disk' },
+const alertMetrics: Array<{
+  key: AlertRuleKey
+  label: string
+  description: string
+  unit: string
+  step: number
+  max?: number
+}> = [
+  { key: 'cpu', label: 'CPU usage', description: 'Aggregate utilization across all CPU cores.', unit: '%', step: 5, max: 100 },
+  { key: 'ram', label: 'RAM usage', description: 'Percentage of physical memory currently in use.', unit: '%', step: 5, max: 100 },
+  { key: 'disk', label: 'Disk usage', description: 'Used capacity on each selected mount.', unit: '%', step: 5, max: 100 },
+  { key: 'gpuUsage', label: 'GPU utilization', description: 'Utilization on each detected NVIDIA GPU.', unit: '%', step: 5, max: 100 },
+  { key: 'gpuTemp', label: 'GPU temperature', description: 'Temperature on each detected NVIDIA GPU.', unit: '°C', step: 5, max: 150 },
+  { key: 'networkRx', label: 'Network receive', description: 'Inbound throughput on each non-loopback interface.', unit: 'MB/s', step: 0.1 },
+  { key: 'networkTx', label: 'Network transmit', description: 'Outbound throughput on each non-loopback interface.', unit: 'MB/s', step: 0.1 },
+]
+
+const severityOptions: Array<{ value: AlertSeverity; label: string }> = [
+  { value: 'info', label: 'Info' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'critical', label: 'Critical' },
 ]
 
 const presets = [
@@ -1662,20 +1839,101 @@ async function handleChangeCreds() {
   }
 }
 
-// Webhooks
+// Notifications
+type SmtpSecurity = 'starttls' | 'ssl' | 'none'
+
 const webhooks = ref<WebhookResponse[]>([])
-const newWebhookUrl = ref('')
+const newWebhookKind = ref<NotificationKind>('ntfy')
+const newWebhookUrl = ref('http://127.0.0.1:8080')
 const newWebhookLabel = ref('')
-const newWebhookEvents = ref<string[]>(['alert.cpu', 'alert.ram', 'alert.disk'])
+const newNtfyTopic = ref('carbonpanel-alerts')
+const newNtfyToken = ref('')
+const newSmtpHost = ref('')
+const newSmtpPort = ref('587')
+const newSmtpSecurity = ref<SmtpSecurity>('starttls')
+const newSmtpUsername = ref('')
+const newSmtpPassword = ref('')
+const newEmailFrom = ref('')
+const newEmailTo = ref('')
+const newWebhookEvents = ref<string[]>([
+  'alert.cpu',
+  'alert.ram',
+  'alert.disk',
+  'alert.gpu',
+  'alert.gpu_temperature',
+  'alert.network_rx',
+  'alert.network_tx',
+])
 const webhookLoading = ref(false)
 const webhookError = ref('')
 const webhookSuccess = ref('')
 
-const webhookEventOptions = [
-  { value: 'alert.cpu', label: 'CPU' },
-  { value: 'alert.ram', label: 'RAM' },
-  { value: 'alert.disk', label: 'Disk' },
+const notificationKinds: { value: NotificationKind; label: string }[] = [
+  { value: 'ntfy', label: 'ntfy' },
+  { value: 'email', label: 'Email' },
+  { value: 'webhook', label: 'Webhook' },
 ]
+const smtpSecurityModes: { value: SmtpSecurity; label: string }[] = [
+  { value: 'starttls', label: 'STARTTLS' },
+  { value: 'ssl', label: 'SSL/TLS' },
+  { value: 'none', label: 'None (local)' },
+]
+const webhookEventOptions = [
+  { value: 'alert.cpu', label: 'CPU usage', short: 'CPU' },
+  { value: 'alert.ram', label: 'RAM usage', short: 'RAM' },
+  { value: 'alert.disk', label: 'Disk usage', short: 'Disk' },
+  { value: 'alert.gpu', label: 'GPU utilization', short: 'GPU' },
+  { value: 'alert.gpu_temperature', label: 'GPU temperature', short: 'Temp' },
+  { value: 'alert.network_rx', label: 'Network receive', short: 'RX' },
+  { value: 'alert.network_tx', label: 'Network transmit', short: 'TX' },
+]
+
+const canAddNotification = computed(() => {
+  if (!newWebhookEvents.value.length) return false
+  if (newWebhookKind.value === 'webhook') return Boolean(newWebhookUrl.value.trim())
+  if (newWebhookKind.value === 'ntfy') {
+    return Boolean(newWebhookUrl.value.trim() && newNtfyTopic.value.trim())
+  }
+  return Boolean(
+    newSmtpHost.value.trim() &&
+    newSmtpPort.value &&
+    newEmailFrom.value.trim() &&
+    newEmailTo.value.trim() &&
+    Boolean(newSmtpUsername.value) === Boolean(newSmtpPassword.value),
+  )
+})
+
+function channelKindLabel(kind: NotificationKind) {
+  if (kind === 'ntfy') return 'ntfy'
+  return kind === 'email' ? 'Email' : 'Webhook'
+}
+
+function channelTarget(channel: WebhookResponse) {
+  if (channel.kind === 'ntfy') return `${channel.url} / ${channel.topic}`
+  if (channel.kind === 'email') {
+    return `${channel.email_to} via ${channel.smtp_host}:${channel.smtp_port}`
+  }
+  return channel.url
+}
+
+function selectNotificationKind(kind: NotificationKind) {
+  newWebhookKind.value = kind
+  webhookError.value = ''
+  webhookSuccess.value = ''
+  if (kind === 'ntfy' && !newWebhookUrl.value) {
+    newWebhookUrl.value = 'http://127.0.0.1:8080'
+  } else if (kind === 'email') {
+    newWebhookUrl.value = ''
+  }
+}
+
+function selectSmtpSecurity(mode: SmtpSecurity) {
+  const oldDefault = ['25', '465', '587'].includes(newSmtpPort.value)
+  newSmtpSecurity.value = mode
+  if (oldDefault) {
+    newSmtpPort.value = mode === 'ssl' ? '465' : mode === 'starttls' ? '587' : '25'
+  }
+}
 
 function toggleEvent(ev: string) {
   const idx = newWebhookEvents.value.indexOf(ev)
@@ -1693,31 +1951,75 @@ async function loadWebhooks() {
 async function addWebhook() {
   webhookError.value = ''
   webhookSuccess.value = ''
-  if (!newWebhookUrl.value) return
+  if (!canAddNotification.value) return
   webhookLoading.value = true
   try {
-    await webhooksApi.create({ url: newWebhookUrl.value, label: newWebhookLabel.value, events: newWebhookEvents.value })
-    newWebhookUrl.value = ''
+    const payload: WebhookCreate = {
+      kind: newWebhookKind.value,
+      label: newWebhookLabel.value,
+      events: newWebhookEvents.value,
+    }
+    if (newWebhookKind.value === 'webhook') {
+      payload.url = newWebhookUrl.value.trim()
+    } else if (newWebhookKind.value === 'ntfy') {
+      payload.url = newWebhookUrl.value.trim()
+      payload.topic = newNtfyTopic.value.trim()
+      if (newNtfyToken.value) payload.token = newNtfyToken.value
+    } else {
+      payload.smtp_host = newSmtpHost.value.trim()
+      payload.smtp_port = Number.parseInt(newSmtpPort.value, 10)
+      payload.smtp_security = newSmtpSecurity.value
+      payload.email_from = newEmailFrom.value.trim()
+      payload.email_to = newEmailTo.value.trim()
+      if (newSmtpUsername.value) payload.smtp_username = newSmtpUsername.value
+      if (newSmtpPassword.value) payload.smtp_password = newSmtpPassword.value
+    }
+    await webhooksApi.create(payload)
     newWebhookLabel.value = ''
-    webhookSuccess.value = 'Webhook added.'
+    newNtfyToken.value = ''
+    newSmtpPassword.value = ''
+    webhookSuccess.value = t('settings.notificationAdded')
     await loadWebhooks()
   } catch (e: any) {
-    webhookError.value = e.response?.data?.detail || 'Failed to save webhook'
+    webhookError.value = e.response?.data?.detail || t('settings.notificationSaveFailed')
   } finally {
     webhookLoading.value = false
   }
 }
 
 async function toggleWebhook(wh: WebhookResponse) {
-  await webhooksApi.update(wh.id, { enabled: !wh.enabled })
-  await loadWebhooks()
+  webhookError.value = ''
+  try {
+    await webhooksApi.update(wh.id, { enabled: !wh.enabled })
+    await loadWebhooks()
+  } catch (e: any) {
+    webhookError.value = e.response?.data?.detail || t('settings.notificationSaveFailed')
+  }
+}
+
+async function toggleWebhookEvent(wh: WebhookResponse, event: string) {
+  webhookError.value = ''
+  webhookSuccess.value = ''
+  const events = wh.events.includes(event)
+    ? wh.events.filter((value) => value !== event)
+    : [...wh.events, event]
+  if (!events.length) {
+    webhookError.value = 'Each notification channel must subscribe to at least one event.'
+    return
+  }
+  try {
+    await webhooksApi.update(wh.id, { events })
+    await loadWebhooks()
+  } catch (e: any) {
+    webhookError.value = e.response?.data?.detail || t('settings.notificationSaveFailed')
+  }
 }
 
 async function deleteWebhook(id: string) {
   const confirmed = await dialog.confirm({
-    title: 'Delete webhook',
-    message: 'Delete this webhook? This cannot be undone.',
-    confirmLabel: 'Delete',
+    title: t('settings.deleteNotification'),
+    message: t('settings.deleteNotificationConfirm'),
+    confirmLabel: t('common.delete'),
     variant: 'danger',
   })
   if (!confirmed) return
@@ -1726,11 +2028,13 @@ async function deleteWebhook(id: string) {
 }
 
 async function testWebhook(wh: WebhookResponse) {
+  webhookError.value = ''
+  webhookSuccess.value = ''
   try {
-    await webhooksApi.trigger('test', 'manual', 0, 0)
-    webhookSuccess.value = `Test sent to ${wh.url}`
+    await webhooksApi.test(wh.id)
+    webhookSuccess.value = t('settings.notificationTestSent')
   } catch (e: any) {
-    webhookError.value = e.response?.data?.detail || 'Test failed'
+    webhookError.value = e.response?.data?.detail || t('settings.notificationTestFailed')
   }
 }
 
@@ -2243,14 +2547,36 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 .webhook-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.webhook-label-line { display: flex; align-items: center; gap: 7px; }
 .webhook-label { font-size: 11px; font-weight: 500; color: var(--fg); }
+.notification-kind { font-size: 9px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
 .webhook-url { font-size: 10px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notification-event-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.notification-event-chip {
+  padding: 2px 5px;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font: 8px var(--font);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+.notification-event-chip:hover { color: var(--fg-muted); border-color: var(--fg-dim); }
+.notification-event-chip.active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-dim);
+}
 .webhook-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .wh-toggle.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .wh-del:hover { border-color: rgba(255,68,68,0.4); color: var(--danger); }
 .wh-test:hover { border-color: rgba(100,180,255,0.4); color: #60a5fa; }
 .webhook-add-form { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--border-subtle); }
 .wh-events { display: flex; flex-direction: column; gap: 6px; }
+.smtp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.credential-note { margin: -3px 0 0; color: var(--fg-dim); font-size: 9.5px; line-height: 1.45; }
+@media (max-width: 640px) { .smtp-grid { grid-template-columns: 1fr; } }
 
 .display-pref-row {
   display: flex;
@@ -2521,9 +2847,86 @@ onMounted(async () => {
 }
 .toggle-link:hover { color: var(--accent); }
 
-.alert-row { display: flex; align-items: center; gap: 10px; }
-.alert-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); width: 34px; flex-shrink: 0; }
-.alert-val { font-size: 11px; color: var(--fg-muted); width: 28px; text-align: right; flex-shrink: 0; }
+.alert-rules { display: flex; flex-direction: column; gap: 10px; }
+.alert-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.alert-rule-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.alert-rule-label { font-size: 11px; font-weight: 600; color: var(--fg); }
+.alert-rule-desc {
+  margin: 3px 0 0;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--fg-dim);
+}
+.alert-rule-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.75fr) minmax(260px, 1.25fr);
+  gap: 12px;
+  align-items: end;
+}
+.alert-threshold-field,
+.alert-severity-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alert-threshold-input-wrap {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition);
+}
+.alert-threshold-input-wrap:focus-within { border-color: var(--accent); }
+.alert-threshold-input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: 11px var(--font);
+}
+.alert-threshold-unit {
+  padding: 0 8px;
+  color: var(--fg-dim);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.alert-off-note { color: var(--fg-dim); font-size: 9px; }
+.alert-severity-badge {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.alert-severity-badge.severity-info { color: #60a5fa; border-color: color-mix(in srgb, #60a5fa 40%, transparent); }
+.alert-severity-badge.severity-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.alert-severity-badge.severity-critical { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.severity-btn.active.severity-info { color: #60a5fa; border-color: color-mix(in srgb, #60a5fa 50%, transparent); background: color-mix(in srgb, #60a5fa 10%, transparent); }
+.severity-btn.active.severity-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 50%, transparent); background: var(--warning-dim); }
+.severity-btn.active.severity-critical { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); background: var(--danger-dim); }
+@media (max-width: 640px) {
+  .alert-rule-controls { grid-template-columns: 1fr; }
+}
 
 /* Background settings */
 .bg-block { display: flex; flex-direction: column; gap: 10px; }
