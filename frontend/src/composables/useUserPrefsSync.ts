@@ -30,6 +30,7 @@ export function useUserPrefsSync() {
         ...alerts.thresholds,
         diskScope: alerts.diskScope,
         severities: { ...alerts.severities },
+        durations: { ...alerts.durations },
       },
       background: {
         appBg: { ...bg.appBg },
@@ -81,6 +82,7 @@ export function useUserPrefsSync() {
         () => display.storageUnit,
         () => JSON.stringify(alerts.thresholds),
         () => JSON.stringify(alerts.severities),
+        () => JSON.stringify(alerts.durations),
         () => alerts.diskScope,
         () => JSON.stringify(bg.appBg),
         () => JSON.stringify(bg.loginBg),

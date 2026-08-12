@@ -449,7 +449,7 @@
             <span class="section-title">Alert Thresholds</span>
             <span class="badge badge-gray">Always-on monitoring</span>
           </div>
-          <p class="section-desc">Configure thresholds and severity for CPU, RAM, disks, GPUs, GPU temperature, and per-interface network throughput. The server sends configured notifications even when the dashboard is closed.</p>
+          <p class="section-desc">Configure thresholds, sustained timeframes, and severity for CPU, RAM, disks, GPUs, GPU temperature, and per-interface network throughput. A metric must stay beyond its threshold for the full timeframe before the server sends notifications.</p>
 
           <div class="disk-scope">
             <span class="style-lbl">Disk alert source</span>
@@ -509,6 +509,27 @@
                   </span>
                   <span class="alert-off-note">
                     {{ alerts.thresholds[metric.key] === 0 ? 'Disabled' : 'Set to 0 to disable' }}
+                  </span>
+                </label>
+                <label class="alert-duration-field">
+                  <span class="style-lbl">Sustain for</span>
+                  <span class="alert-threshold-input-wrap">
+                    <input
+                      type="number"
+                      class="alert-threshold-input"
+                      :value="alerts.durations[metric.key]"
+                      min="0"
+                      max="86400"
+                      step="1"
+                      @input="alerts.setDuration(
+                        metric.key,
+                        Number.parseFloat(($event.target as HTMLInputElement).value),
+                      )"
+                    />
+                    <span class="alert-threshold-unit">seconds</span>
+                  </span>
+                  <span class="alert-off-note">
+                    {{ alerts.durations[metric.key] === 0 ? 'Immediate' : 'Continuous breach' }}
                   </span>
                 </label>
                 <div class="alert-severity-control">
@@ -2959,11 +2980,12 @@ onMounted(async () => {
 }
 .alert-rule-controls {
   display: grid;
-  grid-template-columns: minmax(120px, 0.75fr) minmax(260px, 1.25fr);
+  grid-template-columns: minmax(105px, 0.6fr) minmax(115px, 0.7fr) minmax(245px, 1.4fr);
   gap: 12px;
   align-items: end;
 }
 .alert-threshold-field,
+.alert-duration-field,
 .alert-severity-control {
   display: flex;
   flex-direction: column;

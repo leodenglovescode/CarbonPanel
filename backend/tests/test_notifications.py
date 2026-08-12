@@ -174,7 +174,7 @@ def test_email_delivery_uses_starttls_login_and_plain_text_message(
     assert "Notification delivery is working." in sent.get_content()
 
 
-def test_alert_preferences_choose_lowest_enabled_threshold_and_broadest_disk_scope() -> None:
+def test_alert_preferences_choose_sensitive_threshold_duration_and_disk_scope() -> None:
     class Row:
         def __init__(self, prefs_json: str):
             self.prefs_json = prefs_json
@@ -184,8 +184,12 @@ def test_alert_preferences_choose_lowest_enabled_threshold_and_broadest_disk_sco
         fromlist=["_config_from_preferences"],
     )._config_from_preferences(
         [
-            Row('{"alerts":{"cpu":90,"ram":0,"disk":85,"gpuTemp":80,"diskScope":"physical","severities":{"gpuTemp":"critical"}}}'),
-            Row('{"alerts":{"cpu":75,"ram":80,"disk":0,"networkRx":12.5,"diskScope":"all","severities":{"networkRx":"info"}}}'),
+            Row(
+                '{"alerts":{"cpu":90,"ram":0,"disk":85,"gpuTemp":80,"diskScope":"physical","durations":{"cpu":20},"severities":{"gpuTemp":"critical"}}}'
+            ),
+            Row(
+                '{"alerts":{"cpu":75,"ram":80,"disk":0,"networkRx":12.5,"diskScope":"all","durations":{"cpu":15,"networkRx":30},"severities":{"networkRx":"info"}}}'
+            ),
         ]
     )
 
@@ -196,6 +200,9 @@ def test_alert_preferences_choose_lowest_enabled_threshold_and_broadest_disk_sco
     assert config.network_rx == 12.5
     assert config.severity("gpuTemp") == "critical"
     assert config.severity("networkRx") == "info"
+    assert config.duration("cpu") == 15
+    assert config.duration("networkRx") == 30
+    assert config.duration("disk") == 10
     assert config.disk_scope == "all"
 
 
@@ -210,7 +217,7 @@ async def test_server_alert_evaluator_delivers_once_until_recovery(
     evaluator = AlertEvaluator()
 
     async def load_config():
-        return AlertConfig(cpu=80)
+        return AlertConfig(cpu=80, durations={"cpu": 0})
 
     class Session:
         async def __aenter__(self):
@@ -254,6 +261,65 @@ async def test_server_alert_evaluator_delivers_once_until_recovery(
     assert deliveries == ["alert.cpu", "alert.cpu"]
 
 
+@pytest.mark.asyncio
+async def test_server_alert_requires_one_continuous_breach_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from app.services.alert_service import AlertConfig, AlertEvaluator
+
+    evaluator = AlertEvaluator()
+    now = 100.0
+
+    async def load_config():
+        return AlertConfig(cpu=80, durations={"cpu": 10})
+
+    class Session:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *args):
+            return False
+
+    deliveries: list[dict] = []
+
+    async def fire_event(db, event, payload):
+        deliveries.append(payload)
+        return [webhook_service.DeliveryResult("channel-id", True, status=200)]
+
+    monkeypatch.setattr(evaluator, "_load_config", load_config)
+    monkeypatch.setattr("app.services.alert_service.AsyncSessionLocal", Session)
+    monkeypatch.setattr("app.services.alert_service.time.monotonic", lambda: now)
+    monkeypatch.setattr(webhook_service, "fire_event", fire_event)
+
+    def snapshot(cpu: float):
+        return SimpleNamespace(
+            cpu=SimpleNamespace(aggregate=cpu),
+            memory=SimpleNamespace(percent=20),
+            disks=[],
+            gpu=SimpleNamespace(available=False, devices=[]),
+            network=[],
+        )
+
+    await evaluator.check(snapshot(95))
+    now = 102.0
+    await evaluator.check(snapshot(40))
+    now = 103.0
+    await evaluator.check(snapshot(95))
+    now = 112.9
+    await evaluator.check(snapshot(95))
+    assert deliveries == []
+
+    now = 113.0
+    await evaluator.check(snapshot(95))
+    await evaluator.check(snapshot(95))
+
+    assert len(deliveries) == 1
+    assert deliveries[0]["duration_seconds"] == 10
+    assert deliveries[0]["message"].endswith("for at least 10 seconds.")
+
+
 def test_expanded_notification_event_catalog() -> None:
     assert webhook_service.EVENT_NAMES == (
         "alert.cpu",
@@ -285,6 +351,12 @@ async def test_gpu_and_network_alerts_preserve_rule_severity(
             "gpuTemp": "critical",
             "networkRx": "info",
             "networkTx": "critical",
+        },
+        durations={
+            "gpuUsage": 0,
+            "gpuTemp": 0,
+            "networkRx": 0,
+            "networkTx": 0,
         },
     )
 
@@ -323,9 +395,7 @@ async def test_gpu_and_network_alerts_preserve_rule_severity(
                 )
             ],
         ),
-        network=[
-            SimpleNamespace(interface="eth0", rx_mb_s=12.5, tx_mb_s=25.5)
-        ],
+        network=[SimpleNamespace(interface="eth0", rx_mb_s=12.5, tx_mb_s=25.5)],
     )
 
     await evaluator.check(snapshot)
