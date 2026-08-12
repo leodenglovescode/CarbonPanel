@@ -1,4 +1,5 @@
 import json
+import math
 import time
 from dataclasses import dataclass, field
 
@@ -23,6 +24,8 @@ _DEFAULT_SEVERITIES = {
     "networkTx": "warning",
 }
 _SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
+_DEFAULT_DURATION_SECONDS = 10.0
+_MAX_DURATION_SECONDS = 86_400.0
 
 
 @dataclass(frozen=True)
@@ -35,12 +38,19 @@ class AlertConfig:
     network_rx: float = 0
     network_tx: float = 0
     disk_scope: str = "physical"
-    severities: dict[str, str] = field(
-        default_factory=lambda: dict(_DEFAULT_SEVERITIES)
+    severities: dict[str, str] = field(default_factory=lambda: dict(_DEFAULT_SEVERITIES))
+    durations: dict[str, float] = field(
+        default_factory=lambda: {key: _DEFAULT_DURATION_SECONDS for key in _RULE_KEYS}
     )
 
     def severity(self, key: str) -> str:
         return self.severities.get(key, _DEFAULT_SEVERITIES.get(key, "warning"))
+
+    def duration(self, key: str) -> float:
+        value = self.durations.get(key, _DEFAULT_DURATION_SECONDS)
+        if not math.isfinite(value):
+            return _DEFAULT_DURATION_SECONDS
+        return min(_MAX_DURATION_SECONDS, max(0.0, value))
 
 
 def _is_physical_disk(disk: DiskMetrics) -> bool:
@@ -78,6 +88,31 @@ def _config_from_preferences(rows: list[UserPreferences]) -> AlertConfig:
                 values.append(value)
         return min(values, default=0)
 
+    def shortest_duration(key: str) -> float:
+        values: list[float] = []
+        for alerts in alert_sets:
+            try:
+                threshold = float(alerts.get(key, 0))
+            except (TypeError, ValueError):
+                continue
+            if threshold <= 0:
+                continue
+
+            durations = alerts.get("durations")
+            raw_value = (
+                durations.get(key, _DEFAULT_DURATION_SECONDS)
+                if isinstance(durations, dict)
+                else _DEFAULT_DURATION_SECONDS
+            )
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                value = _DEFAULT_DURATION_SECONDS
+            if not math.isfinite(value):
+                value = _DEFAULT_DURATION_SECONDS
+            values.append(min(_MAX_DURATION_SECONDS, max(0.0, value)))
+        return min(values, default=_DEFAULT_DURATION_SECONDS)
+
     severities = dict(_DEFAULT_SEVERITIES)
     for key in _RULE_KEYS:
         configured = [
@@ -98,17 +133,18 @@ def _config_from_preferences(rows: list[UserPreferences]) -> AlertConfig:
         network_rx=lowest_enabled("networkRx"),
         network_tx=lowest_enabled("networkTx"),
         disk_scope=(
-            "all"
-            if any(alerts.get("diskScope") == "all" for alerts in alert_sets)
-            else "physical"
+            "all" if any(alerts.get("diskScope") == "all" for alerts in alert_sets) else "physical"
         ),
         severities=severities,
+        durations={key: shortest_duration(key) for key in _RULE_KEYS},
     )
 
 
 class AlertEvaluator:
     def __init__(self) -> None:
         self._active: set[str] = set()
+        self._breached_since: dict[str, float] = {}
+        self._rule_signatures: dict[str, tuple[float, float]] = {}
         self._last_attempt: dict[str, float] = {}
         self._config = AlertConfig()
         self._config_loaded_at = 0.0
@@ -135,15 +171,27 @@ class AlertEvaluator:
         threshold: float,
         unit: str,
         severity: str,
+        duration_seconds: float,
         message: str,
     ) -> None:
+        signature = (threshold, duration_seconds)
+        if self._rule_signatures.get(key) != signature:
+            self._active.discard(key)
+            self._breached_since.pop(key, None)
+            self._last_attempt.pop(key, None)
+            self._rule_signatures[key] = signature
+
         if not breached:
             self._active.discard(key)
+            self._breached_since.pop(key, None)
             return
         if key in self._active:
             return
 
         now = time.monotonic()
+        breached_since = self._breached_since.setdefault(key, now)
+        if now - breached_since < duration_seconds:
+            return
         if now - self._last_attempt.get(key, 0) < _RETRY_COOLDOWN_SECONDS:
             return
         self._last_attempt[key] = now
@@ -159,7 +207,12 @@ class AlertEvaluator:
                     "threshold": threshold,
                     "unit": unit,
                     "severity": severity,
-                    "message": message,
+                    "duration_seconds": duration_seconds,
+                    "message": (
+                        f"{message.removesuffix('.')} for at least {duration_seconds:g} seconds."
+                        if duration_seconds > 0
+                        else message
+                    ),
                 },
             )
         if any(result.success for result in results):
@@ -169,6 +222,9 @@ class AlertEvaluator:
         self._active.difference_update(
             key for key in self._active if key.startswith(prefix) and key not in present
         )
+        for state in (self._breached_since, self._rule_signatures, self._last_attempt):
+            for key in [key for key in state if key.startswith(prefix) and key not in present]:
+                state.pop(key, None)
 
     async def check(self, snapshot: MetricsSnapshot | None) -> None:
         if snapshot is None:
@@ -185,10 +241,8 @@ class AlertEvaluator:
             threshold=config.cpu,
             unit="%",
             severity=config.severity("cpu"),
-            message=(
-                f"CPU usage {snapshot.cpu.aggregate:.0f}% is at or above "
-                f"{config.cpu:.0f}%."
-            ),
+            duration_seconds=config.duration("cpu"),
+            message=(f"CPU usage {snapshot.cpu.aggregate:.0f}% is at or above {config.cpu:.0f}%."),
         )
         await self._evaluate(
             key="ram",
@@ -200,10 +254,8 @@ class AlertEvaluator:
             threshold=config.ram,
             unit="%",
             severity=config.severity("ram"),
-            message=(
-                f"RAM usage {snapshot.memory.percent:.0f}% is at or above "
-                f"{config.ram:.0f}%."
-            ),
+            duration_seconds=config.duration("ram"),
+            message=(f"RAM usage {snapshot.memory.percent:.0f}% is at or above {config.ram:.0f}%."),
         )
 
         disks = (
@@ -224,6 +276,7 @@ class AlertEvaluator:
                 threshold=config.disk,
                 unit="%",
                 severity=config.severity("disk"),
+                duration_seconds=config.duration("disk"),
                 message=(
                     f"Disk {disk.mountpoint} usage {disk.usage_percent:.0f}% is at or above "
                     f"{config.disk:.0f}%."
@@ -238,10 +291,7 @@ class AlertEvaluator:
         for device in gpu_devices:
             await self._evaluate(
                 key=f"gpu-usage:{device.index}",
-                breached=(
-                    config.gpu_usage > 0
-                    and device.utilization_percent >= config.gpu_usage
-                ),
+                breached=(config.gpu_usage > 0 and device.utilization_percent >= config.gpu_usage),
                 event="alert.gpu",
                 metric=f"gpu:{device.index}",
                 label=f"GPU {device.index} utilization",
@@ -249,6 +299,7 @@ class AlertEvaluator:
                 threshold=config.gpu_usage,
                 unit="%",
                 severity=config.severity("gpuUsage"),
+                duration_seconds=config.duration("gpuUsage"),
                 message=(
                     f"GPU {device.index} ({device.name}) utilization "
                     f"{device.utilization_percent:.0f}% is at or above "
@@ -257,9 +308,7 @@ class AlertEvaluator:
             )
             await self._evaluate(
                 key=f"gpu-temp:{device.index}",
-                breached=(
-                    config.gpu_temp > 0 and device.temperature_c >= config.gpu_temp
-                ),
+                breached=(config.gpu_temp > 0 and device.temperature_c >= config.gpu_temp),
                 event="alert.gpu_temperature",
                 metric=f"gpu-temperature:{device.index}",
                 label=f"GPU {device.index} temperature",
@@ -267,6 +316,7 @@ class AlertEvaluator:
                 threshold=config.gpu_temp,
                 unit="°C",
                 severity=config.severity("gpuTemp"),
+                duration_seconds=config.duration("gpuTemp"),
                 message=(
                     f"GPU {device.index} ({device.name}) temperature "
                     f"{device.temperature_c:.0f}°C is at or above "
@@ -289,6 +339,7 @@ class AlertEvaluator:
                 threshold=config.network_rx,
                 unit="MB/s",
                 severity=config.severity("networkRx"),
+                duration_seconds=config.duration("networkRx"),
                 message=(
                     f"Network {item.interface} receive throughput {item.rx_mb_s:.2f} MB/s "
                     f"is at or above {config.network_rx:.2f} MB/s."
@@ -304,6 +355,7 @@ class AlertEvaluator:
                 threshold=config.network_tx,
                 unit="MB/s",
                 severity=config.severity("networkTx"),
+                duration_seconds=config.duration("networkTx"),
                 message=(
                     f"Network {item.interface} transmit throughput {item.tx_mb_s:.2f} MB/s "
                     f"is at or above {config.network_tx:.2f} MB/s."
