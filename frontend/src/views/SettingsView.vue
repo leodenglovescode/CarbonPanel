@@ -2057,6 +2057,25 @@ async function loadWebhooks() {
   } catch { /* ignore */ }
 }
 
+function resetNotificationDraft(kind: NotificationKind) {
+  newWebhookLabel.value = ''
+  if (kind === 'webhook') {
+    newWebhookUrl.value = ''
+  } else if (kind === 'ntfy') {
+    newWebhookUrl.value = 'http://127.0.0.1:8080'
+    newNtfyTopic.value = 'carbonpanel-alerts'
+    newNtfyToken.value = ''
+  } else {
+    newSmtpHost.value = ''
+    newSmtpPort.value = '587'
+    newSmtpSecurity.value = 'starttls'
+    newSmtpUsername.value = ''
+    newSmtpPassword.value = ''
+    newEmailFrom.value = ''
+    newEmailTo.value = ''
+  }
+}
+
 async function addWebhook() {
   webhookError.value = ''
   webhookSuccess.value = ''
@@ -2088,9 +2107,7 @@ async function addWebhook() {
       if (newSmtpPassword.value) payload.smtp_password = newSmtpPassword.value
     }
     await webhooksApi.create(payload)
-    newWebhookLabel.value = ''
-    newNtfyToken.value = ''
-    newSmtpPassword.value = ''
+    resetNotificationDraft(newWebhookKind.value)
     webhookSuccess.value = t('settings.notificationAdded')
     await loadWebhooks()
   } catch (e: any) {
