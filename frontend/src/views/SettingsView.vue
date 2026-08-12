@@ -1036,6 +1036,13 @@
                   :placeholder="t('settings.optionalPassword')"
                 />
               </div>
+              <p
+                v-if="smtpCredentialsMismatch"
+                class="error-msg credential-validation"
+              >{{ t('settings.smtpCredentialsPairRequired') }}</p>
+              <p v-else class="credential-note">
+                {{ t('settings.smtpCredentialsOptionalPair') }}
+              </p>
               <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
             </template>
 
@@ -1987,6 +1994,10 @@ const webhookEventOptions = [
   { value: 'alert.network_tx', label: 'Network transmit', short: 'TX' },
 ]
 
+const smtpCredentialsMismatch = computed(() =>
+  Boolean(newSmtpUsername.value.trim()) !== Boolean(newSmtpPassword.value),
+)
+
 const canAddNotification = computed(() => {
   if (!newWebhookEvents.value.length) return false
   if (newWebhookKind.value === 'webhook') return Boolean(newWebhookUrl.value.trim())
@@ -1997,8 +2008,7 @@ const canAddNotification = computed(() => {
     newSmtpHost.value.trim() &&
     newSmtpPort.value &&
     newEmailFrom.value.trim() &&
-    newEmailTo.value.trim() &&
-    Boolean(newSmtpUsername.value) === Boolean(newSmtpPassword.value),
+    newEmailTo.value.trim(),
   )
 })
 
@@ -2051,6 +2061,10 @@ async function addWebhook() {
   webhookError.value = ''
   webhookSuccess.value = ''
   if (!canAddNotification.value) return
+  if (newWebhookKind.value === 'email' && smtpCredentialsMismatch.value) {
+    webhookError.value = t('settings.smtpCredentialsPairRequired')
+    return
+  }
   webhookLoading.value = true
   try {
     const payload: WebhookCreate = {
@@ -2070,7 +2084,7 @@ async function addWebhook() {
       payload.smtp_security = newSmtpSecurity.value
       payload.email_from = newEmailFrom.value.trim()
       payload.email_to = newEmailTo.value.trim()
-      if (newSmtpUsername.value) payload.smtp_username = newSmtpUsername.value
+      if (newSmtpUsername.value.trim()) payload.smtp_username = newSmtpUsername.value.trim()
       if (newSmtpPassword.value) payload.smtp_password = newSmtpPassword.value
     }
     await webhooksApi.create(payload)
@@ -2675,6 +2689,7 @@ onMounted(async () => {
 .wh-events { display: flex; flex-direction: column; gap: 6px; }
 .smtp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .credential-note { margin: -3px 0 0; color: var(--fg-dim); font-size: 9.5px; line-height: 1.45; }
+.credential-validation { margin: -3px 0 0; }
 @media (max-width: 640px) { .smtp-grid { grid-template-columns: 1fr; } }
 
 .display-pref-row {
