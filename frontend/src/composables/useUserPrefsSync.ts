@@ -27,10 +27,9 @@ export function useUserPrefsSync() {
         storageUnit: display.storageUnit,
       },
       alerts: {
-        cpu: alerts.thresholds.cpu,
-        ram: alerts.thresholds.ram,
-        disk: alerts.thresholds.disk,
+        ...alerts.thresholds,
         diskScope: alerts.diskScope,
+        severities: { ...alerts.severities },
       },
       background: {
         appBg: { ...bg.appBg },
@@ -64,7 +63,7 @@ export function useUserPrefsSync() {
         styleSettings: p.styleSettings,
       })
       if (p.displayPrefs) display.loadFromDb(p.displayPrefs as Record<string, string>)
-      if (p.alerts) alerts.loadFromDb(p.alerts as Record<string, number | string>)
+      if (p.alerts) alerts.loadFromDb(p.alerts as Parameters<typeof alerts.loadFromDb>[0])
       if (p.background) bg.loadFromDb(p.background as Parameters<typeof bg.loadFromDb>[0])
       if (p.siteTraffic) siteTraffic.loadFromDb(p.siteTraffic as Parameters<typeof siteTraffic.loadFromDb>[0])
     } catch { /* silent — localStorage values stay */ } finally {
@@ -80,9 +79,8 @@ export function useUserPrefsSync() {
         () => display.ramUnit,
         () => display.networkUnit,
         () => display.storageUnit,
-        () => alerts.thresholds.cpu,
-        () => alerts.thresholds.ram,
-        () => alerts.thresholds.disk,
+        () => JSON.stringify(alerts.thresholds),
+        () => JSON.stringify(alerts.severities),
         () => alerts.diskScope,
         () => JSON.stringify(bg.appBg),
         () => JSON.stringify(bg.loginBg),

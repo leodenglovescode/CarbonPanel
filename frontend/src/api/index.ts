@@ -256,17 +256,38 @@ export interface ContainerInfo {
   mem_percent: number
 }
 
+export type NotificationKind = 'webhook' | 'ntfy' | 'email'
+
 export interface WebhookResponse {
   id: string
   label: string
+  kind: NotificationKind
   url: string
+  topic: string | null
+  has_token: boolean
+  smtp_host: string | null
+  smtp_port: number | null
+  smtp_security: 'starttls' | 'ssl' | 'none' | null
+  has_smtp_credentials: boolean
+  email_from: string | null
+  email_to: string | null
   enabled: boolean
   events: string[]
 }
 
 export interface WebhookCreate {
   label?: string
-  url: string
+  kind?: NotificationKind
+  url?: string
+  topic?: string
+  token?: string
+  smtp_host?: string
+  smtp_port?: number
+  smtp_security?: 'starttls' | 'ssl' | 'none'
+  smtp_username?: string
+  smtp_password?: string
+  email_from?: string
+  email_to?: string
   enabled?: boolean
   events?: string[]
 }
@@ -286,12 +307,22 @@ export const processesApi = {
 }
 
 export const webhooksApi = {
-  list: () => api.get<WebhookResponse[]>('/webhooks'),
-  create: (data: WebhookCreate) => api.post<WebhookResponse>('/webhooks', data),
-  update: (id: string, data: Partial<WebhookCreate>) => api.put<WebhookResponse>(`/webhooks/${id}`, data),
-  delete: (id: string) => api.delete(`/webhooks/${id}`),
-  trigger: (event: string, metric: string, value: number, threshold: number) =>
-    api.post('/webhooks/trigger', { event, metric, value, threshold }),
+  list: () => api.get<WebhookResponse[]>('/notifications'),
+  create: (data: WebhookCreate) => api.post<WebhookResponse>('/notifications', data),
+  update: (id: string, data: Partial<WebhookCreate>) => api.put<WebhookResponse>(`/notifications/${id}`, data),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+  test: (id: string) => api.post(`/notifications/${id}/test`),
+  trigger: (
+    event: string,
+    metric: string,
+    value: number,
+    threshold: number,
+    message?: string,
+    severity: 'info' | 'warning' | 'critical' = 'warning',
+    unit = '%',
+    label?: string,
+  ) =>
+    api.post('/notifications/trigger', { event, metric, value, threshold, message, severity, unit, label }),
 }
 
 export const metricsApi = {
