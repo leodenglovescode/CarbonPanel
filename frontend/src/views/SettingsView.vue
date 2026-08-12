@@ -593,13 +593,31 @@
             </div>
           </div>
 
-          <div v-if="restarting" class="restart-countdown">
-            <div class="restart-countdown-num">{{ restartCountdown > 0 ? restartCountdown : '…' }}</div>
+          <div
+            v-if="restarting"
+            :class="['restart-countdown', { 'restart-countdown-timeout': restartTimedOut }]"
+          >
+            <div class="restart-countdown-num">
+              {{ restartTimedOut ? '!' : restartCountdown > 0 ? restartCountdown : '…' }}
+            </div>
             <div class="restart-countdown-copy">
-              <strong>Panel is restarting</strong>
-              <span>
-                {{ restartCountdown > 0 ? `Reconnecting automatically in ${restartCountdown}s` : 'Reconnecting…' }}
-                — this page isn't broken, it's just picking up the update. It'll reload itself.
+              <strong>
+                {{ restartTimedOut ? 'Panel did not reconnect automatically' : 'Panel is restarting' }}
+              </strong>
+              <template v-if="restartTimedOut">
+                <span>
+                  The automatic wait has stopped. Reload now if the service is back, or retry the
+                  connection checks without leaving this page.
+                </span>
+                <div class="restart-countdown-actions">
+                  <BaseButton variant="ghost" @click="retryRestartConnection">Try again</BaseButton>
+                  <BaseButton variant="primary" @click="reloadPanel">Reload now</BaseButton>
+                </div>
+              </template>
+              <span v-else>
+                Checking every 2 seconds
+                {{ restartCountdown > 0 ? `· ${restartCountdown}s until manual controls appear.` : '· reconnecting…' }}
+                This page will reload as soon as the updated backend answers.
               </span>
             </div>
           </div>
@@ -1592,42 +1610,102 @@ const updateStepLabel = computed(() =>
 
 // ── Restart countdown ────────────────────────────────────────────────────
 // The updater announces the restart immediately before it stops the backend.
-// Keep a full 60-second explanation visible even if the backend returns early;
-// only then probe and reload. Slow restarts extend in ten-second increments.
+// Probe throughout the countdown and reload as soon as the new backend reports
+// that the operation completed (or after an observed disconnect/reconnect).
+// Never reset the countdown indefinitely: after one bounded window, give the
+// user explicit retry/reload controls.
 const restarting = ref(false)
 const restartCountdown = ref(0)
-let restartTimer: ReturnType<typeof setInterval> | null = null
+const restartTimedOut = ref(false)
+let restartCountdownTimer: ReturnType<typeof setInterval> | null = null
+let restartProbeTimer: ReturnType<typeof setTimeout> | null = null
 let restartProbeInFlight = false
+let restartDeadline = 0
+let restartOperationId: string | null = null
+let restartObservedOffline = false
+let restartGeneration = 0
 
 function stopRestartCountdown() {
-  if (restartTimer) {
-    clearInterval(restartTimer)
-    restartTimer = null
+  restartGeneration += 1
+  if (restartCountdownTimer) {
+    clearInterval(restartCountdownTimer)
+    restartCountdownTimer = null
+  }
+  if (restartProbeTimer) {
+    clearTimeout(restartProbeTimer)
+    restartProbeTimer = null
   }
   restartProbeInFlight = false
 }
 
-function startRestartCountdown(seconds = 60) {
-  if (restarting.value) return
-  restarting.value = true
-  restartCountdown.value = seconds
+function reloadPanel() {
   stopRestartCountdown()
-  restartTimer = setInterval(async () => {
+  const url = new URL(window.location.href)
+  url.searchParams.set('_restart', Date.now().toString())
+  window.location.replace(url.toString())
+}
+
+async function probeRestart(generation: number) {
+  if (!restarting.value || restartTimedOut.value || generation !== restartGeneration) return
+  if (restartProbeInFlight) return
+
+  restartProbeInFlight = true
+  const reachable = await loadVersionInfo()
+  restartProbeInFlight = false
+
+  if (!restarting.value || generation !== restartGeneration) return
+
+  if (!reachable) {
+    restartObservedOffline = true
+  } else {
+    const info = versionInfo.value
+    const operationMatches = !restartOperationId || info?.operation_id === restartOperationId
+    const operationFinished = Boolean(
+      info &&
+        operationMatches &&
+        !info.restart_pending &&
+        (info.operation_state === 'succeeded' || info.restart_performed),
+    )
+
+    if (restartObservedOffline || operationFinished) {
+      reloadPanel()
+      return
+    }
+  }
+
+  if (Date.now() >= restartDeadline) {
+    stopRestartCountdown()
+    restartCountdown.value = 0
+    restartTimedOut.value = true
+    return
+  }
+
+  restartProbeTimer = setTimeout(() => void probeRestart(generation), 2000)
+}
+
+function startRestartCountdown(seconds = 60, operationId: string | null = null) {
+  if (restarting.value && !restartTimedOut.value) return
+
+  stopRestartCountdown()
+  restarting.value = true
+  restartTimedOut.value = false
+  restartCountdown.value = seconds
+  restartDeadline = Date.now() + seconds * 1000
+  restartOperationId = operationId ?? versionInfo.value?.operation_id ?? null
+  restartObservedOffline = false
+  const generation = restartGeneration
+
+  restartCountdownTimer = setInterval(() => {
     if (restartCountdown.value > 0) {
       restartCountdown.value -= 1
     }
-    if (restartCountdown.value > 0 || restartProbeInFlight) return
-
-    restartProbeInFlight = true
-    const reachable = await loadVersionInfo()
-    restartProbeInFlight = false
-    if (reachable) {
-      stopRestartCountdown()
-      window.location.reload()
-    } else {
-      restartCountdown.value = 10
-    }
   }, 1000)
+
+  void probeRestart(generation)
+}
+
+function retryRestartConnection() {
+  startRestartCountdown(60, restartOperationId)
 }
 
 onUnmounted(stopRestartCountdown)
@@ -1640,7 +1718,7 @@ async function pollInstallProgress(operationId: string) {
   while (Date.now() < deadline && !restarting.value) {
     const [reachable] = await Promise.all([loadVersionInfo(), fetchServiceLogs()])
     if (!reachable) {
-      startRestartCountdown(60)
+      startRestartCountdown(60, operationId)
       return
     }
 
@@ -1653,7 +1731,7 @@ async function pollInstallProgress(operationId: string) {
 
     if (info.restart_pending) {
       versionSuccess.value = 'The new release is ready. The backend is restarting now.'
-      startRestartCountdown(60)
+      startRestartCountdown(60, operationId)
       return
     }
     if (info.operation_state === 'failed') {
@@ -1664,8 +1742,8 @@ async function pollInstallProgress(operationId: string) {
     }
     if (info.operation_state === 'succeeded') {
       if (info.restart_performed) {
-        versionSuccess.value = 'Update installed. Waiting for the restart window before reloading…'
-        startRestartCountdown(60)
+        versionSuccess.value = 'Update installed. Reconnecting to the restarted panel…'
+        startRestartCountdown(60, operationId)
       } else {
         versionSuccess.value = info.progress_label || 'Already up to date.'
         installing.value = false
@@ -1707,7 +1785,7 @@ async function installUpdate() {
   const targetVersion = versionInfo.value.latest_version ?? 'the latest version'
   const confirmed = await dialog.confirm({
     title: 'Install update',
-    message: `Install CarbonPanel ${targetVersion} now? Live server progress will remain visible, followed by a 60-second restart countdown.`,
+    message: `Install CarbonPanel ${targetVersion} now? Live server progress will remain visible, followed by an automatic reconnect.`,
     confirmLabel: 'Install',
   })
 
@@ -2296,7 +2374,7 @@ onMounted(async () => {
       operationState === 'running')
   ) {
     installing.value = true
-    if (versionInfo.value?.restart_pending) startRestartCountdown(60)
+    if (versionInfo.value?.restart_pending) startRestartCountdown(60, operationId)
     else void pollInstallProgress(operationId)
   }
 })
@@ -2771,6 +2849,15 @@ onMounted(async () => {
 }
 .restart-countdown-copy strong { font-size: 12px; color: var(--fg); }
 .restart-countdown-copy span { font-size: 11px; color: var(--fg-muted); line-height: 1.5; }
+.restart-countdown-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+.restart-countdown-timeout {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: var(--warning-dim);
+}
+.restart-countdown-timeout .restart-countdown-num {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warning);
+}
 
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(-4px); }
