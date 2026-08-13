@@ -1,5 +1,10 @@
 <template>
-  <div class="site-card" @click="$router.push(`/sites/${site.id}`)">
+  <div class="site-card">
+    <RouterLink
+      class="card-hit-target"
+      :to="`/sites/${site.id}`"
+      :aria-label="`Open ${site.name}`"
+    />
     <div class="card-header">
       <div class="card-title-row">
         <span class="site-name">{{ site.name }}</span>
@@ -93,7 +98,15 @@ function statusClass(s?: string) {
      couple levels deep (e.g. a long service name) can force this whole card
      wider than its 1fr track instead of letting inner ellipsis rules clip it. */
   min-width: 0;
+  position: relative;
 }
+.card-hit-target {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.card-hit-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .site-card:hover { border-color: var(--accent-border); background: var(--bg-card-hover); }
 
 .card-header { display: flex; flex-direction: column; gap: 5px; }
@@ -140,7 +153,7 @@ function statusClass(s?: string) {
 
 .description { font-size: 10px; color: var(--fg-dim); line-height: 1.4; }
 
-.actions { display: flex; gap: 5px; }
+.actions { display: flex; gap: 5px; position: relative; z-index: 2; }
 .action-btn {
   flex: 1;
   background: none;

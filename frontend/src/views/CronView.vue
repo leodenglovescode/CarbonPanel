@@ -63,83 +63,82 @@
       </table>
     </div>
 
-    <!-- Create / edit modal -->
-    <div v-if="formOpen" class="modal-overlay" @click.self="closeForm">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">{{ editingId ? t('cron.editJob') : t('cron.newJob') }}</span>
-          <button class="close-btn" @click="closeForm">✕</button>
+    <BaseModal
+      :open="formOpen"
+      :title="editingId ? t('cron.editJob') : t('cron.newJob')"
+      max-width="460px"
+      @close="closeForm"
+    >
+      <div class="cron-form">
+        <label class="form-field">
+          <span class="form-lbl">{{ t('cron.label') }}</span>
+          <input v-model="form.label" class="form-input" :placeholder="t('cron.labelPlaceholder')" autofocus />
+        </label>
+
+        <label class="form-field">
+          <span class="form-lbl">{{ t('cron.command') }}</span>
+          <input v-model="form.command" class="form-input mono" placeholder="/path/to/script.sh" />
+        </label>
+
+        <div class="form-field">
+          <span class="form-lbl">{{ t('cron.runLabel') }}</span>
+          <div class="freq-row">
+            <button
+              v-for="f in FREQ_OPTIONS"
+              :key="f.value"
+              type="button"
+              :class="['freq-btn', { active: freq === f.value }]"
+              @click="freq = f.value"
+            >{{ f.label }}</button>
+          </div>
         </div>
-        <div class="modal-body">
-          <label class="form-field">
-            <span class="form-lbl">{{ t('cron.label') }}</span>
-            <input v-model="form.label" class="form-input" :placeholder="t('cron.labelPlaceholder')" />
-          </label>
 
-          <label class="form-field">
-            <span class="form-lbl">{{ t('cron.command') }}</span>
-            <input v-model="form.command" class="form-input mono" placeholder="/path/to/script.sh" />
-          </label>
+        <label v-if="freq === 'minutes'" class="form-field">
+          <span class="form-lbl">{{ t('cron.everyNMinutes') }}</span>
+          <input v-model.number="everyN" type="number" min="1" max="59" class="form-input" />
+        </label>
 
-          <div class="form-field">
-            <span class="form-lbl">{{ t('cron.runLabel') }}</span>
-            <div class="freq-row">
-              <button
-                v-for="f in FREQ_OPTIONS"
-                :key="f.value"
-                :class="['freq-btn', { active: freq === f.value }]"
-                @click="freq = f.value"
-              >{{ f.label }}</button>
-            </div>
-          </div>
+        <label v-if="freq === 'hourly'" class="form-field">
+          <span class="form-lbl">{{ t('cron.atMinute') }}</span>
+          <input v-model.number="atMinute" type="number" min="0" max="59" class="form-input" />
+        </label>
 
-          <label v-if="freq === 'minutes'" class="form-field">
-            <span class="form-lbl">{{ t('cron.everyNMinutes') }}</span>
-            <input v-model.number="everyN" type="number" min="1" max="59" class="form-input" />
-          </label>
+        <label v-if="freq === 'daily' || freq === 'weekly' || freq === 'monthly'" class="form-field">
+          <span class="form-lbl">{{ t('cron.atTime') }}</span>
+          <input v-model="atTime" type="time" class="form-input" />
+        </label>
 
-          <label v-if="freq === 'hourly'" class="form-field">
-            <span class="form-lbl">{{ t('cron.atMinute') }}</span>
-            <input v-model.number="atMinute" type="number" min="0" max="59" class="form-input" />
-          </label>
+        <label v-if="freq === 'weekly'" class="form-field">
+          <span class="form-lbl">{{ t('cron.onDay') }}</span>
+          <select v-model.number="weekday" class="form-input">
+            <option v-for="d in WEEKDAYS" :key="d.value" :value="d.value">{{ d.label }}</option>
+          </select>
+        </label>
 
-          <label v-if="freq === 'daily' || freq === 'weekly' || freq === 'monthly'" class="form-field">
-            <span class="form-lbl">{{ t('cron.atTime') }}</span>
-            <input v-model="atTime" type="time" class="form-input" />
-          </label>
+        <label v-if="freq === 'monthly'" class="form-field">
+          <span class="form-lbl">{{ t('cron.dayOfMonth') }}</span>
+          <input v-model.number="dayOfMonth" type="number" min="1" max="31" class="form-input" />
+        </label>
 
-          <label v-if="freq === 'weekly'" class="form-field">
-            <span class="form-lbl">{{ t('cron.onDay') }}</span>
-            <select v-model.number="weekday" class="form-input">
-              <option v-for="d in WEEKDAYS" :key="d.value" :value="d.value">{{ d.label }}</option>
-            </select>
-          </label>
+        <label v-if="freq === 'custom'" class="form-field">
+          <span class="form-lbl">{{ t('cron.cronExpression') }}</span>
+          <input v-model="customSchedule" class="form-input mono" placeholder="0 2 * * *" />
+        </label>
 
-          <label v-if="freq === 'monthly'" class="form-field">
-            <span class="form-lbl">{{ t('cron.dayOfMonth') }}</span>
-            <input v-model.number="dayOfMonth" type="number" min="1" max="31" class="form-input" />
-          </label>
+        <p class="schedule-preview">
+          → {{ describeCronSchedule(builtSchedule) }} <code>{{ builtSchedule }}</code>
+        </p>
 
-          <label v-if="freq === 'custom'" class="form-field">
-            <span class="form-lbl">{{ t('cron.cronExpression') }}</span>
-            <input v-model="customSchedule" class="form-input mono" placeholder="0 2 * * *" />
-          </label>
+        <p v-if="formError" class="error-msg">{{ formError }}</p>
 
-          <p class="schedule-preview">
-            → {{ describeCronSchedule(builtSchedule) }} <code>{{ builtSchedule }}</code>
-          </p>
-
-          <p v-if="formError" class="error-msg">{{ formError }}</p>
-
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="closeForm">{{ t('common.cancel') }}</button>
-            <button class="btn-primary" :disabled="formSaving" @click="submitForm">
-              {{ formSaving ? '…' : (editingId ? t('common.save') : t('cron.create')) }}
-            </button>
-          </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" @click="closeForm">{{ t('common.cancel') }}</button>
+          <button type="button" class="btn-primary" :disabled="formSaving" @click="submitForm">
+            {{ formSaving ? '…' : (editingId ? t('common.save') : t('cron.create')) }}
+          </button>
         </div>
       </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -148,6 +147,7 @@ import { computed, onMounted, ref } from 'vue'
 import api, { cronApi, type CronJob } from '@/api/index'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const { t } = useLocaleStore()
 const dialog = useDialogStore()
@@ -449,12 +449,7 @@ tbody tr:last-child td { border-bottom: none; }
 .cmd-cell code { font-size: 11px; color: var(--fg); word-break: break-all; }
 
 /* Create/edit modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; box-sizing: border-box; }
-.modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 460px; max-height: 90vh; display: flex; flex-direction: column; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
-.modal-title { font-size: 13px; font-weight: 600; }
-.close-btn { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: 14px; padding: 2px 6px; }
-.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.cron-form { display: flex; flex-direction: column; gap: 12px; }
 
 .form-field { display: flex; flex-direction: column; gap: 5px; }
 .form-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }

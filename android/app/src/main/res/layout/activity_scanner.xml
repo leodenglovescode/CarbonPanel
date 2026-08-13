@@ -35,7 +35,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Scan pairing code"
+            android:text="@string/scan_pairing_code"
             android:textColor="#00FF88"
             android:textSize="17sp"
             android:textStyle="bold"
@@ -50,7 +50,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:gravity="center"
-            android:text="Open the web panel and go to Settings → Paired Devices"
+            android:text="@string/scan_pairing_instructions"
             android:textColor="#C2CCC8"
             android:textSize="12sp"
             android:lineSpacingExtra="3dp"

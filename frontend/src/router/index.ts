@@ -70,6 +70,11 @@ const router = createRouter({
       name: 'sessions',
       component: () => import('@/views/SessionsView.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/views/NotFoundView.vue'),
+    },
   ],
 })
 

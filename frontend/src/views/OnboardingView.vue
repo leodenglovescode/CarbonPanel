@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi, settingsApi, type TOTPSetupResponse } from '@/api'
@@ -216,6 +216,11 @@ const confirmCode = ref('')
 const totpError = ref('')
 const totpLoading = ref(false)
 
+watch(confirmCode, (value) => {
+  const digits = value.replace(/\D/g, '').slice(0, 6)
+  if (digits !== value) confirmCode.value = digits
+})
+
 async function startTotpSetup() {
   if (!totpPassword.value) return
   setupLoading.value = true
@@ -241,7 +246,7 @@ async function startTotpSetup() {
 }
 
 async function confirmTotp() {
-  if (confirmCode.value.length !== 6) return
+  if (!/^\d{6}$/.test(confirmCode.value) || totpLoading.value) return
   totpError.value = ''
   totpLoading.value = true
   try {

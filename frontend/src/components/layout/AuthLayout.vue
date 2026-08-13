@@ -1,20 +1,21 @@
 <template>
   <div class="auth-layout">
     <Transition name="backdrop">
-      <div v-if="sidebarOpen" class="mobile-backdrop" @click="sidebarOpen = false" />
+      <div v-if="sidebarOpen" class="mobile-backdrop" aria-hidden="true" @click="closeSidebar" />
     </Transition>
     <AppSidebar
       :system="metrics.latest?.system"
       :connected="metrics.connected"
       :mobile-open="sidebarOpen"
-      @close="sidebarOpen = false"
+      @close="closeSidebar"
     />
     <div class="main-column">
       <AppHeader
         :system="metrics.latest?.system"
         :load-avg="metrics.latest?.cpu.load_avg"
         :connected="metrics.connected"
-        @menu="sidebarOpen = !sidebarOpen"
+        :menu-open="sidebarOpen"
+        @menu="toggleSidebar"
       />
       <main class="content">
         <slot />
@@ -24,13 +25,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
 import { useMetricsStore } from '@/stores/metrics'
 
 const metrics = useMetricsStore()
 const sidebarOpen = ref(false)
+let previousOverflow = ''
+
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value
+}
+function closeSidebar() {
+  sidebarOpen.value = false
+}
+
+watch(sidebarOpen, (open) => {
+  if (open) {
+    previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = previousOverflow
+  }
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = previousOverflow
+})
 </script>
 
 <style scoped>

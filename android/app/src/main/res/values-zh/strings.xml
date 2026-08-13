@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CarbonPanel</string>
+    <string name="widget_description">CPU、内存、GPU、磁盘状态环及网络吞吐量</string>
+    <string name="scan_pairing_code">扫描配对二维码</string>
+    <string name="scan_pairing_instructions">打开网页面板，前往“设置”→“已配对设备”</string>
+    <string name="scan_camera_prompt">将相机对准二维码</string>
+    <string name="metric_disk">磁盘</string>
+</resources>

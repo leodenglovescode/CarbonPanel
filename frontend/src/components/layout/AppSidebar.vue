@@ -1,10 +1,18 @@
 <template>
-  <aside class="sidebar" :class="{ 'mobile-open': mobileOpen }">
+  <aside
+    id="app-sidebar"
+    ref="sidebarEl"
+    class="sidebar"
+    :class="{ 'mobile-open': mobileOpen }"
+    :inert="drawerHidden ? true : undefined"
+    :aria-hidden="drawerHidden ? 'true' : undefined"
+    @keydown="onKeydown"
+  >
     <div class="sidebar-top">
       <div class="logo">
         <span class="bracket">[</span>Carbon<span class="accent">Panel</span><span class="bracket">]</span>
       </div>
-      <button class="mobile-close-btn" aria-label="Close menu" @click="$emit('close')">✕</button>
+      <button ref="closeButtonEl" class="mobile-close-btn" aria-label="Close menu" @click="$emit('close')">✕</button>
     </div>
 
     <nav class="nav">
@@ -32,20 +40,87 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useLocaleStore } from '@/stores/locale'
 import type { SystemMetrics } from '@/types/metrics'
 
-defineProps<{ system?: SystemMetrics; connected?: boolean; mobileOpen?: boolean }>()
-defineEmits<{ close: [] }>()
+const props = defineProps<{ system?: SystemMetrics; connected?: boolean; mobileOpen?: boolean }>()
+const emit = defineEmits<{ close: [] }>()
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { t } = useLocaleStore()
+const sidebarEl = ref<HTMLElement | null>(null)
+const closeButtonEl = ref<HTMLButtonElement | null>(null)
+const isMobile = ref(false)
+const drawerHidden = computed(() => isMobile.value && !props.mobileOpen)
+let mediaQuery: MediaQueryList | null = null
+let previousFocus: HTMLElement | null = null
+
+function updateMobile(event: MediaQueryList | MediaQueryListEvent) {
+  const leavingMobile = isMobile.value && !event.matches
+  isMobile.value = event.matches
+  if (leavingMobile && props.mobileOpen) {
+    previousFocus?.focus()
+    previousFocus = null
+    emit('close')
+  }
+}
+
+function focusableElements(): HTMLElement[] {
+  if (!sidebarEl.value) return []
+  return Array.from(sidebarEl.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+  ))
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (!isMobile.value || !props.mobileOpen) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('close')
+    return
+  }
+  if (event.key !== 'Tab') return
+  const items = focusableElements()
+  if (!items.length) return
+  const first = items[0]
+  const last = items[items.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+watch(() => props.mobileOpen, async (open) => {
+  if (!isMobile.value) return
+  if (open) {
+    previousFocus = document.activeElement as HTMLElement | null
+    await nextTick()
+    closeButtonEl.value?.focus()
+  } else if (previousFocus) {
+    await nextTick()
+    previousFocus.focus()
+    previousFocus = null
+  }
+})
+
+onMounted(() => {
+  mediaQuery = window.matchMedia('(max-width: 640px)')
+  updateMobile(mediaQuery)
+  mediaQuery.addEventListener('change', updateMobile)
+})
+onUnmounted(() => {
+  mediaQuery?.removeEventListener('change', updateMobile)
+  previousFocus?.focus()
+})
 
 const navItems = computed(() => [
   { to: '/', label: t('nav.stats') },
@@ -116,7 +191,7 @@ async function handleLogout() {
   line-height: 1;
   transition: color var(--transition);
 }
-.mobile-close-btn:hover { color: var(--fg); }
+.mobile-close-btn:hover, .mobile-close-btn:focus-visible { color: var(--fg); }
 
 .nav {
   flex: 1;

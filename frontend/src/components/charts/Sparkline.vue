@@ -26,6 +26,7 @@ const props = withDefaults(defineProps<{
   maxY?: number
 }>(), {
   color: '#00ff88',
+  height: undefined,
   maxY: 100,
 })
 

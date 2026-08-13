@@ -35,6 +35,7 @@ class CarbonViewfinderView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = 2f
     }
+    private val drawFrame = RectF()
 
     override fun onDraw(canvas: Canvas) {
         refreshSizes()
@@ -48,7 +49,8 @@ class CarbonViewfinderView @JvmOverloads constructor(
 
         val w = width.toFloat()
         val h = height.toFloat()
-        val f = RectF(frame)
+        drawFrame.set(frame)
+        val f = drawFrame
         val radius = 20f
 
         // Dim everything outside the framing rect so the eye lands on the
@@ -60,25 +62,31 @@ class CarbonViewfinderView @JvmOverloads constructor(
 
         canvas.drawRoundRect(f, radius, radius, hairline)
 
-        // Corner brackets, one per corner, drawn as two strokes each.
+        // Corner brackets, one per corner, drawn without allocating
+        // temporary collections during every camera frame.
         val arm = minOf(f.width(), f.height()) * 0.16f
-        val corners = listOf(
-            Triple(f.left, f.top, Pair(1f, 1f)),
-            Triple(f.right, f.top, Pair(-1f, 1f)),
-            Triple(f.left, f.bottom, Pair(1f, -1f)),
-            Triple(f.right, f.bottom, Pair(-1f, -1f)),
-        )
-        for ((x, y, dir) in corners) {
-            val (dx, dy) = dir
-            canvas.drawLine(x, y + dy * 2, x, y + dy * arm, bracket)
-            canvas.drawLine(x + dx * 2, y, x + dx * arm, y, bracket)
-        }
+        drawCorner(canvas, f.left, f.top, 1f, 1f, arm)
+        drawCorner(canvas, f.right, f.top, -1f, 1f, arm)
+        drawCorner(canvas, f.left, f.bottom, 1f, -1f, arm)
+        drawCorner(canvas, f.right, f.bottom, -1f, -1f, arm)
 
         // Deliberately no laser line and no animation: a QR decodes the
         // instant it's in frame, so a sweeping beam implies progress that
         // isn't happening. The one redraw below tracks a framing rect that can
         // move when the camera reconfigures; it is not an animation loop.
         postInvalidateDelayed(TRACK_DELAY_MS)
+    }
+
+    private fun drawCorner(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        dx: Float,
+        dy: Float,
+        arm: Float,
+    ) {
+        canvas.drawLine(x, y + dy * 2, x, y + dy * arm, bracket)
+        canvas.drawLine(x + dx * 2, y, x + dx * arm, y, bracket)
     }
 
     private companion object {

@@ -1,22 +1,38 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="cp-overlay" @click.self="close">
-      <div class="cp-panel">
+      <div
+        ref="panelEl"
+        class="cp-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        @keydown="onPanelKeydown"
+      >
         <input
           ref="inputEl"
           v-model="query"
           class="cp-input"
           placeholder="Search pages, settings, sites, containers…"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="command-palette-results"
+          :aria-expanded="open"
+          :aria-activedescendant="activeDescendant"
           @keydown="onKeydown"
         />
-        <div class="cp-results">
+        <div id="command-palette-results" class="cp-results" role="listbox">
           <template v-for="group in groupedResults" :key="group.label">
             <div class="cp-group-label">{{ group.label }}</div>
             <button
               v-for="item in group.items"
               :key="item.key"
               type="button"
+              :id="`command-option-${item.key}`"
               class="cp-item"
+              role="option"
+              tabindex="-1"
+              :aria-selected="isActive(item)"
               :class="{ active: isActive(item) }"
               @mouseenter="hoverIndex = flatIndex(item)"
               @click="select(item)"
@@ -56,8 +72,11 @@ const open = ref(false)
 const query = ref('')
 const hoverIndex = ref(0)
 const inputEl = ref<HTMLInputElement | null>(null)
+const panelEl = ref<HTMLElement | null>(null)
+let previousFocus: HTMLElement | null = null
+let previousOverflow = ''
 
-const pages: PaletteItem[] = [
+const pages = computed<PaletteItem[]>(() => [
   { key: 'page-/', label: t('nav.stats'), category: 'Pages', go: () => router.push('/') },
   { key: 'page-/sites', label: t('nav.sites'), category: 'Pages', go: () => router.push('/sites') },
   { key: 'page-/system-services', label: t('nav.systemServices'), category: 'Pages', go: () => router.push('/system-services') },
@@ -68,14 +87,14 @@ const pages: PaletteItem[] = [
   { key: 'page-/cron', label: t('nav.cron'), category: 'Pages', go: () => router.push('/cron') },
   { key: 'page-/sessions', label: t('nav.sessions'), category: 'Pages', go: () => router.push('/sessions') },
   { key: 'page-/settings', label: t('nav.settings'), category: 'Pages', go: () => router.push('/settings') },
-]
+])
 
 function goSettings(id: string) {
   router.push({ path: '/settings', hash: `#${id}` })
 }
 
 // ponytail: mirrors SettingsView.vue's navSections — keep in sync if sections change there
-const settingsSections: PaletteItem[] = [
+const settingsSections = computed<PaletteItem[]>(() => [
   { key: 'set-appearance', label: 'Appearance', category: 'Settings', go: () => goSettings('section-appearance') },
   { key: 'set-style', label: 'Stylistic', category: 'Settings', go: () => goSettings('section-style') },
   { key: 'set-backgrounds', label: 'Backgrounds', category: 'Settings', go: () => goSettings('section-backgrounds') },
@@ -90,16 +109,17 @@ const settingsSections: PaletteItem[] = [
   { key: 'set-devices', label: 'Sessions', category: 'Settings', go: () => goSettings('section-devices') },
   { key: 'set-pairing', label: 'Paired Devices', category: 'Settings', go: () => goSettings('section-pairing') },
   { key: 'set-proxy', label: 'Proxy', category: 'Settings', go: () => goSettings('section-proxy') },
-]
+])
 
 const sites = ref<{ id: string; name: string }[]>([])
 const containers = ref<{ id: string; name: string }[]>([])
 const services = ref<{ service_name: string }[]>([])
 let dynamicLoaded = false
+let dynamicLoading = false
 
 async function loadDynamic() {
-  if (dynamicLoaded) return
-  dynamicLoaded = true
+  if (dynamicLoaded || dynamicLoading) return
+  dynamicLoading = true
   const [sitesRes, containersRes, servicesRes] = await Promise.allSettled([
     sitesApi.list(),
     dockerApi.list(),
@@ -108,6 +128,8 @@ async function loadDynamic() {
   if (sitesRes.status === 'fulfilled') sites.value = sitesRes.value.data
   if (containersRes.status === 'fulfilled') containers.value = containersRes.value.data
   if (servicesRes.status === 'fulfilled') services.value = servicesRes.value.data
+  dynamicLoaded = [sitesRes, containersRes, servicesRes].every((result) => result.status === 'fulfilled')
+  dynamicLoading = false
 }
 
 const dynamicItems = computed<PaletteItem[]>(() => [
@@ -125,11 +147,11 @@ const dynamicItems = computed<PaletteItem[]>(() => [
   })),
 ])
 
-const allItems = computed<PaletteItem[]>(() => [...pages, ...settingsSections, ...dynamicItems.value])
+const allItems = computed<PaletteItem[]>(() => [...pages.value, ...settingsSections.value, ...dynamicItems.value])
 
 const flatResults = computed<PaletteItem[]>(() => {
   const q = query.value.trim().toLowerCase()
-  if (!q) return [...pages, ...settingsSections]
+  if (!q) return [...pages.value, ...settingsSections.value]
   return allItems.value
     .filter((i) => i.label.toLowerCase().includes(q) || i.category.toLowerCase().includes(q))
     .sort((a, b) => {
@@ -163,16 +185,23 @@ function select(item: PaletteItem) {
 }
 
 async function openPalette() {
+  previousFocus = document.activeElement as HTMLElement | null
+  previousOverflow = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
   open.value = true
   void loadDynamic()
   await nextTick()
   inputEl.value?.focus()
 }
 
-function close() {
+async function close() {
   open.value = false
   query.value = ''
   hoverIndex.value = 0
+  document.body.style.overflow = previousOverflow
+  await nextTick()
+  previousFocus?.focus()
+  previousFocus = null
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -186,23 +215,57 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     const item = flatResults.value[hoverIndex.value]
     if (item) select(item)
-  } else if (e.key === 'Escape') {
-    close()
+  }
+}
+
+const activeDescendant = computed(() => {
+  const item = flatResults.value[hoverIndex.value]
+  return item ? `command-option-${item.key}` : undefined
+})
+
+function onPanelKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    void close()
+    return
+  }
+  if (event.key !== 'Tab' || !panelEl.value) return
+  const focusable = Array.from(panelEl.value.querySelectorAll<HTMLElement>(
+    'input:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  ))
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
   }
 }
 
 watch(query, () => { hoverIndex.value = 0 })
+watch(hoverIndex, async () => {
+  await nextTick()
+  const active = panelEl.value?.querySelector<HTMLElement>('.cp-item.active')
+  active?.scrollIntoView({ block: 'nearest' })
+})
 
 function onGlobalKeydown(e: KeyboardEvent) {
   if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
     e.preventDefault()
-    if (open.value) close()
+    if (open.value) void close()
     else void openPalette()
   }
 }
 
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  document.body.style.overflow = previousOverflow
+  previousFocus?.focus()
+})
 </script>
 
 <style scoped>

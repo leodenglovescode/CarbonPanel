@@ -1,7 +1,10 @@
 package dev.carbonpanel.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings as AndroidSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -39,11 +42,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import dev.carbonpanel.ui.components.LocalizedText as Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +67,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import dev.carbonpanel.R
 import dev.carbonpanel.pairing.PairState
 import dev.carbonpanel.pairing.ScannerActivity
 import dev.carbonpanel.pairing.PairingViewModel
@@ -76,9 +83,10 @@ fun PairingScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var showManual by remember { mutableStateOf(false) }
-    var manualUrl by remember { mutableStateOf("") }
-    var manualCode by remember { mutableStateOf("") }
+    var showManual by rememberSaveable { mutableStateOf(false) }
+    var manualUrl by rememberSaveable { mutableStateOf("") }
+    var manualCode by rememberSaveable { mutableStateOf("") }
+    var cameraDenied by rememberSaveable { mutableStateOf(false) }
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let { viewModel.pairFromQr(it) }
@@ -92,7 +100,7 @@ fun PairingScreen(
                 // Overrides the status line under the frame. The header on the
                 // scanner layout already says where to find the code, so this
                 // says what to do rather than repeating it.
-                .setPrompt("Point the camera at the QR code")
+                .setPrompt(context.getString(R.string.scan_camera_prompt))
                 .setBeepEnabled(false)
                 .setOrientationLocked(false)
         )
@@ -100,9 +108,14 @@ fun PairingScreen(
 
     val cameraPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) launchScanner() }
+    ) { granted ->
+        cameraDenied = !granted
+        if (granted) launchScanner()
+    }
 
-    if (state is PairState.Paired) onPaired()
+    LaunchedEffect(state) {
+        if (state is PairState.Paired) onPaired()
+    }
 
     // Centred vertically when the content fits, scrollable when it doesn't.
     // A plain verticalScroll column measures against unbounded height, so
@@ -167,11 +180,29 @@ fun PairingScreen(
             else -> Unit
         }
 
+        if (cameraDenied) {
+            ErrorBanner("Camera access is required to scan a pairing code.")
+            TextButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(
+                            AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}"),
+                        ),
+                    )
+                },
+            ) {
+                Text("Open app settings")
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         Button(
             onClick = {
                 val granted = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.CAMERA
                 ) == PackageManager.PERMISSION_GRANTED
+                cameraDenied = false
                 if (granted) launchScanner() else cameraPermission.launch(Manifest.permission.CAMERA)
             },
             enabled = state !is PairState.Working,

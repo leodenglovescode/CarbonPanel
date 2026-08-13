@@ -13,7 +13,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import dev.carbonpanel.ui.components.LocalizedText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
@@ -51,7 +51,7 @@ fun SearchField(
                 IconButton(onClick = { onValueChange("") }) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = "Clear",
+                        contentDescription = localizeUiText("Clear"),
                         modifier = Modifier.size(17.dp),
                     )
                 }

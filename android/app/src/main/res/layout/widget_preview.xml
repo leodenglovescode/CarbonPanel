@@ -17,7 +17,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="CARBONPANEL"
+        android:text="@string/widget_preview_title"
         android:textColor="@color/widget_preview_accent"
         android:textSize="12sp"
         android:textStyle="bold"
@@ -35,27 +35,27 @@
             android:layout_height="52dp"
             android:layout_marginEnd="8dp"
             android:src="@drawable/widget_preview_ring"
-            android:contentDescription="CPU" />
+            android:contentDescription="@string/metric_cpu" />
 
         <ImageView
             android:layout_width="52dp"
             android:layout_height="52dp"
             android:layout_marginEnd="8dp"
             android:src="@drawable/widget_preview_ring"
-            android:contentDescription="RAM" />
+            android:contentDescription="@string/metric_ram" />
 
         <ImageView
             android:layout_width="52dp"
             android:layout_height="52dp"
             android:layout_marginEnd="8dp"
             android:src="@drawable/widget_preview_ring"
-            android:contentDescription="GPU" />
+            android:contentDescription="@string/metric_gpu" />
 
         <ImageView
             android:layout_width="52dp"
             android:layout_height="52dp"
             android:src="@drawable/widget_preview_ring"
-            android:contentDescription="DISK" />
+            android:contentDescription="@string/metric_disk" />
     </LinearLayout>
 
     <TextView
@@ -65,7 +65,7 @@
         android:background="@drawable/widget_preview_row"
         android:paddingHorizontal="10dp"
         android:paddingVertical="7dp"
-        android:text="eno2:   ↓ 152 mbps   ↑ 80 mbps"
+        android:text="@string/widget_preview_network"
         android:textColor="@color/widget_preview_fg"
         android:textSize="12sp"
         android:fontFamily="monospace" />

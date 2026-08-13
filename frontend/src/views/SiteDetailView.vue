@@ -67,18 +67,6 @@
       </div>
     </template>
 
-    <!-- Delete confirm modal -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
-      <div class="confirm-modal">
-        <p class="confirm-msg">Delete <strong>{{ site?.name }}</strong>? This cannot be undone.</p>
-        <div class="confirm-actions">
-          <button class="btn-ghost" @click="showDeleteConfirm = false">Cancel</button>
-          <button class="btn-danger" :disabled="deleting" @click="doDelete">
-            {{ deleting ? 'Deleting…' : 'Delete' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -103,7 +91,6 @@ const actionLoading = ref<string | null>(null)
 const actionOutput = ref('')
 const activeTab = ref<'logs' | 'config'>('logs')
 const tabs = ['logs', 'config'] as const
-const showDeleteConfirm = ref(false)
 const deleting = ref(false)
 
 async function loadSite() {
@@ -160,7 +147,16 @@ function statusClass(s?: string) {
   return 'dot-yellow'
 }
 
-function confirmDelete() { showDeleteConfirm.value = true }
+async function confirmDelete() {
+  if (!site.value) return
+  const confirmed = await dialog.confirm({
+    title: 'Delete site',
+    message: `Delete "${site.value.name}"? This cannot be undone.`,
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  })
+  if (confirmed) await doDelete()
+}
 
 async function doDelete() {
   if (!site.value) return
@@ -170,7 +166,6 @@ async function doDelete() {
     router.push('/sites')
   } finally {
     deleting.value = false
-    showDeleteConfirm.value = false
   }
 }
 
@@ -262,30 +257,6 @@ onMounted(() => loadSite())
 .tab-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .tab-content > * { flex: 1; min-height: 0; }
 
-/* Delete modal */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-}
-.confirm-modal {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px; width: 340px; max-width: 95vw;
-  display: flex; flex-direction: column; gap: 16px;
-}
-.confirm-msg { font-size: 13px; color: var(--fg); }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn-ghost {
-  background: none; border: 1px solid var(--border); color: var(--fg-dim);
-  font-family: var(--font); font-size: 11px; padding: 5px 12px; border-radius: 3px;
-  cursor: pointer; transition: all var(--transition);
-}
-.btn-ghost:hover { border-color: var(--fg-dim); color: var(--fg); }
-.btn-danger {
-  background: var(--danger-dim); border: 1px solid var(--danger); color: var(--danger);
-  font-family: var(--font); font-size: 11px; padding: 5px 12px; border-radius: 3px;
-  cursor: pointer; transition: all var(--transition);
-}
-.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
 @media (max-width: 640px) {
   .detail-page { padding: 12px; gap: 10px; }
