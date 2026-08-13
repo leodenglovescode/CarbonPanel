@@ -42,7 +42,15 @@
         class="disk-card"
         :class="{ expanded: expandedKey === diskKey(disk) }"
       >
-        <div class="disk-main" @click="toggleExpand(disk)">
+        <div
+          class="disk-main"
+          role="button"
+          tabindex="0"
+          :aria-expanded="expandedKey === diskKey(disk)"
+          @click="toggleExpand(disk)"
+          @keydown.enter.prevent="toggleExpand(disk)"
+          @keydown.space.prevent="toggleExpand(disk)"
+        >
           <div class="disk-left">
             <div class="disk-device-row">
               <BrandIcon v-if="disk.smart?.model" :name="disk.smart.model" :size="22" />
@@ -204,27 +212,6 @@
       </div>
     </div>
 
-    <!-- Confirm unmount modal -->
-    <div v-if="confirmDisk" class="modal-overlay" @click.self="confirmDisk = null">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">Unmount Disk</span>
-          <button class="close-btn" @click="confirmDisk = null">✕</button>
-        </div>
-        <div class="modal-body">
-          <p class="confirm-msg">
-            Unmount <span class="confirm-highlight">{{ confirmDisk.mountpoint }}</span>?
-            Any running processes using this disk will lose access.
-          </p>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="confirmDisk = null">cancel</button>
-            <button class="btn-danger" :disabled="actionBusy !== null" @click="doUnmount">
-              {{ actionBusy ? 'unmounting...' : 'unmount' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -233,18 +220,19 @@ import { ref, computed, onMounted } from 'vue'
 import { disksApi } from '@/api/index'
 import { useMetricsStore } from '@/stores/metrics'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
+import { useDialogStore } from '@/stores/dialog'
 import type { DiskInfo } from '@/api/index'
 import BrandIcon from '@/components/ui/BrandIcon.vue'
 
 const metricsStore = useMetricsStore()
 const display = useDisplayPrefsStore()
+const dialog = useDialogStore()
 
 const disks = ref<DiskInfo[]>([])
 const loading = ref(false)
 const error = ref('')
 const activeTab = ref<'physical' | 'all' | 'removable'>('physical')
 const expandedKey = ref<string | null>(null)
-const confirmDisk = ref<DiskInfo | null>(null)
 const actionBusy = ref<string | null>(null)
 const actionOutput = ref<Record<string, string>>({})
 const actionError = ref<Record<string, boolean>>({})
@@ -347,13 +335,17 @@ function metricsWrite(device: string): number {
   return d?.write_mb_s ?? 0
 }
 
-function confirmUnmount(disk: DiskInfo) {
-  confirmDisk.value = disk
+async function confirmUnmount(disk: DiskInfo) {
+  const confirmed = await dialog.confirm({
+    title: 'Unmount Disk',
+    message: `Unmount ${disk.mountpoint}? Any running processes using this disk will lose access.`,
+    confirmLabel: 'Unmount',
+    variant: 'danger',
+  })
+  if (confirmed) await doUnmount(disk)
 }
 
-async function doUnmount() {
-  if (!confirmDisk.value) return
-  const disk = confirmDisk.value
+async function doUnmount(disk: DiskInfo) {
   const k = diskKey(disk)
   actionBusy.value = k
   actionOutput.value[k] = ''
@@ -362,12 +354,10 @@ async function doUnmount() {
     const { data } = await disksApi.unmount(disk.mountpoint)
     actionOutput.value[k] = data.output
     actionError.value[k] = !data.success
-    confirmDisk.value = null
     await load()
   } catch (e: any) {
     actionOutput.value[k] = e.response?.data?.detail || 'Unmount failed'
     actionError.value[k] = true
-    confirmDisk.value = null
   } finally {
     actionBusy.value = null
   }
@@ -447,6 +437,7 @@ onMounted(load)
   display: flex; align-items: center; gap: 16px;
   padding: 14px 16px; cursor: pointer;
 }
+.disk-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .disk-left { min-width: 200px; }
 .disk-device-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; min-width: 0; }
@@ -597,37 +588,4 @@ onMounted(load)
   .smart-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-}
-.modal {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); width: 380px; max-width: 95vw;
-}
-.modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
-}
-.modal-title { font-size: 13px; font-weight: 600; }
-.close-btn { background: none; border: none; color: var(--fg-dim); font-size: 12px; cursor: pointer; padding: 2px 4px; }
-.close-btn:hover { color: var(--fg); }
-.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.confirm-msg { font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
-.confirm-highlight { color: var(--fg); font-weight: 600; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn-ghost {
-  background: none; border: 1px solid var(--border); color: var(--fg-dim);
-  font-family: var(--font); font-size: 11px; padding: 5px 12px; border-radius: 3px;
-  cursor: pointer; transition: all var(--transition);
-}
-.btn-ghost:hover { border-color: var(--fg-dim); color: var(--fg); }
-.btn-danger {
-  background: var(--danger-dim); border: 1px solid rgba(255,68,68,0.3); color: var(--danger);
-  font-family: var(--font); font-size: 11px; padding: 5px 14px; border-radius: 3px;
-  cursor: pointer; transition: all var(--transition);
-}
-.btn-danger:hover:not(:disabled) { background: rgba(255,68,68,0.2); }
-.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

@@ -196,25 +196,31 @@
                 <label class="style-field">
                   <span class="style-lbl">From</span>
                   <div class="color-control">
-                    <input type="color" class="color-picker" :value="bg.appBg.gradientStart"
-                      @input="bg.setAppBg({ gradientStart: ($event.target as HTMLInputElement).value })" />
+                    <input
+                      type="color" class="color-picker" :value="bg.appBg.gradientStart"
+                      @input="bg.setAppBg({ gradientStart: ($event.target as HTMLInputElement).value })"
+                    />
                     <code class="color-value">{{ bg.appBg.gradientStart }}</code>
                   </div>
                 </label>
                 <label class="style-field">
                   <span class="style-lbl">To</span>
                   <div class="color-control">
-                    <input type="color" class="color-picker" :value="bg.appBg.gradientEnd"
-                      @input="bg.setAppBg({ gradientEnd: ($event.target as HTMLInputElement).value })" />
+                    <input
+                      type="color" class="color-picker" :value="bg.appBg.gradientEnd"
+                      @input="bg.setAppBg({ gradientEnd: ($event.target as HTMLInputElement).value })"
+                    />
                     <code class="color-value">{{ bg.appBg.gradientEnd }}</code>
                   </div>
                 </label>
               </div>
               <label class="style-field">
                 <span class="style-lbl">Angle — {{ bg.appBg.gradientAngle }}°</span>
-                <input type="range" class="interval-slider" min="0" max="360" step="5"
+                <input
+                  type="range" class="interval-slider" min="0" max="360" step="5"
                   :value="bg.appBg.gradientAngle"
-                  @input="bg.setAppBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })" />
+                  @input="bg.setAppBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })"
+                />
               </label>
             </template>
 
@@ -223,34 +229,48 @@
                 <img :src="bg.appBgImage" class="img-thumb" alt="App background" />
                 <button class="reset-sm danger-sm" :disabled="uploading === 'app'" @click="removeImage('app')">Remove</button>
               </div>
-              <div v-else class="upload-drop" :class="{ disabled: uploading === 'app' }" @click="uploading !== 'app' && triggerUpload('app')">
+              <button
+                v-else
+                type="button"
+                class="upload-drop"
+                :disabled="uploading === 'app'"
+                @click="triggerUpload('app')"
+              >
                 <span>{{ uploading === 'app' ? 'Uploading…' : 'Click to upload image' }}</span>
                 <span class="upload-hint">JPG, PNG, WEBP · max 20 MB · compressed automatically</span>
-              </div>
-              <input ref="appFileInput" type="file" accept="image/*" class="file-hidden"
-                @change="handleUpload('app', $event)" />
+              </button>
+              <input
+                ref="appFileInput" type="file" accept="image/*" class="file-hidden"
+                @change="handleUpload('app', $event)"
+              />
               <p v-if="uploadError === 'app'" class="upload-error">{{ uploadErrorMsg }}</p>
             </template>
 
             <label v-if="bg.appBg.type !== 'color'" class="style-field">
               <span class="style-lbl">Background blur — {{ bg.appBg.blur }}px</span>
-              <input type="range" class="interval-slider" min="0" max="20" step="1"
+              <input
+                type="range" class="interval-slider" min="0" max="20" step="1"
                 :value="bg.appBg.blur"
-                @input="bg.setAppBg({ blur: parseInt(($event.target as HTMLInputElement).value) })" />
+                @input="bg.setAppBg({ blur: parseInt(($event.target as HTMLInputElement).value) })"
+              />
             </label>
 
             <label v-if="bg.appBg.type !== 'color'" class="style-field">
               <span class="style-lbl">Background brightness — {{ bg.appBg.brightness }}%</span>
-              <input type="range" class="interval-slider" min="30" max="150" step="5"
+              <input
+                type="range" class="interval-slider" min="30" max="150" step="5"
                 :value="bg.appBg.brightness"
-                @input="bg.setAppBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })" />
+                @input="bg.setAppBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })"
+              />
             </label>
 
             <label v-if="bg.appBg.type !== 'color'" class="style-field">
               <span class="style-lbl">Text contrast overlay — {{ bg.appBg.overlay }}%</span>
-              <input type="range" class="interval-slider" min="0" max="80" step="5"
+              <input
+                type="range" class="interval-slider" min="0" max="80" step="5"
                 :value="bg.appBg.overlay"
-                @input="bg.setAppBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })" />
+                @input="bg.setAppBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })"
+              />
               <span class="style-hint">Dims the background so text and controls stay readable. Raise this if a bright image washes out the UI.</span>
             </label>
           </div>
@@ -279,25 +299,31 @@
                 <label class="style-field">
                   <span class="style-lbl">From</span>
                   <div class="color-control">
-                    <input type="color" class="color-picker" :value="bg.loginBg.gradientStart"
-                      @input="bg.setLoginBg({ gradientStart: ($event.target as HTMLInputElement).value })" />
+                    <input
+                      type="color" class="color-picker" :value="bg.loginBg.gradientStart"
+                      @input="bg.setLoginBg({ gradientStart: ($event.target as HTMLInputElement).value })"
+                    />
                     <code class="color-value">{{ bg.loginBg.gradientStart }}</code>
                   </div>
                 </label>
                 <label class="style-field">
                   <span class="style-lbl">To</span>
                   <div class="color-control">
-                    <input type="color" class="color-picker" :value="bg.loginBg.gradientEnd"
-                      @input="bg.setLoginBg({ gradientEnd: ($event.target as HTMLInputElement).value })" />
+                    <input
+                      type="color" class="color-picker" :value="bg.loginBg.gradientEnd"
+                      @input="bg.setLoginBg({ gradientEnd: ($event.target as HTMLInputElement).value })"
+                    />
                     <code class="color-value">{{ bg.loginBg.gradientEnd }}</code>
                   </div>
                 </label>
               </div>
               <label class="style-field">
                 <span class="style-lbl">Angle — {{ bg.loginBg.gradientAngle }}°</span>
-                <input type="range" class="interval-slider" min="0" max="360" step="5"
+                <input
+                  type="range" class="interval-slider" min="0" max="360" step="5"
                   :value="bg.loginBg.gradientAngle"
-                  @input="bg.setLoginBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })" />
+                  @input="bg.setLoginBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })"
+                />
               </label>
             </template>
 
@@ -306,34 +332,48 @@
                 <img :src="bg.loginBgImage" class="img-thumb" alt="Login background" />
                 <button class="reset-sm danger-sm" :disabled="uploading === 'login'" @click="removeImage('login')">Remove</button>
               </div>
-              <div v-else class="upload-drop" :class="{ disabled: uploading === 'login' }" @click="uploading !== 'login' && triggerUpload('login')">
+              <button
+                v-else
+                type="button"
+                class="upload-drop"
+                :disabled="uploading === 'login'"
+                @click="triggerUpload('login')"
+              >
                 <span>{{ uploading === 'login' ? 'Uploading…' : 'Click to upload image' }}</span>
                 <span class="upload-hint">JPG, PNG, WEBP · max 20 MB · compressed automatically</span>
-              </div>
-              <input ref="loginFileInput" type="file" accept="image/*" class="file-hidden"
-                @change="handleUpload('login', $event)" />
+              </button>
+              <input
+                ref="loginFileInput" type="file" accept="image/*" class="file-hidden"
+                @change="handleUpload('login', $event)"
+              />
               <p v-if="uploadError === 'login'" class="upload-error">{{ uploadErrorMsg }}</p>
             </template>
 
             <label v-if="bg.loginBg.type !== 'color'" class="style-field">
               <span class="style-lbl">Background blur — {{ bg.loginBg.blur }}px</span>
-              <input type="range" class="interval-slider" min="0" max="20" step="1"
+              <input
+                type="range" class="interval-slider" min="0" max="20" step="1"
                 :value="bg.loginBg.blur"
-                @input="bg.setLoginBg({ blur: parseInt(($event.target as HTMLInputElement).value) })" />
+                @input="bg.setLoginBg({ blur: parseInt(($event.target as HTMLInputElement).value) })"
+              />
             </label>
 
             <label v-if="bg.loginBg.type !== 'color'" class="style-field">
               <span class="style-lbl">Background brightness — {{ bg.loginBg.brightness }}%</span>
-              <input type="range" class="interval-slider" min="30" max="150" step="5"
+              <input
+                type="range" class="interval-slider" min="30" max="150" step="5"
                 :value="bg.loginBg.brightness"
-                @input="bg.setLoginBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })" />
+                @input="bg.setLoginBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })"
+              />
             </label>
 
             <label v-if="bg.loginBg.type !== 'color'" class="style-field">
               <span class="style-lbl">Text contrast overlay — {{ bg.loginBg.overlay }}%</span>
-              <input type="range" class="interval-slider" min="0" max="80" step="5"
+              <input
+                type="range" class="interval-slider" min="0" max="80" step="5"
                 :value="bg.loginBg.overlay"
-                @input="bg.setLoginBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })" />
+                @input="bg.setLoginBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })"
+              />
               <span class="style-hint">Dims the background so the logo and login form stay readable. Raise this if a bright image washes out the text.</span>
             </label>
           </div>
@@ -1316,7 +1356,7 @@ const { sendInterval } = useWebSocket()
 
 const mainEl = ref<HTMLElement | null>(null)
 
-const navSections = [
+const navSections = computed(() => [
   { id: 'section-appearance', label: 'Appearance' },
   { id: 'section-style',      label: 'Stylistic' },
   { id: 'section-backgrounds',label: 'Backgrounds' },
@@ -1331,7 +1371,7 @@ const navSections = [
   { id: 'section-devices',    label: 'Sessions' },
   { id: 'section-pairing',    label: 'Paired Devices' },
   { id: 'section-proxy',      label: 'Proxy' },
-]
+])
 
 function scrollTo(id: string) {
   const target = document.getElementById(id)
@@ -3089,13 +3129,14 @@ onMounted(async () => {
 }
 
 .upload-drop {
+  width: 100%; background: none; font-family: var(--font);
   border: 1px dashed var(--border); border-radius: var(--radius-sm);
   padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 4px;
   cursor: pointer; transition: all var(--transition); color: var(--fg-muted); font-size: 11px;
 }
-.upload-drop:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
-.upload-drop.disabled { cursor: default; opacity: 0.6; }
-.upload-drop.disabled:hover { border-color: var(--border); color: var(--fg-muted); background: none; }
+.upload-drop:hover:not(:disabled) { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+.upload-drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.upload-drop:disabled { cursor: default; opacity: 0.6; }
 .upload-hint { font-size: 10px; color: var(--fg-dim); }
 
 .img-preview-row { display: flex; align-items: center; gap: 10px; }

@@ -2,4 +2,13 @@
 <resources>
     <string name="app_name">CarbonPanel</string>
     <string name="widget_description">CPU, RAM, GPU and disk rings plus network throughput</string>
+    <string name="scan_pairing_code">Scan pairing code</string>
+    <string name="scan_pairing_instructions">Open the web panel and go to Settings → Paired Devices</string>
+    <string name="scan_camera_prompt">Point the camera at the code</string>
+    <string name="widget_preview_title" translatable="false">CARBONPANEL</string>
+    <string name="metric_cpu" translatable="false">CPU</string>
+    <string name="metric_ram" translatable="false">RAM</string>
+    <string name="metric_gpu" translatable="false">GPU</string>
+    <string name="metric_disk">Disk</string>
+    <string name="widget_preview_network" translatable="false">eno2:   ↓ 152 mbps   ↑ 80 mbps</string>
 </resources>

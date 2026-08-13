@@ -53,7 +53,7 @@
         class="app-row"
         :class="{ expanded: expandedKey === appKey(app) }"
       >
-        <div class="row-main" @click="toggleExpand(app)">
+        <div class="row-main">
           <span class="col-port">
             <span class="port-num">{{ app.port }}</span>
           </span>
@@ -74,24 +74,37 @@
               <button class="label-save-btn" @click.stop="saveLabel(app)">save</button>
               <button class="label-cancel-btn" @click.stop="cancelEdit">✕</button>
             </span>
-            <span v-else class="label-display" @click.stop="startEdit(app)">
+            <button
+              v-else
+              type="button"
+              class="label-display"
+              :aria-label="`Edit label for port ${app.port}`"
+              @click.stop="startEdit(app)"
+            >
               <span v-if="app.custom_label" class="custom-label">{{ app.custom_label }}</span>
               <span v-else-if="app.auto_label" class="auto-label">{{ app.auto_label }}</span>
               <span v-else class="no-label">+ Label</span>
-            </span>
+            </button>
           </span>
           <span class="col-process">
             <span class="process-name" :title="app.cmdline">{{ app.process_name || '—' }}</span>
           </span>
           <span class="col-user">{{ app.user || '—' }}</span>
           <span class="col-pid">{{ app.pid ?? '—' }}</span>
-          <span class="col-actions" @click.stop>
+          <span class="col-actions">
+            <button
+              type="button"
+              class="expand-btn"
+              :aria-label="expandedKey === appKey(app) ? `Hide details for port ${app.port}` : `Show details for port ${app.port}`"
+              :aria-expanded="expandedKey === appKey(app)"
+              @click="toggleExpand(app)"
+            >›</button>
             <button
               v-if="app.pid"
               class="kill-btn"
               :disabled="killBusy === app.port"
               :title="`Kill ${app.process_name} (PID ${app.pid})`"
-              @click.stop="confirmKillApp = app"
+              @click.stop="confirmKill(app)"
             >
               kill
             </button>
@@ -124,35 +137,6 @@
       </div>
     </div>
 
-    <!-- Confirm kill modal -->
-    <div v-if="confirmKillApp" class="modal-overlay" @click.self="confirmKillApp = null">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">Kill Process</span>
-          <button class="close-btn" @click="confirmKillApp = null">✕</button>
-        </div>
-        <div class="modal-body">
-          <p class="confirm-msg">
-            Send <span class="confirm-highlight">SIGTERM</span> to
-            <span class="confirm-highlight">{{ confirmKillApp.process_name }}</span>
-            (PID {{ confirmKillApp.pid }}) on port {{ confirmKillApp.port }}?
-          </p>
-          <div v-if="killOutput" class="kill-output" :class="{ 'output-error': killError }">
-            {{ killOutput }}
-          </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="confirmKillApp = null">cancel</button>
-            <button
-              class="btn-danger"
-              :disabled="killBusy !== null"
-              @click="doKill"
-            >
-              {{ killBusy !== null ? 'Killing...' : 'Kill process' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -160,7 +144,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { appsApi } from '@/api/index'
 import type { AppInfo } from '@/api/index'
+import { useDialogStore } from '@/stores/dialog'
 
+const dialog = useDialogStore()
 const apps = ref<AppInfo[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -170,9 +156,6 @@ const expandedKey = ref<string | null>(null)
 const editingPort = ref<number | null>(null)
 const editLabel = ref('')
 const killBusy = ref<number | null>(null)
-const killOutput = ref('')
-const killError = ref(false)
-const confirmKillApp = ref<AppInfo | null>(null)
 
 const tabs = [
   { key: 'all' as const, label: 'All' },
@@ -265,21 +248,26 @@ async function removeLabel(app: AppInfo) {
   }
 }
 
-async function doKill() {
-  if (!confirmKillApp.value) return
-  const app = confirmKillApp.value
+async function confirmKill(app: AppInfo) {
+  const confirmed = await dialog.confirm({
+    title: 'Kill Process',
+    message: `Send SIGTERM to ${app.process_name} (PID ${app.pid}) on port ${app.port}?`,
+    confirmLabel: 'Kill process',
+    variant: 'danger',
+  })
+  if (confirmed) await doKill(app)
+}
+
+async function doKill(app: AppInfo) {
   killBusy.value = app.port
-  killOutput.value = ''
-  killError.value = false
   try {
     const { data } = await appsApi.kill(app.port)
-    killOutput.value = data.output
-    killError.value = !data.success
+    if (!data.success) {
+      await dialog.alert({ title: 'Kill failed', message: data.output || 'The process could not be stopped.', variant: 'danger' })
+    }
     await load()
-    confirmKillApp.value = null
   } catch (e: any) {
-    killOutput.value = e.response?.data?.detail || 'Kill failed'
-    killError.value = true
+    await dialog.alert({ title: 'Kill failed', message: e.response?.data?.detail || 'Kill failed', variant: 'danger' })
   } finally {
     killBusy.value = null
   }
@@ -336,7 +324,7 @@ onMounted(load)
 
 .table-head {
   display: grid;
-  grid-template-columns: 60px 54px 1fr 140px 100px 60px 70px;
+  grid-template-columns: 60px 54px 1fr 140px 100px 60px 96px;
   padding: 6px 12px;
   font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--fg-dim);
 }
@@ -345,8 +333,8 @@ onMounted(load)
   .apps-page { padding: 12px; gap: 12px; }
   .filter-row { flex-direction: column; align-items: stretch; }
   .search-wrap { max-width: 100%; }
-  .table-head { grid-template-columns: 58px 50px 1fr 1fr 60px; padding: 6px 10px; }
-  .row-main { grid-template-columns: 58px 50px 1fr 1fr 60px; padding: 8px 10px; }
+  .table-head { grid-template-columns: 58px 50px 1fr 1fr 80px; padding: 6px 10px; }
+  .row-main { grid-template-columns: 58px 50px 1fr 1fr 80px; padding: 8px 10px; }
   .col-user, .col-pid { display: none; }
   .process-name { max-width: 100%; }
 }
@@ -363,8 +351,8 @@ onMounted(load)
 
 .row-main {
   display: grid;
-  grid-template-columns: 60px 54px 1fr 140px 100px 60px 70px;
-  align-items: center; padding: 6px 12px; cursor: pointer;
+  grid-template-columns: 60px 54px 1fr 140px 100px 60px 96px;
+  align-items: center; padding: 6px 12px;
   transition: background var(--transition);
 }
 .row-main:hover { background: var(--bg-hover); }
@@ -380,7 +368,11 @@ onMounted(load)
 .proto-tcp { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
 .proto-udp { background: rgba(68,136,255,0.1); color: var(--info); border: 1px solid rgba(68,136,255,0.25); }
 
-.label-display { cursor: pointer; }
+.label-display {
+  max-width: 100%; padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.label-display:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 .custom-label { font-size: 11px; font-weight: 600; color: var(--fg); }
 .auto-label { font-size: 11px; color: var(--fg-muted); font-style: italic; }
 .no-label { font-size: 10px; color: var(--fg-dim); }
@@ -402,6 +394,13 @@ onMounted(load)
 .process-name { font-size: 12px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; display: block; }
 .col-user { font-size: 11px; color: var(--fg-muted); }
 .col-pid { font-size: 11px; color: var(--fg-dim); }
+
+.col-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.expand-btn {
+  width: 26px; height: 26px; padding: 0; border: 0; border-radius: 3px;
+  background: none; color: var(--fg-dim); font: 18px/1 var(--font); cursor: pointer;
+}
+.expand-btn:hover, .expand-btn:focus-visible { color: var(--accent); background: var(--accent-dim); }
 
 .kill-btn {
   background: none; border: 1px solid rgba(255,68,68,0.3); color: var(--danger);
@@ -435,42 +434,4 @@ onMounted(load)
 .expand-enter-from, .expand-leave-to { opacity: 0; max-height: 0; }
 .expand-enter-to, .expand-leave-from { opacity: 1; max-height: 200px; }
 
-/* Modal */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-}
-.modal {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); width: 400px; max-width: 95vw;
-}
-.modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
-}
-.modal-title { font-size: 13px; font-weight: 600; }
-.close-btn { background: none; border: none; color: var(--fg-dim); font-size: 12px; cursor: pointer; padding: 2px 4px; }
-.close-btn:hover { color: var(--fg); }
-.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.confirm-msg { font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
-.confirm-highlight { color: var(--fg); font-weight: 600; }
-.kill-output {
-  font-size: 11px; color: var(--fg-muted); background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 8px 10px;
-}
-.output-error { color: var(--danger); border-color: rgba(255,68,68,0.3); background: var(--danger-dim); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn-ghost {
-  background: none; border: 1px solid var(--border); color: var(--fg-dim);
-  font-family: var(--font); font-size: 11px; padding: 5px 12px; border-radius: 3px;
-  cursor: pointer; transition: all var(--transition);
-}
-.btn-ghost:hover { border-color: var(--fg-dim); color: var(--fg); }
-.btn-danger {
-  background: var(--danger-dim); border: 1px solid rgba(255,68,68,0.3); color: var(--danger);
-  font-family: var(--font); font-size: 11px; padding: 5px 14px; border-radius: 3px;
-  cursor: pointer; transition: all var(--transition);
-}
-.btn-danger:hover:not(:disabled) { background: rgba(255,68,68,0.2); }
-.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

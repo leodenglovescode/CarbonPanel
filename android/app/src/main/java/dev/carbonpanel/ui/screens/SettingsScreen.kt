@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,7 +19,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import dev.carbonpanel.ui.components.LocalizedText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -399,17 +405,28 @@ private fun AccentSwatch(choice: AccentChoice, selected: Boolean, onClick: () ->
     val ring = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent
     Box(
         Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .background(choice.seed)
-            .border(2.dp, ring, CircleShape)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics {
+                contentDescription = localizeUiText("${choice.label} accent")
+                role = Role.RadioButton
+                this.selected = selected
+            }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        // Material You has no fixed colour of its own, so it's marked rather
-        // than shown as a swatch that would misrepresent the result.
-        if (choice == AccentChoice.Dynamic) {
-            Text("You", style = MaterialTheme.typography.labelSmall, color = Color.Black)
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(choice.seed)
+                .border(2.dp, ring, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Material You has no fixed colour of its own, so it's marked rather
+            // than shown as a swatch that would misrepresent the result.
+            if (choice == AccentChoice.Dynamic) {
+                Text("You", style = MaterialTheme.typography.labelSmall, color = Color.Black)
+            }
         }
     }
 }

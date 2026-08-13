@@ -144,9 +144,9 @@
             :class="`action-${act}`"
             :disabled="
               reorderMode ||
-              reorderBusy ||
-              busyKey === `${svc.service_name}:${act}` ||
-              toggleBusyId === svc.service_name
+                reorderBusy ||
+                busyKey === `${svc.service_name}:${act}` ||
+                toggleBusyId === svc.service_name
             "
             @click="confirmAction(svc.service_name, act)"
           >
@@ -161,10 +161,10 @@
               :checked="svc.autostart_enabled"
               :disabled="
                 reorderMode ||
-                reorderBusy ||
-                toggleBusyId === svc.service_name ||
-                !!busyKey ||
-                !canToggleAutostart(svc)
+                  reorderBusy ||
+                  toggleBusyId === svc.service_name ||
+                  !!busyKey ||
+                  !canToggleAutostart(svc)
               "
               @change="toggleAutostart(svc.service_name, ($event.target as HTMLInputElement).checked)"
             />

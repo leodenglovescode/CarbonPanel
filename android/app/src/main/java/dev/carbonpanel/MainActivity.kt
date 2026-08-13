@@ -27,13 +27,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import dev.carbonpanel.ui.components.LocalizedText as Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +46,7 @@ import dev.carbonpanel.pairing.PairingViewModel
 import dev.carbonpanel.ui.Dest
 import dev.carbonpanel.ui.PanelViewModel
 import dev.carbonpanel.ui.components.Backdrop
+import dev.carbonpanel.ui.components.localizeUiText
 import dev.carbonpanel.ui.screens.*
 import dev.carbonpanel.ui.theme.CarbonTheme
 import dev.carbonpanel.widget.StatusWidgetWorker
@@ -75,7 +77,7 @@ private fun CarbonPanelRoot() {
     val accent by panelViewModel.accent.collectAsStateWithLifecycle()
     val backdropEnabled by panelViewModel.backdropEnabled.collectAsStateWithLifecycle()
 
-    var paired by remember { mutableStateOf(Prefs.get(context).isPaired) }
+    var paired by rememberSaveable { mutableStateOf(Prefs.get(context).isPaired) }
     // The backdrop only exists once there's a server to fetch it from.
     val showBackdrop = paired && backdropEnabled
 
@@ -115,8 +117,8 @@ private fun MainScaffold(
     transparent: Boolean,
     onUnpair: () -> Unit,
 ) {
-    var dest by remember { mutableStateOf(Dest.Dashboard) }
-    var openSiteId by remember { mutableStateOf<String?>(null) }
+    var dest by rememberSaveable { mutableStateOf(Dest.Dashboard) }
+    var openSiteId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
     val message by viewModel.message.collectAsStateWithLifecycle()
 
@@ -138,9 +140,9 @@ private fun MainScaffold(
     }
 
     val title = when {
-        openSiteId != null -> "Site"
+        openSiteId != null -> localizeUiText("Site")
         dest == Dest.Dashboard -> viewModel.serverName
-        else -> dest.title
+        else -> localizeUiText(dest.title)
     }
     val canGoBack = openSiteId != null || !dest.primary
 
@@ -155,7 +157,10 @@ private fun MainScaffold(
                         IconButton(onClick = {
                             if (openSiteId != null) openSiteId = null else dest = Dest.More
                         }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = localizeUiText("Back"),
+                            )
                         }
                     }
                 },
@@ -173,7 +178,9 @@ private fun MainScaffold(
                     NavigationBarItem(
                         selected = dest == entry || (entry == Dest.More && !dest.primary),
                         onClick = { dest = entry; openSiteId = null },
-                        icon = { Icon(entry.icon, contentDescription = entry.title) },
+                        icon = {
+                            Icon(entry.icon, contentDescription = localizeUiText(entry.title))
+                        },
                         label = { Text(entry.title, style = MaterialTheme.typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,

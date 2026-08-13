@@ -1,16 +1,21 @@
 <template>
   <Teleport to="body">
-    <div class="toast-stack">
+    <div class="toast-stack" aria-live="polite" aria-relevant="additions">
       <TransitionGroup name="toast">
         <div
           v-for="t in alerts.toasts"
           :key="t.id"
           :class="['toast', `toast-${t.level}`]"
-          @click="alerts.dismiss(t.id)"
+          :role="t.level === 'danger' ? 'alert' : 'status'"
         >
           <span class="toast-icon">{{ t.level === 'danger' ? '⚠' : t.level === 'info' ? 'i' : '!' }}</span>
           <span class="toast-msg">{{ t.message }}</span>
-          <button class="toast-close">✕</button>
+          <button
+            type="button"
+            class="toast-close"
+            :aria-label="`Dismiss notification: ${t.message}`"
+            @click="alerts.dismiss(t.id)"
+          >✕</button>
         </div>
       </TransitionGroup>
     </div>
@@ -43,7 +48,6 @@ const alerts = useAlertsStore()
   border: 1px solid;
   font-size: 11px;
   font-family: var(--font);
-  cursor: pointer;
   pointer-events: auto;
   min-width: 220px;
   max-width: 340px;
@@ -74,7 +78,12 @@ const alerts = useAlertsStore()
   font-size: 10px; cursor: pointer; padding: 0; line-height: 1;
   flex-shrink: 0;
 }
-.toast-close:hover { color: var(--fg); }
+.toast-close:hover, .toast-close:focus-visible { color: var(--fg); }
+
+@media (max-width: 480px) {
+  .toast-stack { left: 12px; right: 12px; bottom: 12px; }
+  .toast { min-width: 0; max-width: none; }
+}
 
 /* TransitionGroup animations */
 .toast-enter-active { transition: opacity 200ms ease, transform 200ms ease; }

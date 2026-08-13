@@ -18,134 +18,120 @@
       <SiteCard v-for="site in store.sites" :key="site.id" :site="site" />
     </div>
 
-    <!-- Add Site Modal -->
-    <div v-if="showForm" class="modal-overlay" @click.self="cancelForm">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">Add Site</span>
-          <button class="close-btn" @click="cancelForm">✕</button>
+    <BaseModal :open="showForm" title="Add Site" @close="cancelForm">
+      <form class="site-form" @submit.prevent="submitForm">
+        <div class="form-row">
+          <label class="form-label" for="site-name">Name</label>
+          <input id="site-name" v-model="form.name" class="form-input" placeholder="My Site" required autofocus />
         </div>
 
-        <form class="modal-body" @submit.prevent="submitForm">
-          <div class="form-row">
-            <label class="form-label">Name</label>
-            <input v-model="form.name" class="form-input" placeholder="My Site" required />
+        <div class="form-row">
+          <label class="form-label" for="site-type">Type</label>
+          <select id="site-type" v-model="form.type" class="form-input">
+            <option value="nginx">nginx</option>
+            <option value="python">python</option>
+            <option value="wordpress">wordpress</option>
+            <option value="nodejs">nodejs</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="site-manager">Service Manager</label>
+          <select id="site-manager" v-model="form.service_manager" class="form-input">
+            <option value="systemd">systemd</option>
+            <option value="pm2">pm2</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="site-service">Service Name</label>
+          <input
+            id="site-service"
+            v-model="form.service_name"
+            class="form-input"
+            :placeholder="form.service_manager === 'systemd' ? 'nginx.service' : 'my-app'"
+            required
+          />
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="site-config">Config File</label>
+          <input id="site-config" v-model="form.config_file_path" class="form-input" placeholder="/etc/nginx/nginx.conf" />
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="site-logs">Log Paths</label>
+          <input id="site-logs" v-model="logPathsRaw" class="form-input" placeholder="/var/log/nginx/access.log, /var/log/nginx/error.log" />
+          <span class="form-hint">Comma-separated</span>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" for="site-description">Description</label>
+          <input id="site-description" v-model="form.description" class="form-input" placeholder="Optional" />
+        </div>
+
+        <p v-if="formError" class="form-error">{{ formError }}</p>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" @click="cancelForm">Cancel</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Saving…' : 'Add site' }}
+          </button>
+        </div>
+      </form>
+    </BaseModal>
+    <BaseModal :open="showDiscover" title="Discover nginx sites" @close="showDiscover = false">
+      <div class="discover-body">
+        <div v-if="discoverLoading" class="state-msg">Scanning…</div>
+        <div v-else-if="discoverError" class="state-msg error">{{ discoverError }}</div>
+        <div v-else-if="!discoverData?.nginx_available" class="state-msg muted">
+          /etc/nginx/sites-available not found on this server
+        </div>
+        <div v-else-if="!discoverData.candidates.length" class="state-msg muted">
+          No config files found in /etc/nginx/sites-available
+        </div>
+        <template v-else>
+          <p class="discover-hint">
+            Select configs to import as sites. Already-registered configs are pre-checked and
+            will be skipped.
+          </p>
+          <div class="candidate-list">
+            <label
+              v-for="c in discoverData.candidates"
+              :key="c.config_file_path"
+              class="candidate-row"
+            >
+              <input
+                type="checkbox"
+                :value="c.config_file_path"
+                v-model="selectedPaths"
+                :disabled="c.already_exists"
+                class="cand-check"
+              />
+              <div class="cand-info">
+                <span class="cand-name">{{ c.name }}</span>
+                <span class="cand-path">{{ c.config_file_path }}</span>
+                <span v-if="c.already_exists" class="cand-exists">Already added</span>
+                <span v-else-if="c.server_names.length" class="cand-meta">
+                  {{ c.server_names.join(', ') }}
+                </span>
+              </div>
+            </label>
           </div>
-
-          <div class="form-row">
-            <label class="form-label">Type</label>
-            <select v-model="form.type" class="form-input">
-              <option value="nginx">nginx</option>
-              <option value="python">python</option>
-              <option value="wordpress">wordpress</option>
-              <option value="nodejs">nodejs</option>
-            </select>
-          </div>
-
-          <div class="form-row">
-            <label class="form-label">Service Manager</label>
-            <select v-model="form.service_manager" class="form-input">
-              <option value="systemd">systemd</option>
-              <option value="pm2">pm2</option>
-            </select>
-          </div>
-
-          <div class="form-row">
-            <label class="form-label">Service Name</label>
-            <input
-              v-model="form.service_name"
-              class="form-input"
-              :placeholder="form.service_manager === 'systemd' ? 'nginx.service' : 'my-app'"
-              required
-            />
-          </div>
-
-          <div class="form-row">
-            <label class="form-label">Config File</label>
-            <input v-model="form.config_file_path" class="form-input" placeholder="/etc/nginx/nginx.conf" />
-          </div>
-
-          <div class="form-row">
-            <label class="form-label">Log Paths</label>
-            <input v-model="logPathsRaw" class="form-input" placeholder="/var/log/nginx/access.log, /var/log/nginx/error.log" />
-            <span class="form-hint">Comma-separated</span>
-          </div>
-
-          <div class="form-row">
-            <label class="form-label">Description</label>
-            <input v-model="form.description" class="form-input" placeholder="Optional" />
-          </div>
-
-          <p v-if="formError" class="form-error">{{ formError }}</p>
-
+          <p v-if="importError" class="form-error">{{ importError }}</p>
           <div class="modal-actions">
-            <button type="button" class="btn-ghost" @click="cancelForm">Cancel</button>
-            <button type="submit" class="btn-primary" :disabled="submitting">
-              {{ submitting ? 'Saving…' : 'Add site' }}
+            <button class="btn-ghost" @click="showDiscover = false">Cancel</button>
+            <button
+              class="btn-primary"
+              :disabled="importing || !selectedPaths.length"
+              @click="doImport"
+            >
+              {{ importing ? 'Importing…' : `Import ${selectedPaths.length}` }}
             </button>
           </div>
-        </form>
+        </template>
       </div>
-    </div>
-    <!-- Discover nginx modal -->
-    <div v-if="showDiscover" class="modal-overlay" @click.self="showDiscover = false">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">Discover nginx sites</span>
-          <button class="close-btn" @click="showDiscover = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="discoverLoading" class="state-msg">Scanning…</div>
-          <div v-else-if="discoverError" class="state-msg error">{{ discoverError }}</div>
-          <div v-else-if="!discoverData?.nginx_available" class="state-msg muted">
-            /etc/nginx/sites-available not found on this server
-          </div>
-          <div v-else-if="!discoverData.candidates.length" class="state-msg muted">
-            No config files found in /etc/nginx/sites-available
-          </div>
-          <template v-else>
-            <p class="discover-hint">
-              Select configs to import as sites. Already-registered configs are pre-checked and
-              will be skipped.
-            </p>
-            <div class="candidate-list">
-              <label
-                v-for="c in discoverData.candidates"
-                :key="c.config_file_path"
-                class="candidate-row"
-              >
-                <input
-                  type="checkbox"
-                  :value="c.config_file_path"
-                  v-model="selectedPaths"
-                  :disabled="c.already_exists"
-                  class="cand-check"
-                />
-                <div class="cand-info">
-                  <span class="cand-name">{{ c.name }}</span>
-                  <span class="cand-path">{{ c.config_file_path }}</span>
-                  <span v-if="c.already_exists" class="cand-exists">Already added</span>
-                  <span v-else-if="c.server_names.length" class="cand-meta">
-                    {{ c.server_names.join(', ') }}
-                  </span>
-                </div>
-              </label>
-            </div>
-            <p v-if="importError" class="form-error">{{ importError }}</p>
-            <div class="modal-actions">
-              <button class="btn-ghost" @click="showDiscover = false">Cancel</button>
-              <button
-                class="btn-primary"
-                :disabled="importing || !selectedPaths.length"
-                @click="doImport"
-              >
-                {{ importing ? 'Importing…' : `Import ${selectedPaths.length}` }}
-              </button>
-            </div>
-          </template>
-        </div>
-      </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -153,6 +139,7 @@
 import { ref, onMounted } from 'vue'
 import { useSitesStore } from '@/stores/sites'
 import SiteCard from '@/components/sites/SiteCard.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { sitesApi } from '@/api/index'
 import type { SiteType, ServiceManager, NginxDiscoverResponse } from '@/types/sites'
 
@@ -285,6 +272,7 @@ async function submitForm() {
 }
 
 /* Discover modal specifics */
+.site-form, .discover-body { display: flex; flex-direction: column; gap: 12px; }
 .discover-hint { font-size: 11px; color: var(--fg-muted); line-height: 1.5; }
 
 .candidate-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }

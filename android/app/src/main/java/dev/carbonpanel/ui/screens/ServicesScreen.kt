@@ -15,7 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import dev.carbonpanel.ui.components.LocalizedText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -164,7 +164,7 @@ private fun ServiceRow(
                 IconButton(onClick = onStar, modifier = Modifier.size(32.dp)) {
                     Icon(
                         if (service.starred) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                        contentDescription = if (service.starred) "Unstar" else "Star",
+                        contentDescription = localizeUiText(if (service.starred) "Unstar" else "Star"),
                         tint = if (service.starred) Accent
                                else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(17.dp),

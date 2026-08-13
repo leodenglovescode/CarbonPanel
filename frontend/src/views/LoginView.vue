@@ -84,8 +84,15 @@ const sessionToken = ref('')
 const error = ref('')
 const loading = ref(false)
 
-// Auto-submit TOTP when 6 digits entered
-watch(totpCode, (v) => { if (v.length === 6) handleTotp() })
+// Normalize pasted codes and auto-submit only a complete numeric token.
+watch(totpCode, (value) => {
+  const digits = value.replace(/\D/g, '').slice(0, 6)
+  if (digits !== value) {
+    totpCode.value = digits
+    return
+  }
+  if (digits.length === 6 && !loading.value) void handleTotp()
+})
 
 async function handleLogin() {
   error.value = ''
@@ -107,7 +114,7 @@ async function handleLogin() {
 }
 
 async function handleTotp() {
-  if (totpCode.value.length !== 6) return
+  if (!/^\d{6}$/.test(totpCode.value) || loading.value) return
   error.value = ''
   loading.value = true
   try {

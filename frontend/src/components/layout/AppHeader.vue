@@ -1,7 +1,13 @@
 <template>
   <header class="header">
     <div class="header-left">
-      <button class="menu-btn" aria-label="Open menu" @click="$emit('menu')">☰</button>
+      <button
+        class="menu-btn"
+        aria-label="Open menu"
+        aria-controls="app-sidebar"
+        :aria-expanded="menuOpen"
+        @click="$emit('menu')"
+      >☰</button>
       <span v-if="system" class="host">{{ system.hostname }}</span>
     </div>
 
@@ -26,6 +32,7 @@ defineProps<{
   system?: SystemMetrics
   loadAvg?: number[]
   connected?: boolean
+  menuOpen?: boolean
 }>()
 
 defineEmits<{ menu: [] }>()
@@ -73,7 +80,7 @@ function formatUptime(seconds: number): string {
   border-radius: var(--radius-sm);
   transition: color var(--transition), background var(--transition);
 }
-.menu-btn:hover { color: var(--fg); background: var(--bg-hover); }
+.menu-btn:hover, .menu-btn:focus-visible { color: var(--fg); background: var(--bg-hover); }
 
 .host {
   font-size: 11px; color: var(--fg-muted);

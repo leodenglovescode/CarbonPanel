@@ -4,7 +4,9 @@
     <!-- Edit toolbar -->
     <Transition name="toolbar">
       <div v-if="editMode" class="edit-toolbar">
-        <span class="edit-hint">Drag to move · corners to resize · × to remove</span>
+        <span class="edit-hint">
+          {{ compactEditor ? 'Drag or use arrow keys to reorder · × to remove' : 'Drag to move · corners to resize · arrow keys move · Shift+arrows resize' }}
+        </span>
         <select v-if="hiddenWidgets.length" class="tb-add" @change="onAddWidget($event)">
           <option value="">+ Add widget…</option>
           <option v-for="w in hiddenWidgets" :key="w.id" :value="w.id">{{ WIDGET_LABELS[w.id] }}</option>
@@ -15,7 +17,13 @@
     </Transition>
 
     <!-- Edit button (normal mode) -->
-    <button v-if="!editMode && metrics.latest" class="edit-fab" @click="enterEdit" title="Edit layout">
+    <button
+      v-if="!editMode && metrics.latest"
+      ref="editButtonEl"
+      class="edit-fab"
+      aria-label="Edit dashboard layout"
+      @click="enterEdit"
+    >
       ⊞
     </button>
 
@@ -37,20 +45,24 @@
         class="grid-item"
         :class="[w.id, { 'edit-widget': editMode, 'is-active': editMode && drag?.id === w.id }]"
         :style="gridItemStyle(w.id)"
-        @mousedown.left="editMode ? (($event as MouseEvent).preventDefault(), startDrag(w.id, $event)) : undefined"
+        :role="editMode ? 'group' : undefined"
+        :tabindex="editMode ? 0 : undefined"
+        :aria-label="editMode ? `Edit ${WIDGET_LABELS[w.id]} widget. Arrow keys move; Shift plus arrow keys resize.` : undefined"
+        @pointerdown="editMode ? startDrag(w.id, $event) : undefined"
+        @keydown="editMode ? onWidgetKeydown(w.id, $event) : undefined"
       >
         <div class="widget-body" :class="{ 'no-pe': editMode }">
           <component :is="w.comp" v-bind="w.props" />
         </div>
         <template v-if="editMode">
-          <div class="handle tl" @mousedown.left.stop.prevent="startResize(w.id, 'tl', $event)" />
-          <div class="handle tr" @mousedown.left.stop.prevent="startResize(w.id, 'tr', $event)" />
-          <div class="handle bl" @mousedown.left.stop.prevent="startResize(w.id, 'bl', $event)" />
-          <div class="handle br" @mousedown.left.stop.prevent="startResize(w.id, 'br', $event)" />
+          <span class="handle tl" aria-hidden="true" @pointerdown.stop.prevent="startResize(w.id, 'tl', $event)" />
+          <span class="handle tr" aria-hidden="true" @pointerdown.stop.prevent="startResize(w.id, 'tr', $event)" />
+          <span class="handle bl" aria-hidden="true" @pointerdown.stop.prevent="startResize(w.id, 'bl', $event)" />
+          <span class="handle br" aria-hidden="true" @pointerdown.stop.prevent="startResize(w.id, 'br', $event)" />
           <button
             class="widget-remove"
-            title="Remove from dashboard"
-            @mousedown.stop.prevent
+            :aria-label="`Remove ${WIDGET_LABELS[w.id]} from dashboard`"
+            @pointerdown.stop.prevent
             @click.stop="layoutStore.toggleHidden(w.id)"
           >×</button>
         </template>
@@ -61,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import CpuWidget from '@/components/widgets/CpuWidget.vue'
 import RamWidget from '@/components/widgets/RamWidget.vue'
 import GpuWidget from '@/components/widgets/GpuWidget.vue'
@@ -119,6 +131,7 @@ const layoutStore = useLayoutStore()
 
 const editMode = ref(false)
 const gridEl = ref<HTMLElement | null>(null)
+const editButtonEl = ref<HTMLButtonElement | null>(null)
 const gridW = ref(0)
 
 // Grid constants — must match CSS (.grid { grid-auto-rows: 30px; gap: 6px })
@@ -129,6 +142,8 @@ const MIN_W = 3
 const MIN_H = 3
 
 // cellW is only used for drag-delta snapping; CSS grid handles actual sizing
+const compactEditor = computed(() => gridW.value <= 900)
+
 const cellW = computed(() => {
   const w = gridW.value || 1200
   return (w - GAP * (COLS - 1)) / COLS
@@ -155,20 +170,25 @@ interface DragState {
 
 const drag = ref<DragState | null>(null)
 
-function startDrag(id: WidgetId, e: MouseEvent) {
+function startDrag(id: WidgetId, event: PointerEvent) {
+  if (!event.isPrimary || event.button !== 0) return
+  const target = event.target as HTMLElement
+  if (target.closest('button, input, select, textarea, a')) return
+  event.preventDefault()
   const p = layoutStore.layout[id]
   drag.value = {
     type: 'drag', id,
-    mx0: e.clientX, my0: e.clientY,
+    mx0: event.clientX, my0: event.clientY,
     col0: p.col, row0: p.row, w0: p.w, h0: p.h,
   }
 }
 
-function startResize(id: WidgetId, corner: 'tl' | 'tr' | 'bl' | 'br', e: MouseEvent) {
+function startResize(id: WidgetId, corner: 'tl' | 'tr' | 'bl' | 'br', event: PointerEvent) {
+  if (!event.isPrimary || event.button !== 0) return
   const p = layoutStore.layout[id]
   drag.value = {
     type: 'resize', id, corner,
-    mx0: e.clientX, my0: e.clientY,
+    mx0: event.clientX, my0: event.clientY,
     col0: p.col, row0: p.row, w0: p.w, h0: p.h,
   }
 }
@@ -188,9 +208,31 @@ function hasOverlap(id: WidgetId, pos: { col: number; row: number; w: number; h:
   return false
 }
 
-function onMouseMove(e: MouseEvent) {
+function swapCompactWidget(id: WidgetId, direction: number): boolean {
+  const items = sortedWidgets.value
+  const index = items.findIndex((item) => item.id === id)
+  const target = Math.max(0, Math.min(items.length - 1, index + direction))
+  if (index < 0 || target === index) return false
+  const otherId = items[target].id
+  const current = { ...layoutStore.layout[id] }
+  const other = { ...layoutStore.layout[otherId] }
+  layoutStore.update(id, other)
+  layoutStore.update(otherId, current)
+  return true
+}
+
+function onPointerMove(e: PointerEvent) {
   const d = drag.value
   if (!d) return
+
+  if (compactEditor.value) {
+    if (d.type !== 'drag') return
+    const steps = Math.round((e.clientY - d.my0) / 72)
+    if (steps && swapCompactWidget(d.id, steps)) {
+      d.my0 = e.clientY
+    }
+    return
+  }
 
   const cw = cellW.value
   const dcol = Math.round((e.clientX - d.mx0) / (cw + GAP))
@@ -245,25 +287,65 @@ function onMouseMove(e: MouseEvent) {
   // If overlap: keep current position — widget stays at last valid spot
 }
 
-function onMouseUp() {
+function finishPointerEdit() {
   if (drag.value) {
     layoutStore.save()
     drag.value = null
   }
 }
 
-function enterEdit() {
+async function enterEdit() {
   editMode.value = true
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
-  if (gridEl.value) gridW.value = gridEl.value.clientWidth
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', finishPointerEdit)
+  window.addEventListener('pointercancel', finishPointerEdit)
+  await nextTick()
+  if (gridEl.value) {
+    gridW.value = gridEl.value.clientWidth
+    gridEl.value.querySelector<HTMLElement>('.grid-item')?.focus()
+  }
 }
 
-function exitEdit() {
+async function exitEdit() {
   editMode.value = false
   drag.value = null
-  window.removeEventListener('mousemove', onMouseMove)
-  window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', finishPointerEdit)
+  window.removeEventListener('pointercancel', finishPointerEdit)
+  await nextTick()
+  editButtonEl.value?.focus()
+}
+
+function onWidgetKeydown(id: WidgetId, event: KeyboardEvent) {
+  const deltas: Record<string, [number, number]> = {
+    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+  }
+  const delta = deltas[event.key]
+  if (!delta) return
+  event.preventDefault()
+  const [dx, dy] = delta
+  if (compactEditor.value) {
+    if (!event.shiftKey && swapCompactWidget(id, dy || dx)) layoutStore.save()
+    return
+  }
+  const current = layoutStore.layout[id]
+  const proposed = event.shiftKey
+    ? {
+        col: current.col,
+        row: current.row,
+        w: Math.max(MIN_W, Math.min(COLS - current.col, current.w + dx)),
+        h: Math.max(MIN_H, current.h + dy),
+      }
+    : {
+        col: Math.max(0, Math.min(COLS - current.w, current.col + dx)),
+        row: Math.max(0, current.row + dy),
+        w: current.w,
+        h: current.h,
+      }
+  if (!hasOverlap(id, proposed)) {
+    layoutStore.update(id, proposed)
+    layoutStore.save()
+  }
 }
 
 function resetLayout() {
@@ -279,8 +361,9 @@ onMounted(() => {
 })
 onUnmounted(() => {
   ro?.disconnect()
-  window.removeEventListener('mousemove', onMouseMove)
-  window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', finishPointerEdit)
+  window.removeEventListener('pointercancel', finishPointerEdit)
 })
 
 // Attach/detach ResizeObserver when edit-grid mounts
@@ -409,6 +492,7 @@ const sortedWidgets = computed(() =>
     flex: none !important;
     overflow: auto !important;
   }
+  .grid-edit .handle { display: none; }
 }
 
 @media (max-width: 640px) {
@@ -419,7 +503,7 @@ const sortedWidgets = computed(() =>
 }
 
 /* Edit mode overlay on the same grid */
-.grid-edit { user-select: none; }
+.grid-edit { user-select: none; touch-action: none; }
 .grid-edit .grid-item {
   overflow: visible;   /* allow resize handles to extend outside the cell */
   position: relative;
@@ -430,6 +514,11 @@ const sortedWidgets = computed(() =>
   transition: box-shadow 80ms, border-color 80ms;
 }
 .grid-edit .grid-item:hover { border-color: var(--accent); }
+.grid-edit .grid-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
 .grid-edit .grid-item.is-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-border), var(--shadow-card-hover);
@@ -526,8 +615,8 @@ const sortedWidgets = computed(() =>
 /* Corner resize handles */
 .handle {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg-card);
@@ -536,20 +625,21 @@ const sortedWidgets = computed(() =>
   transition: opacity var(--transition), transform var(--transition);
 }
 .grid-edit .grid-item:hover .handle,
+.grid-edit .grid-item:focus-within .handle,
 .grid-edit .grid-item.is-active .handle { opacity: 1; }
-.handle.tl { top: -6px;    left: -6px;    cursor: nwse-resize; }
-.handle.tr { top: -6px;    right: -6px;   cursor: nesw-resize; }
-.handle.bl { bottom: -6px; left: -6px;    cursor: nesw-resize; }
-.handle.br { bottom: -6px; right: -6px;   cursor: nwse-resize; }
+.handle.tl { top: -10px;    left: -10px;    cursor: nwse-resize; }
+.handle.tr { top: -10px;    right: -10px;   cursor: nesw-resize; }
+.handle.bl { bottom: -10px; left: -10px;    cursor: nesw-resize; }
+.handle.br { bottom: -10px; right: -10px;   cursor: nwse-resize; }
 .handle:hover { transform: scale(1.3); }
 
 /* Remove-widget button */
 .widget-remove {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 18px;
-  height: 18px;
+  top: -14px;
+  right: -14px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -566,6 +656,7 @@ const sortedWidgets = computed(() =>
   transition: opacity var(--transition), color var(--transition), border-color var(--transition);
 }
 .grid-edit .grid-item:hover .widget-remove,
+.grid-edit .grid-item:focus-within .widget-remove,
 .grid-edit .grid-item.is-active .widget-remove { opacity: 1; }
 .widget-remove:hover { color: var(--danger); border-color: var(--danger); }
 </style>
