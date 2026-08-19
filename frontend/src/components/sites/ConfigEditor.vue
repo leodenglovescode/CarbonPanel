@@ -74,7 +74,7 @@ watch(() => props.siteId, () => load())
   flex-direction: column;
   height: 100%;
   min-height: 300px;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: var(--surface-page-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
@@ -89,7 +89,7 @@ watch(() => props.siteId, () => load())
   gap: 10px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   flex-shrink: 0;
 }
 

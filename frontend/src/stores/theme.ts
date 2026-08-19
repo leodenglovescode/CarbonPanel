@@ -71,12 +71,12 @@ const THEME_STYLE_DEFAULTS: Record<ResolvedTheme, ResolvedStyleSettings> = {
     bgInput: '#1a1a1a',
     border: '#222222',
     fg: '#e0e0e0',
-    fgMuted: '#666666',
-    fgDim: '#444444',
+    fgMuted: '#a6a6a6',
+    fgDim: '#8a8a8a',
     accent: '#00ff88',
     danger: '#ff4444',
     warning: '#ffaa00',
-    info: '#4488ff',
+    info: '#60a5fa',
     font: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: 12,
     highContrast: false,
@@ -89,10 +89,10 @@ const THEME_STYLE_DEFAULTS: Record<ResolvedTheme, ResolvedStyleSettings> = {
     border: '#d1d5db',
     fg: '#111827',
     fgMuted: '#4b5563',
-    fgDim: '#6b7280',
-    accent: '#00954a',
+    fgDim: '#5f6875',
+    accent: '#007a3d',
     danger: '#cc2020',
-    warning: '#b45309',
+    warning: '#a34808',
     info: '#1d56cc',
     font: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: 12,
@@ -323,6 +323,9 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   rootStyle.setProperty('--danger', resolved.danger)
   rootStyle.setProperty('--warning', resolved.warning)
   rootStyle.setProperty('--info', resolved.info)
+  rootStyle.setProperty('--teal', effectiveDark ? '#2dd4bf' : '#0f766e')
+  rootStyle.setProperty('--purple', effectiveDark ? '#a78bfa' : '#6d28d9')
+  rootStyle.setProperty('--accent-contrast', effectiveDark ? '#000000' : '#ffffff')
   rootStyle.setProperty('--font', resolved.font)
   rootStyle.setProperty('--font-size', `${resolved.fontSize}px`)
   // Most components hardcode their own px font-sizes rather than inheriting
@@ -337,7 +340,7 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   rootStyle.setProperty('--accent-border', toRgba(resolved.accent, effectiveDark ? 0.2 : 0.25))
   rootStyle.setProperty('--danger-dim', toRgba(resolved.danger, effectiveDark ? 0.1 : 0.08))
   rootStyle.setProperty('--warning-dim', toRgba(resolved.warning, 0.1))
-  rootStyle.setProperty('--accent-hover', lightenColor(resolved.accent, effectiveDark ? 0.2 : 0.12))
+  rootStyle.setProperty('--accent-hover', effectiveDark ? lightenColor(resolved.accent, 0.2) : darkenColor(resolved.accent, 0.08))
   rootStyle.setProperty('--bg-subtle', effectiveDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
   rootStyle.setProperty('--bg-hover', effectiveDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)')
   rootStyle.setProperty('--bg-stripe', effectiveDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.025)')

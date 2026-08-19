@@ -2484,7 +2484,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 6px;
   padding: 10px 14px;
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
@@ -2512,7 +2512,7 @@ onMounted(async () => {
 .back-link:hover { color: var(--accent); }
 
 .section {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
@@ -2741,7 +2741,7 @@ onMounted(async () => {
 .webhook-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .wh-toggle.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .wh-del:hover { border-color: rgba(255,68,68,0.4); color: var(--danger); }
-.wh-test:hover { border-color: rgba(100,180,255,0.4); color: #60a5fa; }
+.wh-test:hover { border-color: color-mix(in srgb, var(--info) 40%, transparent); color: var(--info); }
 .webhook-add-form { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--border-subtle); }
 .wh-events { display: flex; flex-direction: column; gap: 6px; }
 .smtp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
@@ -3099,10 +3099,10 @@ onMounted(async () => {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.alert-severity-badge.severity-info { color: #60a5fa; border-color: color-mix(in srgb, #60a5fa 40%, transparent); }
+.alert-severity-badge.severity-info { color: var(--info); border-color: color-mix(in srgb, var(--info) 40%, transparent); }
 .alert-severity-badge.severity-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
 .alert-severity-badge.severity-critical { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
-.severity-btn.active.severity-info { color: #60a5fa; border-color: color-mix(in srgb, #60a5fa 50%, transparent); background: color-mix(in srgb, #60a5fa 10%, transparent); }
+.severity-btn.active.severity-info { color: var(--info); border-color: color-mix(in srgb, var(--info) 50%, transparent); background: color-mix(in srgb, var(--info) 10%, transparent); }
 .severity-btn.active.severity-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 50%, transparent); background: var(--warning-dim); }
 .severity-btn.active.severity-critical { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); background: var(--danger-dim); }
 @media (max-width: 640px) {

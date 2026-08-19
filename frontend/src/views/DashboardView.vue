@@ -94,11 +94,10 @@ import { metricsApi, type HistoryPoint } from '@/api/index'
 // ── Metrics ────────────────────────────────────────────────────────────────────
 
 const metrics = useMetricsStore()
-const { connect, sendPrefs } = useWebSocket()
+const { sendPrefs } = useWebSocket()
 const historyPoints = ref<HistoryPoint[]>([])
 
 onMounted(async () => {
-  connect()
   layoutStore.loadRemote()
   try {
     const { data } = await metricsApi.history()

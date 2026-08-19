@@ -32,6 +32,7 @@ export default {
     unknown: '未知',
     live: '实时',
     reconnecting: '重连中',
+    metricsReconnecting: '指标重连中',
     logout: '退出',
   },
   dashboard: {

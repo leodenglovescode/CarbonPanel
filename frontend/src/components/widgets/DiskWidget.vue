@@ -91,5 +91,5 @@ function pctBadge(pct: number) {
 .io-val { font-size: 14px; font-weight: 600; }
 .io-unit { font-size: 10px; color: var(--fg-dim); }
 .io-read .io-arrow, .io-read .io-val { color: var(--accent); }
-.io-write .io-arrow, .io-write .io-val { color: #60a5fa; }
+.io-write .io-arrow, .io-write .io-val { color: var(--info); }
 </style>

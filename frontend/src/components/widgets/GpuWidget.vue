@@ -39,7 +39,7 @@
       </div>
 
       <div class="sparkline-row">
-        <Sparkline :data="history" :height="28" color="#a78bfa" />
+        <Sparkline :data="history" :height="28" color="var(--purple)" />
       </div>
     </div>
   </BaseCard>
@@ -77,8 +77,8 @@ function fmt(mb: number) { return (mb / 1024).toFixed(1) + ' GB' }
 .stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); width: 26px; flex-shrink: 0; }
 .bar-track { flex: 1; height: 5px; background: var(--bg-subtle); border-radius: 2px; overflow: hidden; transition: background var(--transition); }
 .bar-fill { height: 100%; border-radius: 2px; transition: width var(--bar-transition); }
-.bar-fill.util { background: #a78bfa; }
-.bar-fill.vram { background: #60a5fa; }
+.bar-fill.util { background: var(--purple); }
+.bar-fill.vram { background: var(--info); }
 .stat-val { font-size: 10px; color: var(--fg-muted); white-space: nowrap; }
 .stat-plain { font-size: 11px; color: var(--fg); }
 

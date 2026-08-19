@@ -61,9 +61,9 @@ const alerts = useAlertsStore()
   color: var(--warning);
 }
 .toast-info {
-  background: color-mix(in srgb, #60a5fa 12%, var(--bg-card));
-  border-color: color-mix(in srgb, #60a5fa 38%, transparent);
-  color: #60a5fa;
+  background: color-mix(in srgb, var(--info) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--info) 38%, transparent);
+  color: var(--info);
 }
 .toast-danger {
   background: var(--danger-dim);

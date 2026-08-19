@@ -5,7 +5,7 @@
         <h1 class="page-title">{{ t('docker.title') }}</h1>
         <p class="page-subtitle">{{ containers.length }} container{{ containers.length !== 1 ? 's' : '' }}</p>
       </div>
-      <button class="refresh-btn" :disabled="loading" @click="load">
+      <button class="refresh-btn" :disabled="loading" @click="load(true)">
         {{ loading ? t('common.refreshing') : t('common.refresh') }}
       </button>
     </div>
@@ -27,7 +27,10 @@
           </div>
         </div>
 
-        <div v-if="c.state === 'running'" class="stats-row">
+        <div v-if="c.state === 'running' && !c.stats_available" class="stats-pending">
+          Collecting live resource stats…
+        </div>
+        <div v-else-if="c.state === 'running'" class="stats-row">
           <div class="stat-item">
             <span class="stat-lbl">{{ t('docker.cpu') }}</span>
             <span class="stat-val">{{ c.cpu_percent.toFixed(1) }}%</span>
@@ -36,7 +39,7 @@
           <div class="stat-item">
             <span class="stat-lbl">{{ t('docker.memory') }}</span>
             <span class="stat-val">{{ fmtMb(c.mem_usage_mb) }} / {{ fmtMb(c.mem_limit_mb) }}</span>
-            <div class="mini-bar"><div class="mini-fill" :style="{ width: Math.min(c.mem_percent, 100) + '%', background: '#60a5fa' }" /></div>
+            <div class="mini-bar"><div class="mini-fill" :style="{ width: Math.min(c.mem_percent, 100) + '%', background: 'var(--info)' }" /></div>
           </div>
         </div>
 
@@ -71,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { dockerApi, type ContainerInfo } from '@/api/index'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
@@ -85,17 +88,28 @@ const error = ref('')
 const busy = ref<string | null>(null)
 const actionMsg = ref<Record<string, string>>({})
 const actionErr = ref<Record<string, boolean>>({})
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
-async function load() {
-  loading.value = true
+function scheduleRefresh(delay: number) {
+  if (refreshTimer) clearTimeout(refreshTimer)
+  refreshTimer = setTimeout(() => { void load(false) }, delay)
+}
+
+async function load(showSpinner = true) {
+  if (showSpinner) loading.value = true
   error.value = ''
+  let nextRefresh = 10_000
   try {
     const { data } = await dockerApi.list()
     containers.value = data
+    if (data.some(c => c.state === 'running' && !c.stats_available)) {
+      nextRefresh = 1_500
+    }
   } catch (e: any) {
     error.value = e.response?.data?.detail || 'Failed to load containers'
   } finally {
-    loading.value = false
+    if (showSpinner) loading.value = false
+    scheduleRefresh(nextRefresh)
   }
 }
 
@@ -146,7 +160,10 @@ function fmtMb(mb: number): string {
   return mb.toFixed(0) + ' MB'
 }
 
-onMounted(load)
+onMounted(() => { void load() })
+onUnmounted(() => {
+  if (refreshTimer) clearTimeout(refreshTimer)
+})
 </script>
 
 <style scoped>
@@ -163,7 +180,7 @@ onMounted(load)
 
 .container-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; align-items: start; }
 .container-card {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
   display: flex; flex-direction: column; gap: 6px; transition: border-color var(--transition);
@@ -190,6 +207,7 @@ onMounted(load)
 .badge-other { background: var(--bg-input); color: var(--fg-muted); border: 1px solid var(--border); }
 .id-badge { font-size: 10px; color: var(--fg-dim); font-family: monospace; padding: 2px 6px; background: var(--bg-input); border-radius: 3px; }
 
+.stats-pending { font-size: 9px; color: var(--fg-dim); padding: 4px 0; }
 .stats-row { display: flex; gap: 12px; }
 .stat-item { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .stat-lbl { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
@@ -209,7 +227,7 @@ onMounted(load)
 .act-btn:disabled { opacity: 0.5; cursor: default; }
 .act-start:hover:not(:disabled) { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .act-stop:hover:not(:disabled) { border-color: rgba(255,68,68,0.4); color: var(--danger); background: var(--danger-dim); }
-.act-restart:hover:not(:disabled) { border-color: rgba(100,180,255,0.4); color: #60a5fa; background: rgba(96,165,250,0.1); }
+.act-restart:hover:not(:disabled) { border-color: rgba(100,180,255,0.4); color: var(--info); background: rgba(96,165,250,0.1); }
 .act-msg { font-size: 10px; color: var(--accent); overflow-wrap: anywhere; min-width: 0; }
 .act-err { color: var(--danger); }
 

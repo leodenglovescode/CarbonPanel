@@ -67,6 +67,13 @@
               >
                 {{ disk.smart.health }}
               </span>
+              <span
+                v-if="disk.smart?.health_percentage != null"
+                :class="['meta-badge', smartScoreClass(disk.smart.health_percentage, disk.smart.health_assessment)]"
+                title="Estimated health; expand for calculation details"
+              >
+                {{ fmtHealth(disk.smart.health_percentage) }}% health
+              </span>
               <span v-if="disk.smart?.temperature_c != null" class="meta-badge badge-temp">
                 {{ disk.smart.temperature_c }}°C
               </span>
@@ -115,60 +122,235 @@
 
             <!-- SMART info -->
             <div v-if="disk.smart" class="smart-panel">
-              <div class="panel-label">SMART</div>
+              <div class="panel-label">SMART health details</div>
               <div v-if="disk.smart.error" class="smart-error">
                 {{ disk.smart.error }}
               </div>
-              <div v-else class="smart-grid">
-                <div class="smart-item">
-                  <span class="si-label">model</span>
-                  <span class="si-val">{{ disk.smart.model || '—' }}</span>
+              <template v-else>
+                <div class="health-summary">
+                  <div :class="['health-score', smartScoreClass(disk.smart.health_percentage, disk.smart.health_assessment)]">
+                    <strong>{{ fmtHealth(disk.smart.health_percentage) }}<small v-if="disk.smart.health_percentage != null">%</small></strong>
+                    <span>health</span>
+                  </div>
+                  <div class="health-copy">
+                    <div class="health-heading">{{ disk.smart.health_assessment }}</div>
+                    <p>{{ disk.smart.health_basis }}</p>
+                    <p class="health-disclaimer">SMART percentages are estimates, not a guarantee against failure. Keep backups even when health is high.</p>
+                  </div>
                 </div>
-                <div class="smart-item">
-                  <span class="si-label">serial</span>
-                  <span class="si-val mono">{{ disk.smart.serial || '—' }}</span>
+
+                <div class="smart-section-title">Drive identity & lifetime</div>
+                <div class="smart-grid">
+                  <div class="smart-item">
+                    <span class="si-label">type</span>
+                    <span class="si-val">{{ disk.smart.drive_type.toUpperCase() }}</span>
+                  </div>
+                  <div class="smart-item">
+                    <span class="si-label">model</span>
+                    <span class="si-val">{{ disk.smart.model || '—' }}</span>
+                  </div>
+                  <div v-if="disk.smart.capacity_bytes != null" class="smart-item">
+                    <span class="si-label">capacity</span>
+                    <span class="si-val">{{ fmtBytes(disk.smart.capacity_bytes) }}</span>
+                  </div>
+                  <div class="smart-item">
+                    <span class="si-label">serial</span>
+                    <span class="si-val mono">{{ disk.smart.serial || '—' }}</span>
+                  </div>
+                  <div class="smart-item">
+                    <span class="si-label">firmware</span>
+                    <span class="si-val mono">{{ disk.smart.firmware || '—' }}</span>
+                  </div>
+                  <div class="smart-item">
+                    <span class="si-label">SMART overall status</span>
+                    <span :class="['si-val', 'si-health', smartHealthClass(disk.smart.health)]">
+                      {{ disk.smart.health }}
+                    </span>
+                  </div>
+                  <div v-if="disk.smart.drive_type !== 'nvme' && disk.smart.temperature_c != null" class="smart-item">
+                    <span class="si-label">temperature</span>
+                    <span class="si-val">{{ disk.smart.temperature_c }}°C</span>
+                  </div>
+                  <div v-if="disk.smart.power_on_hours != null" class="smart-item">
+                    <span class="si-label">power-on time</span>
+                    <span class="si-val">{{ fmtHours(disk.smart.power_on_hours) }}</span>
+                  </div>
+                  <div v-if="disk.smart.power_cycle_count != null" class="smart-item">
+                    <span class="si-label">power cycles</span>
+                    <span class="si-val">{{ disk.smart.power_cycle_count.toLocaleString() }}</span>
+                  </div>
+                  <div v-if="disk.smart.start_stop_count != null" class="smart-item">
+                    <span class="si-label">start / stop count</span>
+                    <span class="si-val">{{ disk.smart.start_stop_count.toLocaleString() }}</span>
+                  </div>
+                  <div v-if="disk.smart.load_cycle_count != null" class="smart-item">
+                    <span class="si-label">head load cycles</span>
+                    <span class="si-val">{{ disk.smart.load_cycle_count.toLocaleString() }}</span>
+                  </div>
                 </div>
-                <div class="smart-item">
-                  <span class="si-label">firmware</span>
-                  <span class="si-val mono">{{ disk.smart.firmware || '—' }}</span>
+
+                <template v-if="disk.smart.drive_type === 'hdd' || (disk.smart.drive_type !== 'nvme' && hasSectorData(disk.smart))">
+                  <div class="smart-section-title">Bad-sector indicators</div>
+                  <div class="smart-grid">
+                    <div class="smart-item">
+                      <span class="si-label">reallocated bad sectors</span>
+                      <span :class="['si-val', smartCounterClass(disk.smart, disk.smart.reallocated_sectors)]">
+                        {{ fmtCount(disk.smart.reallocated_sectors) }}
+                      </span>
+                    </div>
+                    <div class="smart-item">
+                      <span class="si-label">pending bad sectors</span>
+                      <span :class="['si-val', smartCounterClass(disk.smart, disk.smart.pending_sectors)]">
+                        {{ fmtCount(disk.smart.pending_sectors) }}
+                      </span>
+                    </div>
+                    <div class="smart-item">
+                      <span class="si-label">offline uncorrectable</span>
+                      <span :class="['si-val', smartCounterClass(disk.smart, disk.smart.uncorrectable_errors)]">
+                        {{ fmtCount(disk.smart.uncorrectable_errors) }}
+                      </span>
+                    </div>
+                    <div v-if="disk.smart.reported_uncorrectable_errors != null" class="smart-item">
+                      <span class="si-label">reported uncorrectable</span>
+                      <span :class="['si-val', smartCounterClass(disk.smart, disk.smart.reported_uncorrectable_errors)]">
+                        {{ disk.smart.reported_uncorrectable_errors.toLocaleString() }}
+                      </span>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-if="disk.smart.drive_type === 'nvme'">
+                  <div class="smart-section-title">NVMe endurance & reliability</div>
+                  <div class="smart-grid">
+                    <div class="smart-item">
+                      <span class="si-label">critical warning</span>
+                      <span :class="['si-val', (disk.smart.critical_warning ?? 0) > 0 ? 'text-danger' : '']">
+                        {{ fmtCriticalWarning(disk.smart.critical_warning) }}
+                      </span>
+                    </div>
+                    <div v-if="disk.smart.health_percentage != null" class="smart-item">
+                      <span class="si-label">estimated health</span>
+                      <span class="si-val">{{ fmtHealth(disk.smart.health_percentage) }}%</span>
+                    </div>
+                    <div v-if="disk.smart.rated_endurance_tbw != null" class="smart-item">
+                      <span class="si-label">rated endurance</span>
+                      <span class="si-val">{{ fmtTbw(disk.smart.rated_endurance_tbw) }} TBW</span>
+                    </div>
+                    <div v-if="disk.smart.data_written_bytes != null" class="smart-item">
+                      <span class="si-label">lifetime written</span>
+                      <span class="si-val">{{ fmtBytes(disk.smart.data_written_bytes) }}</span>
+                    </div>
+                    <div v-if="disk.smart.tbw_used_percent != null" class="smart-item">
+                      <span class="si-label">calculated endurance used</span>
+                      <span class="si-val">{{ fmtPercent(disk.smart.tbw_used_percent, 2) }}%</span>
+                    </div>
+                    <div v-if="disk.smart.wear_percentage_used != null" class="smart-item">
+                      <span class="si-label">NVMe reported used</span>
+                      <span class="si-val">{{ disk.smart.wear_percentage_used }}%</span>
+                    </div>
+                    <div v-if="disk.smart.available_spare_percent != null" class="smart-item">
+                      <span class="si-label">available spare</span>
+                      <span class="si-val">{{ disk.smart.available_spare_percent }}%</span>
+                    </div>
+                    <div v-if="disk.smart.available_spare_threshold != null" class="smart-item">
+                      <span class="si-label">spare threshold</span>
+                      <span class="si-val">{{ disk.smart.available_spare_threshold }}%</span>
+                    </div>
+                    <div v-if="disk.smart.media_errors != null" class="smart-item">
+                      <span class="si-label">media & data integrity errors</span>
+                      <span :class="['si-val', smartCounterClass(disk.smart, disk.smart.media_errors)]">
+                        {{ disk.smart.media_errors.toLocaleString() }}
+                      </span>
+                    </div>
+                    <div v-if="disk.smart.error_log_entries != null" class="smart-item">
+                      <span class="si-label">error information log entries</span>
+                      <span :class="['si-val', disk.smart.error_log_entries > 0 ? 'text-warning' : '']">
+                        {{ disk.smart.error_log_entries.toLocaleString() }}
+                      </span>
+                    </div>
+                    <div v-if="disk.smart.unsafe_shutdowns != null" class="smart-item">
+                      <span class="si-label">unsafe shutdowns</span>
+                      <span class="si-val">{{ disk.smart.unsafe_shutdowns.toLocaleString() }}</span>
+                    </div>
+                    <div v-if="disk.smart.data_read_bytes != null" class="smart-item">
+                      <span class="si-label">lifetime reads</span>
+                      <span class="si-val">{{ fmtBytes(disk.smart.data_read_bytes) }}</span>
+                    </div>
+                    <div v-if="disk.smart.temperature_c != null" class="smart-item">
+                      <span class="si-label">composite temperature</span>
+                      <span class="si-val">{{ disk.smart.temperature_c }}°C</span>
+                    </div>
+                    <div
+                      v-if="disk.smart.temperature_sensors_c?.length && disk.smart.highest_temperature_c != null"
+                      class="smart-item"
+                    >
+                      <span class="si-label">highest sensor</span>
+                      <span class="si-val">{{ disk.smart.highest_temperature_c }}°C</span>
+                    </div>
+                    <template
+                      v-for="(temperature, index) in disk.smart.temperature_sensors_c || []"
+                      :key="'nvme-temperature-' + index"
+                    >
+                      <div v-if="temperature != null" class="smart-item">
+                        <span class="si-label">temperature sensor {{ index + 1 }}</span>
+                        <span class="si-val">{{ temperature }}°C</span>
+                      </div>
+                    </template>
+                  </div>
+                  <p v-if="disk.smart.error_log_context" class="smart-context">
+                    {{ disk.smart.error_log_context }}
+                  </p>
+                </template>
+
+                <template v-else-if="disk.smart.drive_type === 'ssd'">
+                  <div class="smart-section-title">SSD endurance</div>
+                  <div class="smart-grid">
+                    <div v-if="disk.smart.health_percentage != null" class="smart-item">
+                      <span class="si-label">estimated health</span>
+                      <span class="si-val">{{ fmtHealth(disk.smart.health_percentage) }}%</span>
+                    </div>
+                    <div v-if="disk.smart.wear_percentage_used != null" class="smart-item">
+                      <span class="si-label">device-reported endurance used</span>
+                      <span class="si-val">{{ disk.smart.wear_percentage_used }}%</span>
+                    </div>
+                    <div v-if="disk.smart.data_read_bytes != null" class="smart-item">
+                      <span class="si-label">lifetime reads</span>
+                      <span class="si-val">{{ fmtBytes(disk.smart.data_read_bytes) }}</span>
+                    </div>
+                    <div v-if="disk.smart.data_written_bytes != null" class="smart-item">
+                      <span class="si-label">lifetime writes</span>
+                      <span class="si-val">{{ fmtBytes(disk.smart.data_written_bytes) }}</span>
+                    </div>
+                  </div>
+                </template>
+
+                <div
+                  v-if="disk.smart.command_timeouts != null || disk.smart.crc_errors != null"
+                  class="smart-section-title"
+                >Interface reliability</div>
+                <div
+                  v-if="disk.smart.command_timeouts != null || disk.smart.crc_errors != null"
+                  class="smart-grid"
+                >
+                  <div v-if="disk.smart.command_timeouts != null" class="smart-item">
+                    <span class="si-label">command timeouts</span>
+                    <span :class="['si-val', disk.smart.command_timeouts > 0 ? 'text-warning' : '']">
+                      {{ disk.smart.command_timeouts.toLocaleString() }}
+                    </span>
+                  </div>
+                  <div v-if="disk.smart.crc_errors != null" class="smart-item">
+                    <span class="si-label">interface CRC errors</span>
+                    <span :class="['si-val', disk.smart.crc_errors > 0 ? 'text-warning' : '']">
+                      {{ disk.smart.crc_errors.toLocaleString() }}
+                    </span>
+                  </div>
                 </div>
-                <div class="smart-item">
-                  <span class="si-label">health</span>
-                  <span :class="['si-val', 'si-health', smartHealthClass(disk.smart.health)]">
-                    {{ disk.smart.health }}
-                  </span>
-                </div>
-                <div v-if="disk.smart.temperature_c != null" class="smart-item">
-                  <span class="si-label">temperature</span>
-                  <span class="si-val">{{ disk.smart.temperature_c }}°C</span>
-                </div>
-                <div v-if="disk.smart.power_on_hours != null" class="smart-item">
-                  <span class="si-label">power-on</span>
-                  <span class="si-val">{{ fmtHours(disk.smart.power_on_hours) }}</span>
-                </div>
-                <div v-if="disk.smart.reallocated_sectors != null" class="smart-item">
-                  <span class="si-label">bad sectors</span>
-                  <span :class="['si-val', disk.smart.reallocated_sectors > 0 ? 'text-danger' : '']">
-                    {{ disk.smart.reallocated_sectors }}
-                  </span>
-                </div>
-                <div v-if="disk.smart.pending_sectors != null" class="smart-item">
-                  <span class="si-label">pending</span>
-                  <span :class="['si-val', disk.smart.pending_sectors > 0 ? 'text-warning' : '']">
-                    {{ disk.smart.pending_sectors }}
-                  </span>
-                </div>
-                <div v-if="disk.smart.uncorrectable_errors != null" class="smart-item">
-                  <span class="si-label">uncorrectable</span>
-                  <span :class="['si-val', disk.smart.uncorrectable_errors > 0 ? 'text-danger' : '']">
-                    {{ disk.smart.uncorrectable_errors }}
-                  </span>
-                </div>
-                <div class="smart-item">
-                  <span class="si-label">Last scan</span>
-                  <span class="si-val si-dim">{{ fmtChecked(disk.smart.last_checked) }}</span>
-                </div>
-              </div>
+
+                <ul v-if="disk.smart.health_notes?.length" class="health-notes">
+                  <li v-for="note in disk.smart.health_notes" :key="note">{{ note }}</li>
+                </ul>
+                <div class="last-scan">Last SMART scan: {{ fmtChecked(disk.smart.last_checked) }}</div>
+              </template>
             </div>
             <div v-else class="smart-panel smart-unavailable">
               <div class="panel-label">SMART</div>
@@ -307,6 +489,64 @@ function smartHealthClass(health: string) {
   return 'badge-health-unknown'
 }
 
+function smartScoreClass(score: number | null, assessment?: string) {
+  if (score == null) return 'score-unknown'
+  if (assessment === 'Critical' || (!assessment && score < 30)) return 'score-danger'
+  if (
+    assessment === 'Warning'
+    || assessment === 'Attention'
+    || (!assessment && score < 80)
+  ) return 'score-warning'
+  return 'score-ok'
+}
+
+function smartCounterClass(smart: NonNullable<DiskInfo['smart']>, value: number | null) {
+  if (!value || value <= 0) return ''
+  return smart.health_assessment === 'Critical' ? 'text-danger' : 'text-warning'
+}
+
+function hasSectorData(smart: DiskInfo['smart']) {
+  return !!smart && (
+    smart.reallocated_sectors != null
+    || smart.pending_sectors != null
+    || smart.uncorrectable_errors != null
+    || smart.reported_uncorrectable_errors != null
+  )
+}
+
+function fmtHealth(value: number | null) {
+  return value == null ? '—' : value.toFixed(1)
+}
+
+function fmtPercent(value: number, decimals: number) {
+  return value.toFixed(decimals)
+}
+
+function fmtTbw(value: number) {
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
+}
+
+function fmtCriticalWarning(value: number | null) {
+  if (!value) return 'None'
+  return '0x' + value.toString(16).padStart(2, '0').toUpperCase()
+}
+
+function fmtCount(value: number | null) {
+  return value == null ? 'Not reported' : value.toLocaleString()
+}
+
+function fmtBytes(bytes: number) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000
+    unit++
+  }
+  const decimals = unit === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2
+  return value.toFixed(decimals) + ' ' + units[unit]
+}
+
 function fmtHours(h: number) {
   if (h < 24) return `${h}h`
   const days = Math.floor(h / 24)
@@ -422,7 +662,7 @@ onMounted(load)
 .disk-list { display: flex; flex-direction: column; gap: 8px; }
 
 .disk-card {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
@@ -490,8 +730,8 @@ onMounted(load)
 .io-row { display: flex; gap: 16px; }
 .io-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--fg-muted); }
 .io-read .io-arrow, .io-read { color: var(--accent); }
-.io-write .io-arrow { color: #60a5fa; }
-.io-write { color: #60a5fa; }
+.io-write .io-arrow { color: var(--info); }
+.io-write { color: var(--info); }
 
 .expand-arrow {
   font-size: 18px; color: var(--fg-dim); transition: transform var(--transition);
@@ -502,7 +742,7 @@ onMounted(load)
 /* Expanded panel sections */
 .disk-expanded {
   border-top: 1px solid var(--border-subtle);
-  background: var(--bg-subtle);
+  background: var(--surface-panel);
   display: flex; flex-direction: column; gap: 0;
 }
 
@@ -518,6 +758,46 @@ onMounted(load)
 }
 .smart-unavailable .smart-na { font-size: 11px; color: var(--fg-dim); }
 .smart-error { font-size: 11px; color: var(--danger); }
+.smart-context {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--warning);
+  background: var(--warning-dim);
+  color: var(--fg-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.health-summary {
+  display: flex; align-items: center; gap: 14px; padding: 10px 12px; margin-bottom: 14px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.health-score {
+  width: 94px; min-width: 94px; height: 70px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; border: 1px solid currentColor; border-radius: var(--radius);
+}
+.health-score strong { font-size: 24px; line-height: 1; }
+.health-score strong small { font-size: 12px; }
+.health-score span { margin-top: 5px; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.health-copy { min-width: 0; }
+.health-heading { font-size: 13px; font-weight: 700; color: var(--fg); margin-bottom: 3px; }
+.health-copy p { font-size: 10px; line-height: 1.45; color: var(--fg-muted); }
+.health-copy .health-disclaimer { color: var(--fg-dim); margin-top: 4px; }
+.score-ok { color: var(--accent); border-color: var(--accent-border); background: var(--accent-dim); }
+.score-warning { color: var(--warning); border-color: rgba(255,170,0,0.35); background: var(--warning-dim); }
+.score-danger { color: var(--danger); border-color: rgba(255,68,68,0.35); background: var(--danger-dim); }
+.score-unknown { color: var(--fg-dim); border-color: var(--border); background: var(--bg-badge); }
+.smart-section-title {
+  margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-subtle);
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--fg-muted);
+}
+.health-summary + .smart-section-title { margin-top: 0; }
+.health-notes {
+  margin: 14px 0 0; padding: 8px 10px 8px 26px; border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); background: var(--bg-card);
+}
+.health-notes li { font-size: 10px; line-height: 1.55; color: var(--fg-muted); }
+.last-scan { margin-top: 9px; font-size: 9px; color: var(--fg-dim); }
 
 .smart-grid {
   display: grid;
@@ -585,7 +865,9 @@ onMounted(load)
   .disk-left { min-width: unset; width: 100%; }
   .disk-right { width: 100%; }
   .expand-arrow { align-self: flex-start; margin-left: auto; }
-  .smart-grid { grid-template-columns: repeat(2, 1fr); }
+  .health-summary { align-items: flex-start; }
+  .health-score { width: 82px; min-width: 82px; }
+  .smart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 </style>

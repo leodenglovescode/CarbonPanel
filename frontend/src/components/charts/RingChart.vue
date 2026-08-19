@@ -6,10 +6,20 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useThemeStore } from '@/stores/theme'
 import { Doughnut } from 'vue-chartjs'
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js'
 
 ChartJS.register(ArcElement, Tooltip)
+
+const theme = useThemeStore()
+
+function resolveColor(value: string): string {
+  void theme.resolvedStyleSettings
+  const match = value.match(/^var\((--[^)]+)\)$/)
+  if (!match) return value
+  return getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim() || value
+}
 
 const props = withDefaults(defineProps<{
   value: number
@@ -18,7 +28,7 @@ const props = withDefaults(defineProps<{
   label?: string
 }>(), {
   size: 72,
-  color: '#00ff88',
+  color: 'var(--accent)',
   label: '',
 })
 
@@ -31,9 +41,9 @@ function getCssVar(name: string): string {
 const chartData = computed(() => ({
   datasets: [{
     data: [props.value, 100 - props.value],
-    backgroundColor: [props.color, getCssVar('--bg-subtle') || 'rgba(128,128,128,0.12)'],
+    backgroundColor: [resolveColor(props.color), getCssVar('--bg-subtle') || 'rgba(128,128,128,0.12)'],
     borderWidth: 0,
-    hoverBackgroundColor: [props.color, getCssVar('--bg-subtle') || 'rgba(128,128,128,0.12)'],
+    hoverBackgroundColor: [resolveColor(props.color), getCssVar('--bg-subtle') || 'rgba(128,128,128,0.12)'],
   }],
 }))
 

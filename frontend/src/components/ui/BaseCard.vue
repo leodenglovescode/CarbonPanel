@@ -17,7 +17,7 @@ defineProps<{ title?: string }>()
 
 <style scoped>
 .card {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);

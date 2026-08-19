@@ -54,8 +54,8 @@ const activeTab = ref<Tab>('CPU')
 
 function colorFor(tab: Tab) {
   if (tab === 'CPU') return 'var(--accent)'
-  if (tab === 'MEM') return '#60a5fa'
-  return '#a78bfa'
+  if (tab === 'MEM') return 'var(--info)'
+  return 'var(--purple)'
 }
 const lineColor = computed(() => colorFor(activeTab.value))
 

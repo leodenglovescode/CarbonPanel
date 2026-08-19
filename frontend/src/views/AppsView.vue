@@ -340,7 +340,7 @@ onMounted(load)
 }
 
 .app-row {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm); overflow: hidden;
@@ -413,7 +413,7 @@ onMounted(load)
 /* Detail panel */
 .row-detail {
   border-top: 1px solid var(--border-subtle); padding: 10px 12px;
-  background: var(--bg-subtle); display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface-panel); display: flex; flex-direction: column; gap: 8px;
 }
 .detail-grid { display: flex; flex-direction: column; gap: 6px; }
 .detail-item { display: flex; gap: 12px; align-items: baseline; }

@@ -6,8 +6,8 @@
   --border: #222222;
   --border-subtle: #1a1a1a;
   --fg: #e0e0e0;
-  --fg-muted: #9a9a9a;
-  --fg-dim: #767676;
+  --fg-muted: #a6a6a6;
+  --fg-dim: #8a8a8a;
   --accent: #00ff88;
   --accent-dim: rgba(0, 255, 136, 0.1);
   --accent-border: rgba(0, 255, 136, 0.2);
@@ -15,7 +15,10 @@
   --danger-dim: rgba(255, 68, 68, 0.1);
   --warning: #ffaa00;
   --warning-dim: rgba(255, 170, 0, 0.1);
-  --info: #4488ff;
+  --info: #60a5fa;
+  --teal: #2dd4bf;
+  --purple: #a78bfa;
+  --accent-contrast: #000000;
   --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-size: 14px;
   --radius: 6px;
@@ -32,6 +35,9 @@
   --bg-stripe:  rgba(255,255,255,0.015);
   --border-row: rgba(255,255,255,0.03);
   --bg-badge:   rgba(255,255,255,0.05);
+  --surface-glass: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  --surface-page-glass: color-mix(in srgb, var(--bg) 94%, transparent);
+  --surface-panel: color-mix(in srgb, var(--bg-card) 98%, transparent);
   --accent-hover: #33ffaa;
   /* scrim tint for custom app/login backgrounds — dark theme text is light-on-dark,
      so bright images/gradients get darkened toward this to stay readable */
@@ -53,24 +59,27 @@
   --border-subtle: #e5e7eb;
   --fg: #111827;
   --fg-muted: #4b5563;
-  --fg-dim: #6b7280;
-  --accent: #00954a;
-  --accent-dim: rgba(0, 149, 74, 0.1);
-  --accent-border: rgba(0, 149, 74, 0.3);
+  --fg-dim: #5f6875;
+  --accent: #007a3d;
+  --accent-dim: rgba(0, 122, 61, 0.1);
+  --accent-border: rgba(0, 122, 61, 0.3);
   --danger: #cc2020;
   --danger-dim: rgba(204, 32, 32, 0.08);
-  --warning: #b45309;
-  --warning-dim: rgba(180, 83, 9, 0.1);
+  --warning: #a34808;
+  --warning-dim: rgba(163, 72, 8, 0.1);
   --info: #1d56cc;
+  --teal: #0f766e;
+  --purple: #6d28d9;
+  --accent-contrast: #ffffff;
   --shadow-card: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,149,74,0.18);
+  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,122,61,0.18);
   /* override for light backgrounds */
   --bg-subtle:  rgba(0,0,0,0.06);
   --bg-hover:   rgba(0,0,0,0.05);
   --bg-stripe:  rgba(0,0,0,0.025);
   --border-row: rgba(0,0,0,0.06);
   --bg-badge:   rgba(0,0,0,0.06);
-  --accent-hover: #00cc77;
+  --accent-hover: #006f37;
   /* light theme text is dark-on-light, so dark images/gradients get lightened instead */
   --bg-scrim-rgb: 255, 255, 255;
 }

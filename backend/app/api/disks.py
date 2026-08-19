@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import time
+from dataclasses import asdict
 from itertools import groupby
 
 import psutil
@@ -39,15 +40,44 @@ _VIRTUAL_FSTYPES = {
 
 
 class SmartResult(BaseModel):
+    device: str
     model: str
     serial: str
     firmware: str
+    drive_type: str
+    capacity_bytes: int | None
     health: str
+    health_percentage: float | None
+    health_assessment: str
+    health_basis: str
+    health_notes: list[str] | None
     temperature_c: int | None
+    temperature_sensors_c: list[int | None] | None
+    highest_temperature_c: int | None
     power_on_hours: int | None
+    power_cycle_count: int | None
+    start_stop_count: int | None
+    load_cycle_count: int | None
     reallocated_sectors: int | None
     pending_sectors: int | None
     uncorrectable_errors: int | None
+    reported_uncorrectable_errors: int | None
+    command_timeouts: int | None
+    crc_errors: int | None
+    wear_percentage_used: int | None
+    rated_endurance_tbw: float | None
+    lifetime_written_tb: float | None
+    tbw_used_percent: float | None
+    effective_wear_percent: float | None
+    critical_warning: int | None
+    available_spare_percent: int | None
+    available_spare_threshold: int | None
+    unsafe_shutdowns: int | None
+    media_errors: int | None
+    error_log_entries: int | None
+    error_log_context: str | None
+    data_read_bytes: int | None
+    data_written_bytes: int | None
     last_checked: str
     error: str | None
 
@@ -129,23 +159,13 @@ def _is_removable(device: str) -> bool:
         return False
 
 
+def _smart_model(result: smart_svc.SmartResult) -> SmartResult:
+    return SmartResult.model_validate(asdict(result))
+
+
 def _smart_response(phys: str) -> SmartResult | None:
-    r = smart_svc.get_cache().get(phys)
-    if r is None:
-        return None
-    return SmartResult(
-        model=r.model,
-        serial=r.serial,
-        firmware=r.firmware,
-        health=r.health,
-        temperature_c=r.temperature_c,
-        power_on_hours=r.power_on_hours,
-        reallocated_sectors=r.reallocated_sectors,
-        pending_sectors=r.pending_sectors,
-        uncorrectable_errors=r.uncorrectable_errors,
-        last_checked=r.last_checked,
-        error=r.error,
-    )
+    result = smart_svc.get_cache().get(phys)
+    return _smart_model(result) if result is not None else None
 
 
 def _primary_mount(mounts: list[str]) -> str:
@@ -228,16 +248,7 @@ async def refresh_smart(_: User = Depends(get_current_user)):
         )
     _last_smart_refresh_ts = now
     await smart_svc.scan_all()
-    return [
-        SmartResult(
-            model=r.model, serial=r.serial, firmware=r.firmware,
-            health=r.health, temperature_c=r.temperature_c,
-            power_on_hours=r.power_on_hours, reallocated_sectors=r.reallocated_sectors,
-            pending_sectors=r.pending_sectors, uncorrectable_errors=r.uncorrectable_errors,
-            last_checked=r.last_checked, error=r.error,
-        )
-        for r in smart_svc.get_cache().values()
-    ]
+    return [_smart_model(result) for result in smart_svc.get_cache().values()]
 
 
 @router.post("/unmount", response_model=ActionResponse)
