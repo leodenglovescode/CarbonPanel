@@ -414,11 +414,11 @@ onMounted(loadAll)
 .managed-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .managed-title { font-size: 13px; font-weight: 600; color: var(--fg); }
 .add-btn { background: var(--accent-dim); border: 1px solid var(--accent-border); color: var(--accent); font-family: var(--font); font-size: 11px; padding: 5px 12px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); flex-shrink: 0; }
-.add-btn:hover { background: var(--accent); color: #000; }
+.add-btn:hover { background: var(--accent); color: var(--accent-contrast); }
 
 .managed-list { display: flex; flex-direction: column; gap: 8px; }
 .managed-card {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -434,7 +434,7 @@ onMounted(loadAll)
 .managed-btn:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
 .managed-btn-danger:hover { border-color: rgba(255,68,68,0.4); color: var(--danger); background: var(--danger-dim); }
 
-.table-wrap { overflow-x: auto; background: color-mix(in srgb, var(--bg-card) 72%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap { overflow-x: auto; background: var(--surface-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--border); border-radius: var(--radius); }
 table { width: 100%; border-collapse: collapse; }
 thead th { font-size: 9px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-dim); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-subtle); }
 tbody tr:nth-child(even) { background: var(--bg-stripe); }
@@ -474,7 +474,7 @@ tbody tr:last-child td { border-bottom: none; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .btn-ghost { background: none; border: 1px solid var(--border); color: var(--fg-muted); font-family: var(--font); font-size: 11px; padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); }
 .btn-ghost:hover { border-color: var(--fg-dim); color: var(--fg); }
-.btn-primary { background: var(--accent); border: 1px solid var(--accent); color: #000; font-family: var(--font); font-size: 11px; font-weight: 600; padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); }
+.btn-primary { background: var(--accent); border: 1px solid var(--accent); color: var(--accent-contrast); font-family: var(--font); font-size: 11px; font-weight: 600; padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 .btn-primary:disabled { opacity: 0.5; cursor: default; }
 

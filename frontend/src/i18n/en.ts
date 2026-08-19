@@ -32,6 +32,7 @@ export default {
     unknown: 'Unknown',
     live: 'Live',
     reconnecting: 'Reconnecting',
+    metricsReconnecting: 'Metrics reconnecting',
     logout: 'Logout',
   },
   dashboard: {

@@ -34,7 +34,7 @@ defineProps<{ variant?: 'primary' | 'ghost' | 'danger'; disabled?: boolean }>()
 
 .btn-primary {
   background: var(--accent);
-  color: #000;
+  color: var(--accent-contrast);
   border-color: var(--accent);
 }
 .btn-primary:hover:not(:disabled) {

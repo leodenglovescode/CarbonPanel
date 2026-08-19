@@ -25,12 +25,14 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
 import { useMetricsStore } from '@/stores/metrics'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const metrics = useMetricsStore()
+const { connect, disconnect } = useWebSocket()
 const sidebarOpen = ref(false)
 let previousOverflow = ''
 
@@ -50,7 +52,9 @@ watch(sidebarOpen, (open) => {
   }
 })
 
+onMounted(connect)
 onUnmounted(() => {
+  disconnect()
   document.body.style.overflow = previousOverflow
 })
 </script>

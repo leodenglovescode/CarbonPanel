@@ -24,8 +24,8 @@
         </div>
 
         <div class="sparklines">
-          <Sparkline :data="rxHistory[iface.interface] || []" :height="22" color="#00ff88" :maxY="sparkMax(iface.interface, 'rx')" />
-          <Sparkline :data="txHistory[iface.interface] || []" :height="22" color="#60a5fa" :maxY="sparkMax(iface.interface, 'tx')" />
+          <Sparkline :data="rxHistory[iface.interface] || []" :height="22" color="var(--accent)" :maxY="sparkMax(iface.interface, 'rx')" />
+          <Sparkline :data="txHistory[iface.interface] || []" :height="22" color="var(--info)" :maxY="sparkMax(iface.interface, 'tx')" />
         </div>
 
         <div class="totals">
@@ -95,7 +95,7 @@ function sparkMax(iface: string, dir: 'rx' | 'tx') {
 .rate-val { font-size: 13px; font-weight: 600; }
 .rate-unit { font-size: 9px; color: var(--fg-dim); }
 .rx .arrow, .rx .rate-val { color: var(--accent); }
-.tx .arrow, .tx .rate-val { color: #60a5fa; }
+.tx .arrow, .tx .rate-val { color: var(--info); }
 
 .sparklines { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
 

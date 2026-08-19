@@ -20,7 +20,7 @@
     </div>
 
     <div class="header-right">
-      <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Connected' : 'Reconnecting…'" />
+      <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Live metrics connected' : 'Live metrics reconnecting; HTTP pages may still be available'" />
     </div>
   </header>
 </template>
@@ -55,7 +55,7 @@ function formatUptime(seconds: number): string {
   padding: 0 16px;
   height: 42px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   position: sticky;

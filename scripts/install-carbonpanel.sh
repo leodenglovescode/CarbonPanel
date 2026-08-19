@@ -31,7 +31,7 @@ SUDOERS_FILE="/etc/sudoers.d/carbonpanel-updater"
 # Read-only listing + start/stop/restart of an already-existing container only —
 # deliberately no `docker run` / bind mounts, which is what docker-group
 # membership would otherwise hand out for free (root-equivalent).
-DOCKER_SUDOERS_CMDS="/usr/bin/docker ps -a --format {{json .}}, /usr/bin/docker stats --no-stream --format {{json .}} *, /usr/bin/docker start *, /usr/bin/docker stop *, /usr/bin/docker restart *"
+DOCKER_SUDOERS_CMDS="/usr/bin/docker ps -a --format {{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.State}}|{{.Ports}}|{{.CreatedAt}}, /usr/bin/docker stats --no-stream --format {{json .}} *, /usr/bin/docker start *, /usr/bin/docker stop *, /usr/bin/docker restart *"
 
 COMMAND="${1:-}"
 shift || true

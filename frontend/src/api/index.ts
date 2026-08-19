@@ -176,15 +176,44 @@ export const systemApi = {
 }
 
 export interface SmartResult {
+  device: string
   model: string
   serial: string
   firmware: string
-  health: string        // "PASSED" | "FAILED" | "UNKNOWN"
+  drive_type: 'hdd' | 'ssd' | 'nvme' | 'unknown'
+  capacity_bytes: number | null
+  health: 'PASSED' | 'FAILED' | 'UNKNOWN'
+  health_percentage: number | null
+  health_assessment: string
+  health_basis: string
+  health_notes: string[] | null
   temperature_c: number | null
+  temperature_sensors_c: (number | null)[] | null
+  highest_temperature_c: number | null
   power_on_hours: number | null
+  power_cycle_count: number | null
+  start_stop_count: number | null
+  load_cycle_count: number | null
   reallocated_sectors: number | null
   pending_sectors: number | null
   uncorrectable_errors: number | null
+  reported_uncorrectable_errors: number | null
+  command_timeouts: number | null
+  crc_errors: number | null
+  wear_percentage_used: number | null
+  rated_endurance_tbw: number | null
+  lifetime_written_tb: number | null
+  tbw_used_percent: number | null
+  effective_wear_percent: number | null
+  critical_warning: number | null
+  available_spare_percent: number | null
+  available_spare_threshold: number | null
+  unsafe_shutdowns: number | null
+  media_errors: number | null
+  error_log_entries: number | null
+  error_log_context: string | null
+  data_read_bytes: number | null
+  data_written_bytes: number | null
   last_checked: string
   error: string | null
 }
@@ -254,6 +283,7 @@ export interface ContainerInfo {
   mem_usage_mb: number
   mem_limit_mb: number
   mem_percent: number
+  stats_available: boolean
 }
 
 export type NotificationKind = 'webhook' | 'ntfy' | 'email'

@@ -73,11 +73,11 @@ function fmtTotal(mb: number) {
 .bw-bar-item { display: flex; align-items: center; gap: 8px; }
 .bw-lbl { font-size: 9px; font-weight: 600; width: 26px; flex-shrink: 0; }
 .bw-lbl.rx { color: var(--accent); }
-.bw-lbl.tx { color: #60a5fa; }
+.bw-lbl.tx { color: var(--info); }
 .bar-track { flex: 1; height: 6px; background: var(--bg-subtle); border-radius: 3px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
 .rx-fill { background: var(--accent); }
-.tx-fill { background: #60a5fa; }
+.tx-fill { background: var(--info); }
 .bw-val { font-size: 10px; color: var(--fg-muted); width: 64px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 @container (max-width: 180px) { .bw-val { display: none; } }
 @container (max-width: 130px) { .bw-bars { display: none; } }

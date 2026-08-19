@@ -83,7 +83,7 @@ function statusClass(s?: string) {
 
 <style scoped>
 .site-card {
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border);
@@ -125,9 +125,9 @@ function statusClass(s?: string) {
   border-radius: 3px;
   flex-shrink: 0;
 }
-.type-nginx     { background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
-.type-python    { background: rgba(250,204,21,0.12); color: #facc15; border: 1px solid rgba(250,204,21,0.3); }
-.type-wordpress { background: rgba(45,212,191,0.12); color: #2dd4bf; border: 1px solid rgba(45,212,191,0.3); }
+.type-nginx     { background: color-mix(in srgb, var(--info) 12%, transparent); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 35%, transparent); }
+.type-python    { background: var(--warning-dim); color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.type-wordpress { background: color-mix(in srgb, var(--teal) 12%, transparent); color: var(--teal); border: 1px solid color-mix(in srgb, var(--teal) 35%, transparent); }
 .type-nodejs    { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
 
 .status-row { display: flex; align-items: center; gap: 5px; }

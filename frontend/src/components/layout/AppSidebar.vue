@@ -31,8 +31,8 @@
     <div class="sidebar-bottom">
       <div v-if="system" class="hostname">{{ system.hostname }}</div>
       <div class="status-row">
-        <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Live' : 'Reconnecting...'" />
-        <span class="ws-label">{{ connected ? t('common.live') : t('common.reconnecting') }}</span>
+        <span class="ws-dot" :class="connected ? 'ws-on' : 'ws-off'" :title="connected ? 'Live metrics connected' : 'Live metrics reconnecting; HTTP pages may still be available'" />
+        <span class="ws-label">{{ connected ? t('common.live') : t('common.metricsReconnecting') }}</span>
       </div>
       <button class="logout-btn" @click="handleLogout">{{ t('common.logout') }}</button>
     </div>
@@ -155,7 +155,7 @@ async function handleLogout() {
 .sidebar {
   width: 178px;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-right: 1px solid var(--border);

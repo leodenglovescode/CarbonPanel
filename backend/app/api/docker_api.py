@@ -17,6 +17,17 @@ _PERMISSION_HINT = (
     "restart. Run: sudo carbonpanel fix"
 )
 
+# Serializing Docker's entire template object with {{json .}} looks tidy, but
+# it makes the CLI resolve every available field. On hosts with many containers
+# that turns an otherwise ~30 ms docker ps into a multi-second call. These are
+# the only fields the page consumes. Docker-generated values cannot contain a
+# pipe in these fields, so the delimiter is safe here.
+_PS_FORMAT = (
+    "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|"
+    "{{.State}}|{{.Ports}}|{{.CreatedAt}}"
+)
+_PS_FIELDS = ("ID", "Names", "Image", "Status", "State", "Ports", "CreatedAt")
+
 _STATS_CACHE: dict[str, dict] = {}
 _STATS_CACHE_TS: float = 0.0
 _STATS_REFRESH_INTERVAL = 10.0
@@ -93,6 +104,7 @@ class ContainerInfo(BaseModel):
     mem_usage_mb: float = 0.0
     mem_limit_mb: float = 0.0
     mem_percent: float = 0.0
+    stats_available: bool = False
 
 
 class ActionResponse(BaseModel):
@@ -100,10 +112,19 @@ class ActionResponse(BaseModel):
     output: str = ""
 
 
+def _parse_ps_line(line: str) -> dict[str, str] | None:
+    values = line.split("|", len(_PS_FIELDS) - 1)
+    if len(values) != len(_PS_FIELDS):
+        return None
+    return dict(zip(_PS_FIELDS, values, strict=True))
+
+
 async def _refresh_stats(running_ids: list[str]) -> None:
     global _STATS_CACHE, _STATS_CACHE_TS
     async with _stats_lock:
         if not running_ids:
+            _STATS_CACHE = {}
+            _STATS_CACHE_TS = time.monotonic()
             return
         src, stats_out = await _run(
             ["docker", "stats", "--no-stream", "--format", "{{json .}}", *running_ids]
@@ -125,7 +146,7 @@ async def _refresh_stats(running_ids: list[str]) -> None:
         _STATS_CACHE_TS = time.monotonic()
 
 
-async def _ensure_stats_fresh(running_ids: list[str]) -> None:
+def _ensure_stats_fresh(running_ids: list[str]) -> None:
     global _stats_task
     age = time.monotonic() - _STATS_CACHE_TS
     if age > _STATS_REFRESH_INTERVAL:
@@ -135,7 +156,7 @@ async def _ensure_stats_fresh(running_ids: list[str]) -> None:
 
 @router.get("/containers", response_model=list[ContainerInfo])
 async def list_containers(_: User = Depends(get_current_user)):
-    rc, out = await _run(["docker", "ps", "-a", "--format", "{{json .}}"])
+    rc, out = await _run(["docker", "ps", "-a", "--format", _PS_FORMAT])
     if rc != 0:
         raise HTTPException(status_code=503, detail=out or "Docker unavailable")
 
@@ -144,18 +165,17 @@ async def list_containers(_: User = Depends(get_current_user)):
         line = line.strip()
         if not line:
             continue
-        try:
-            containers_raw.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+        container = _parse_ps_line(line)
+        if container is not None:
+            containers_raw.append(container)
 
     running_ids = [d["ID"] for d in containers_raw if d.get("State") == "running"]
 
-    # On first load, block briefly to get initial stats; after that serve from cache.
-    if not _STATS_CACHE and running_ids:
-        await _refresh_stats(running_ids)
-    else:
-        asyncio.create_task(_ensure_stats_fresh(running_ids))
+    # Container inventory is fast, while docker stats --no-stream waits for a
+    # resource-usage sample and can take several seconds. Never put that sample
+    # on the response path: return inventory immediately and refresh stats in
+    # the background for the page's next silent poll.
+    _ensure_stats_fresh(running_ids)
 
     result = []
     for d in containers_raw:
@@ -188,6 +208,7 @@ async def list_containers(_: User = Depends(get_current_user)):
             mem_usage_mb=mem_mb,
             mem_limit_mb=mem_limit,
             mem_percent=mem_pct,
+            stats_available=bool(s),
         ))
 
     return result
