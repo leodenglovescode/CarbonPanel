@@ -9,7 +9,8 @@
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 
-A lightweight self-hosted server monitoring panel — live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, and JWT + TOTP authentication.
+A lightweight self-hosted server monitoring panel, No bs, No paywall.
+Live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, and JWT + TOTP authentication.
 
 <img width="1279" height="634" alt="Screenshot Of CarbonPanel" src="https://github.com/user-attachments/assets/b37ce570-fb52-4935-8827-30ce5b3d1d16" />
 
@@ -123,4 +124,4 @@ Other commands: `make backend`, `make frontend`, `make lint`
 
 ---
 
-Idea and logic by @leodenglovescode, code assisted by Claude Code.
+Idea and logic by @leodenglovescode, code assisted by AI
