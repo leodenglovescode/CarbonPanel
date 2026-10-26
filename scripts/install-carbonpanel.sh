@@ -28,10 +28,8 @@ UPDATE_CHECK_SERVICE="carbonpanel-update-check.service"
 UPDATE_CHECK_TIMER="carbonpanel-update-check.timer"
 UPDATE_SERVICE="carbonpanel-update.service"
 SUDOERS_FILE="/etc/sudoers.d/carbonpanel-updater"
-# Read-only listing + start/stop/restart of an already-existing container only —
-# deliberately no `docker run` / bind mounts, which is what docker-group
-# membership would otherwise hand out for free (root-equivalent).
-DOCKER_SUDOERS_CMDS="/usr/bin/docker ps -a --format {{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.State}}|{{.Ports}}|{{.CreatedAt}}, /usr/bin/docker stats --no-stream --format {{json .}} *, /usr/bin/docker start *, /usr/bin/docker stop *, /usr/bin/docker restart *"
+# Root-owned validator; sudoers grants access only to this helper.
+DOCKER_HELPER="/usr/local/libexec/carbonpanel-docker"
 
 COMMAND="${1:-}"
 shift || true
@@ -904,6 +902,95 @@ WantedBy=multi-user.target
 EOF
 }
 
+write_docker_helper() {
+  install -d -o root -g root -m 755 "$(dirname "$DOCKER_HELPER")"
+  local candidate
+  candidate="$(mktemp "${DOCKER_HELPER}.XXXXXX")"
+  cat > "$candidate" <<'HELPER'
+#!/bin/bash
+set -euo pipefail
+export LC_ALL=C
+
+reject() { echo "Unsupported CarbonPanel Docker request" >&2; exit 2; }
+valid_container() {
+  [[ ${#1} -le 128 && "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]
+}
+
+[[ $# -gt 0 ]] || reject
+case "$1" in
+  ps)
+    [[ $# -eq 4 && "$2" == -a && "$3" == --format && "$4" == '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.State}}|{{.Ports}}|{{.CreatedAt}}' ]] || reject
+    args=("$@")
+    ;;
+  stats)
+    [[ $# -ge 5 && "$2" == --no-stream && "$3" == --format && "$4" == '{{json .}}' ]] || reject
+    shift 4
+    for container in "$@"; do valid_container "$container" || reject; done
+    args=(stats --no-stream --format '{{json .}}' -- "$@")
+    ;;
+  start|stop|restart)
+    [[ $# -eq 2 ]] || reject
+    valid_container "$2" || reject
+    args=("$1" -- "$2")
+    ;;
+  *) reject ;;
+esac
+# Do not inherit client config, plugin search paths, or a remote Docker host
+# from the service account. All options above are fixed by this root-owned file.
+exec /usr/bin/env -i HOME=/root PATH=/usr/bin:/bin LC_ALL=C /usr/bin/docker "${args[@]}"
+HELPER
+  chown root:root "$candidate"
+  chmod 755 "$candidate"
+  mv -f "$candidate" "$DOCKER_HELPER"
+}
+
+# Keep install/update and `fix` on the same policy. The journal request is
+# fixed at 150 lines in api/system.py. Docker arguments are checked by the
+# root-owned helper, so no sudoers argument wildcards are needed.
+sudoers_rules() {
+  printf '%s\n' "${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n 150 --output=short-iso, ${DOCKER_HELPER}"
+}
+
+write_sudoers() {
+  write_docker_helper
+  local candidate
+  # A dot in the filename keeps sudo's includedir from loading the candidate.
+  candidate="$(mktemp "${SUDOERS_FILE}.XXXXXX")"
+  sudoers_rules > "$candidate"
+  chmod 440 "$candidate"
+  chown root:root "$candidate"
+  if ! visudo -cf "$candidate"; then
+    rm -f "$candidate"
+    die "Sudoers validation failed; ${SUDOERS_FILE} was not replaced."
+  fi
+  mv -f "$candidate" "$SUDOERS_FILE"
+}
+
+# Preserve the policy alongside its release so rolling back to a backend that
+# still invokes Docker directly restores its matching permissions as well.
+save_release_sudoers() {
+  local release_dir="$1"
+  [[ -n "$release_dir" && -d "$release_dir" && -f "$SUDOERS_FILE" ]] || return 0
+  sed 's/--no-pager -n \* --output=short-iso/--no-pager -n 150 --output=short-iso/g' \
+    "$SUDOERS_FILE" > "$release_dir/.carbonpanel-sudoers"
+  chown root:root "$release_dir/.carbonpanel-sudoers"
+  chmod 600 "$release_dir/.carbonpanel-sudoers"
+}
+
+restore_release_sudoers() {
+  local release_dir="$1" candidate
+  [[ -n "$release_dir" && -f "$release_dir/.carbonpanel-sudoers" ]] || return 0
+  candidate="$(mktemp "${SUDOERS_FILE}.XXXXXX")"
+  cp "$release_dir/.carbonpanel-sudoers" "$candidate"
+  chown root:root "$candidate"
+  chmod 440 "$candidate"
+  if ! visudo -cf "$candidate"; then
+    rm -f "$candidate"
+    die "Cannot restore the release's sudoers policy; validation failed."
+  fi
+  mv -f "$candidate" "$SUDOERS_FILE"
+}
+
 write_update_services() {
   cat > "/etc/systemd/system/$UPDATE_CHECK_SERVICE" <<EOF
 [Unit]
@@ -947,10 +1034,7 @@ Environment=CARBONPANEL_BACKEND_PORT=$BACKEND_PORT
 ExecStart=$CONTROL_SCRIPT update
 EOF
 
-  cat > "$SUDOERS_FILE" <<EOF
-$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block $UPDATE_CHECK_SERVICE, /usr/bin/systemctl start --no-block $UPDATE_SERVICE, /usr/bin/journalctl -u $UPDATE_CHECK_SERVICE -u $UPDATE_SERVICE --no-pager -n * --output=short-iso, $DOCKER_SUDOERS_CMDS
-EOF
-  chmod 440 "$SUDOERS_FILE"
+  write_sudoers
 }
 
 systemd_reload_enable() {
@@ -1095,6 +1179,7 @@ deploy_release() {
 
   db_backup="$(backup_sqlite_db)"
 
+  save_release_sudoers "$current_target"
   write_release_metadata "$release_dir" "$version" "$commit" "$source_type" "$installed_at"
 
   if [[ -n "$current_target" ]]; then
@@ -1121,6 +1206,7 @@ deploy_release() {
   run_silent systemctl restart nginx
 
   if ! wait_for_http "http://127.0.0.1:$BACKEND_PORT/docs"; then
+    restore_release_sudoers "$current_target"
     warn "Health check came back dead — rolling back to the last good version"
     set_update_progress 97 rollback "Health check failed; restoring previous release" false
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
@@ -1427,6 +1513,8 @@ rollback_release() {
 
   [[ -n "$previous_target" ]] || die "No previous release is available for rollback."
 
+  save_release_sudoers "$current_target"
+  restore_release_sudoers "$previous_target"
   switch_symlink "$CURRENT_LINK" "$previous_target"
   if [[ -n "$current_target" ]]; then
     switch_symlink "$PREVIOUS_LINK" "$current_target"
@@ -1598,12 +1686,13 @@ fix_carbonpanel() {
 
   # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
   log "Checking sudoers rules..."
-  local expected_sudoers="${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n * --output=short-iso, ${DOCKER_SUDOERS_CMDS}"
+  write_docker_helper
+  local expected_sudoers
+  expected_sudoers="$(sudoers_rules)"
   local current_sudoers=""
   [[ -f "$SUDOERS_FILE" ]] && current_sudoers="$(cat "$SUDOERS_FILE")"
   if [[ "$current_sudoers" != "$expected_sudoers" ]]; then
-    printf '%s\n' "$expected_sudoers" > "$SUDOERS_FILE"
-    chmod 440 "$SUDOERS_FILE"
+    write_sudoers
     ok "Updated sudoers rules"
     fixed=1
   else
@@ -1674,7 +1763,7 @@ uninstall_carbonpanel() {
   nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
 
   log "Revoking the sudo backstage pass..."
-  rm -f "$SUDOERS_FILE"
+  rm -f "$SUDOERS_FILE" "$DOCKER_HELPER"
 
   log "Nuking ${INSTALL_ROOT} from orbit — it's the only way to be sure..."
   rm -rf "$INSTALL_ROOT"

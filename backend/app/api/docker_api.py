@@ -14,7 +14,7 @@ router = APIRouter(prefix="/docker", tags=["docker"])
 _PERMISSION_HINT = (
     "Permission denied accessing Docker. The carbonpanel service account uses a "
     "scoped sudo rule (not docker-group membership) for container start/stop/"
-    "restart. Run: sudo carbonpanel fix"
+    "restart. Run: sudo carbonpanelctl fix"
 )
 
 # Serializing Docker's entire template object with {{json .}} looks tidy, but
@@ -26,6 +26,8 @@ _PS_FORMAT = (
     "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|"
     "{{.State}}|{{.Ports}}|{{.CreatedAt}}"
 )
+_DOCKER_HELPER = "/usr/local/libexec/carbonpanel-docker"
+
 _PS_FIELDS = ("ID", "Names", "Image", "Status", "State", "Ports", "CreatedAt")
 
 _STATS_CACHE: dict[str, dict] = {}
@@ -51,7 +53,7 @@ async def _run(cmd: list[str]) -> tuple[int, str]:
     # deployments still on the older docker-group model (pre-upgrade, or a
     # manual non-standard setup) so this doesn't regress them.
     if os.geteuid() != 0:
-        sudo_cmd = ["/usr/bin/sudo", "-n", *cmd]
+        sudo_cmd = ["/usr/bin/sudo", "-n", _DOCKER_HELPER, *cmd[1:]]
         rc, out = await _exec(sudo_cmd)
         if rc == 0:
             return rc, out
