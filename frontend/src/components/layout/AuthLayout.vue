@@ -25,13 +25,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
 import { useMetricsStore } from '@/stores/metrics'
+import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const metrics = useMetricsStore()
+const auth = useAuthStore()
 const { connect, disconnect } = useWebSocket()
 const sidebarOpen = ref(false)
 let previousOverflow = ''
@@ -52,7 +54,12 @@ watch(sidebarOpen, (open) => {
   }
 })
 
-onMounted(connect)
+// The layout can mount before the router finishes checking the session.
+// Start the stream when authentication becomes ready, including after login.
+watch(() => auth.isAuthenticated, (authenticated) => {
+  if (authenticated) connect()
+  else disconnect()
+}, { immediate: true })
 onUnmounted(() => {
   disconnect()
   document.body.style.overflow = previousOverflow

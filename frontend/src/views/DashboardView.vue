@@ -1,5 +1,11 @@
 <template>
   <div class="dashboard" :class="{ 'edit-active': editMode }">
+    <p v-if="!metrics.latest" class="metrics-status" role="status">
+      Connecting to live metrics… Your stats will appear when the connection is ready.
+    </p>
+    <p v-else-if="!metrics.connected" class="metrics-status" role="status">
+      Live metrics disconnected. Reconnecting… Displaying the last received values.
+    </p>
 
     <!-- Edit toolbar -->
     <Transition name="toolbar">
@@ -433,6 +439,10 @@ const sortedWidgets = computed(() =>
 </script>
 
 <style scoped>
+.metrics-status {
+  color: var(--fg-muted);
+  margin: 0 0 12px;
+}
 .dashboard { padding: 12px; position: relative; }
 .edit-active { padding-top: 0; }
 
