@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.services import smart as smart_svc
+from app.services import nas
 
 router = APIRouter(prefix="/disks", tags=["disks"])
 
@@ -231,6 +232,11 @@ async def list_disks(_: User = Depends(get_current_user)):
         ))
 
     return results
+
+
+@router.get("/nas")
+async def nas_inventory(_: User = Depends(get_current_user)):
+    return await nas.inventory()
 
 
 @router.post("/smart/refresh", response_model=list[SmartResult])

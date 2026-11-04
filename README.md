@@ -20,7 +20,8 @@ Live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with serv
 
 ## Install
 
-Installs as a native systemd service with nginx. Requires root, Ubuntu/Debian.
+Installs as a native systemd or SysV service with nginx. Requires root, Ubuntu/Debian,
+Python 3.11+, and a working Node.js 18+ build toolchain.
 
 ```bash
 curl -fsSL https://carbonpanel.leodeng.dev/install.sh | sudo bash
@@ -31,7 +32,7 @@ First login walks you through an onboarding wizard to set a real password and op
 enable 2FA.
 
 > CarbonPanel manages the host it runs on — systemd services, real process/disk access,
-> nginx sites — so the supported production path is the native systemd installer. The
+> nginx sites — so the production path is the native installer. The
 > retained `docker/` nginx snippets are legacy integration helpers only; they require an
 > external TLS-terminating proxy and are not a standalone deployment.
 
@@ -125,3 +126,8 @@ Other commands: `make backend`, `make frontend`, `make lint`
 ---
 
 Idea and logic by @leodenglovescode, code assisted by AI
+
+### NAS monitoring and older init systems
+
+See [NAS compatibility and setup](docs/NAS.md) for Linux MD RAID, LVM, fan/PWM
+monitoring, SysV service commands, and vendor-kernel limitations.

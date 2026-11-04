@@ -1,5 +1,7 @@
 import asyncio
+import os
 import time
+from pathlib import Path
 
 import psutil
 
@@ -29,16 +31,17 @@ async def collect() -> list[DiskMetrics]:
     for p in partitions:
         try:
             usage = await loop.run_in_executor(None, lambda mp=p.mountpoint: psutil.disk_usage(mp))
-        except PermissionError:
+        except OSError:
             continue
 
-        # Derive the base device name for matching io_counters keys
-        dev = p.device.replace("/dev/", "")
-        # Strip partition number to get disk name (e.g. sda1 -> sda)
-        io_key = next(
-            (k for k in (io_counters or {}) if dev.startswith(k) or k.startswith(dev)),
-            dev,
-        )
+        # Resolve /dev/mapper aliases to dm-N. Match exactly so md1/dm-1
+        # cannot accidentally pick md10/dm-10 (or a physical member disk).
+        dev = os.path.basename(os.path.realpath(p.device))
+        io_key = dev
+        if dev not in (io_counters or {}):
+            block = Path('/sys/class/block') / dev
+            if (block / 'partition').exists():
+                io_key = block.resolve().parent.name
         io = (io_counters or {}).get(io_key)
 
         read_rate = 0.0
@@ -47,9 +50,6 @@ async def collect() -> list[DiskMetrics]:
             prev = _prev_counters[io_key]
             read_rate = max(0.0, (io.read_bytes - prev.read_bytes) / dt / _MB)
             write_rate = max(0.0, (io.write_bytes - prev.write_bytes) / dt / _MB)
-
-        if io:
-            _prev_counters[io_key] = io
 
         results.append(
             DiskMetrics(
@@ -63,5 +63,6 @@ async def collect() -> list[DiskMetrics]:
             )
         )
 
+    _prev_counters = io_counters or {}
     _prev_time = now
     return results

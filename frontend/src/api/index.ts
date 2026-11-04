@@ -131,6 +131,7 @@ export const backgroundImageApi = {
 }
 
 export interface SystemVersionResponse {
+  browser_updates_available?: boolean
   configured: boolean
   repo_url: string
   current_version: string | null

@@ -38,6 +38,8 @@ def _service_is_active(service_name: str) -> bool:
     for the entire command, so checking only for ``active`` reports false for
     exactly the period the Web UI needs to follow.
     """
+    if os.getenv("CARBONPANEL_INIT_SYSTEM") == "sysv":
+        return False
     try:
         result = subprocess.run(
             ["/usr/bin/systemctl", "is-active", service_name],
@@ -167,6 +169,8 @@ def is_update_in_progress() -> bool:
 
 def _service_unit_exists(service_name: str) -> bool:
     """Return True only if the systemd unit file is installed on this host."""
+    if os.getenv("CARBONPANEL_INIT_SYSTEM") == "sysv":
+        return False
     try:
         result = subprocess.run(
             ["/usr/bin/systemctl", "list-unit-files", "--no-pager", service_name],
@@ -232,6 +236,7 @@ def get_system_version_status() -> dict[str, Any]:
 
     return {
         "configured": configured,
+        "browser_updates_available": os.getenv("CARBONPANEL_INIT_SYSTEM") != "sysv",
         "repo_url": str(
             update.get("repo_url") or current.get("repo_url") or DEFAULT_REPO_URL
         ),
@@ -270,7 +275,9 @@ def get_system_version_status() -> dict[str, Any]:
 
 def trigger_update_check() -> str:
     if not _service_unit_exists(CHECK_SERVICE):
-        raise RuntimeError("Update-check service is not installed on this host.")
+        raise RuntimeError(
+            "Update-check service requires systemd. On SysV use sudo carbonpanelctl check."
+        )
     try:
         operation_id = _begin_operation("check")
     except OSError as exc:
@@ -285,7 +292,9 @@ def trigger_update_check() -> str:
 
 def trigger_update_install() -> str:
     if not _service_unit_exists(UPDATE_SERVICE):
-        raise RuntimeError("Update service is not installed on this host.")
+        raise RuntimeError(
+            "Update service requires systemd. On SysV use sudo carbonpanelctl update."
+        )
     try:
         operation_id = _begin_operation("update")
     except OSError as exc:

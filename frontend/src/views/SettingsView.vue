@@ -608,7 +608,9 @@
               ]"
             >
               {{
-                restarting || versionInfo?.restart_pending
+                versionInfo?.browser_updates_available === false
+                  ? 'Manual updates'
+                  : restarting || versionInfo?.restart_pending
                   ? 'Restarting'
                   : versionInfo?.update_in_progress
                     ? 'Installing'
@@ -620,7 +622,11 @@
               }}
             </span>
           </div>
-          <p class="section-desc">
+          <p v-if="versionInfo?.browser_updates_available === false" class="section-desc">
+            This server uses SysV init. Check and install updates over SSH with
+            <code>sudo carbonpanelctl check</code> and <code>sudo carbonpanelctl update</code>.
+          </p>
+          <p v-else class="section-desc">
             CarbonPanel checks the installed GitHub branch for new commits every day. You can also
             check manually and start an interactive update from here.
           </p>
@@ -687,7 +693,7 @@
             <div class="version-actions">
               <BaseButton
                 variant="ghost"
-                :disabled="versionActionLoading || !!versionInfo?.update_in_progress"
+                :disabled="versionInfo?.browser_updates_available === false || versionActionLoading || !!versionInfo?.update_in_progress"
                 @click="checkForUpdates"
               >
                 {{ versionInfo?.check_in_progress ? 'Checking…' : 'Check for Updates' }}
@@ -696,7 +702,7 @@
               <BaseButton
                 variant="primary"
                 :disabled="
-                  versionActionLoading ||
+                  versionInfo?.browser_updates_available === false || versionActionLoading ||
                     !versionInfo?.update_available ||
                     !!versionInfo?.update_in_progress ||
                     !!versionInfo?.check_in_progress

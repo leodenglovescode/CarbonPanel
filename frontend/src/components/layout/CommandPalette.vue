@@ -80,6 +80,7 @@ const pages = computed<PaletteItem[]>(() => [
   { key: 'page-/', label: t('nav.stats'), category: 'Pages', go: () => router.push('/') },
   { key: 'page-/sites', label: t('nav.sites'), category: 'Pages', go: () => router.push('/sites') },
   { key: 'page-/system-services', label: t('nav.systemServices'), category: 'Pages', go: () => router.push('/system-services') },
+  { key: 'page-nas', label: 'RAID, LVM & Fans', category: 'Pages', go: () => router.push('/disks#nas-monitor') },
   { key: 'page-/disks', label: t('nav.disks'), category: 'Pages', go: () => router.push('/disks') },
   { key: 'page-/apps', label: t('nav.apps'), category: 'Pages', go: () => router.push('/apps') },
   { key: 'page-/docker', label: t('nav.docker'), category: 'Pages', go: () => router.push('/docker') },

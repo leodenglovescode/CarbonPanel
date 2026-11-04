@@ -18,6 +18,8 @@
       </div>
     </div>
 
+    <NasMonitor />
+
     <div class="tabs-row">
       <button
         v-for="tab in tabs"
@@ -404,6 +406,7 @@ import { useMetricsStore } from '@/stores/metrics'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useDialogStore } from '@/stores/dialog'
 import type { DiskInfo } from '@/api/index'
+import NasMonitor from '@/components/NasMonitor.vue'
 import BrandIcon from '@/components/ui/BrandIcon.vue'
 
 const metricsStore = useMetricsStore()

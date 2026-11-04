@@ -86,6 +86,25 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Detect the running init system, not merely the presence of systemctl.
+uses_systemd() {
+  [[ -d /run/systemd/system ]] && command_exists systemctl
+}
+
+service_command() {
+  if uses_systemd; then
+    systemctl "$@"
+    return
+  fi
+  local action="$1" name="${2:-}"
+  name="${name%.service}"
+  case "$action" in
+    daemon-reload) return 0 ;;
+    start|stop|restart|reload) service "$name" "$action" ;;
+    *) die "Unsupported SysV service operation: $action" ;;
+  esac
+}
+
 json_query() {
   python3 - "$1" <<'PY'
 import json
@@ -569,6 +588,12 @@ install_os_prerequisites() {
     sudo \
     acl
 
+  if ! uses_systemd; then
+    run_silent apt-get install -y init-system-helpers sysvinit-utils lsb-base
+  fi
+  # Optional read-only storage tools; their absence is shown in the panel.
+  run_silent apt-get install -y lvm2 smartmontools || warn "Storage tools unavailable; RAID sysfs monitoring still works."
+
   # nginx — skip if already present (nginx.org repo, BunkerWeb, OpenResty, etc. all conflict
   # with Ubuntu's nginx package but provide a compatible binary).
   if ! command_exists nginx; then
@@ -588,10 +613,15 @@ install_os_prerequisites() {
   fi
 
   command_exists python3 || die "python3 is required."
+  python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' || die "Python 3.11+ is required, including on SysV systems."
   command_exists git || die "git is required."
   command_exists nginx || die "nginx is required — install nginx and try again."
   command_exists node || command_exists nodejs || die "Node.js is required — install Node.js and try again."
   command_exists npm || die "npm is required — install Node.js with npm included and try again."
+  local node_binary=node
+  command_exists node || node_binary=nodejs
+  "$node_binary" -e 'process.exit(Number(process.versions.node.split(".")[0]) < 18 ? 1 : 0)' || die "A working Node.js 18+ is required to build the frontend. On old vendor kernels, use a compatible distribution build."
+
 }
 
 ensure_service_account() {
@@ -879,7 +909,63 @@ EOF
   run_silent nginx -t
 }
 
+write_sysv_service() {
+  command_exists start-stop-daemon || die "SysV requires start-stop-daemon"
+  # The launcher loads the same root-managed environment as the systemd unit.
+  cat > "$BIN_DIR/carbonpanel-backend" <<EOF
+#!/bin/bash
+set -euo pipefail
+set -a
+source "$BACKEND_ENV_FILE"
+set +a
+export CARBONPANEL_INIT_SYSTEM=sysv
+export CARBONPANEL_INSTALL_ROOT="$INSTALL_ROOT"
+export CARBONPANEL_BACKEND_PORT="$BACKEND_PORT"
+cd "$CURRENT_LINK/backend"
+exec "$CURRENT_LINK/backend/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$BACKEND_PORT"
+EOF
+  chown root:root "$BIN_DIR/carbonpanel-backend"
+  chmod 755 "$BIN_DIR/carbonpanel-backend"
+  cat > /etc/init.d/carbonpanel-backend <<EOF
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          carbonpanel-backend
+# Required-Start:    \$remote_fs \$network
+# Required-Stop:     \$remote_fs \$network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: CarbonPanel FastAPI backend
+### END INIT INFO
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+DAEMON="$BIN_DIR/carbonpanel-backend"
+PIDFILE=/run/carbonpanel-backend.pid
+. /lib/lsb/init-functions
+case "\$1" in
+  start)
+    start-stop-daemon --start --quiet --oknodo --background --make-pidfile --pidfile "\$PIDFILE" \
+      --chuid "$SERVICE_USER:$SERVICE_GROUP" --startas "\$DAEMON" \
+      --no-close >> "$SHARED_DIR/backend.log" 2>&1
+    ;;
+  stop)
+    start-stop-daemon --stop --quiet --retry TERM/30/KILL/5 --pidfile "\$PIDFILE" --user "$SERVICE_USER"
+    result=\$?
+    [ "\$result" -le 1 ] || exit "\$result"
+    rm -f "\$PIDFILE"
+    ;;
+  restart|force-reload) "\$0" stop && "\$0" start ;;
+  status) status_of_proc -p "\$PIDFILE" "\$DAEMON" carbonpanel-backend ;;
+  *) echo "Usage: \$0 {start|stop|restart|force-reload|status}" >&2; exit 2 ;;
+esac
+EOF
+  chown root:root /etc/init.d/carbonpanel-backend
+  chmod 755 /etc/init.d/carbonpanel-backend
+}
+
 write_backend_service() {
+  if ! uses_systemd; then
+    write_sysv_service
+    return
+  fi
   cat > "/etc/systemd/system/$BACKEND_SERVICE" <<EOF
 [Unit]
 Description=CarbonPanel FastAPI backend
@@ -900,6 +986,25 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+write_lvm_helper() {
+  install -d -o root -g root -m 755 /usr/local/libexec
+  cat > /usr/local/libexec/carbonpanel-lvm <<'LVM_HELPER'
+#!/bin/sh
+set -eu
+[ "$#" -eq 1 ] || exit 2
+case "$1" in
+  pvs) fields=pv_name,vg_name,pv_size,pv_free,pv_attr ;;
+  vgs) fields=vg_name,vg_size,vg_free,pv_count,lv_count,vg_attr ;;
+  lvs) fields=lv_name,vg_name,lv_size,lv_attr,lv_path,pool_lv,data_percent,metadata_percent,devices ;;
+  *) exit 2 ;;
+esac
+exec /usr/bin/env -i HOME=/root PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
+  /sbin/"$1" --reportformat json --units b --nosuffix -o "$fields"
+LVM_HELPER
+  chown root:root /usr/local/libexec/carbonpanel-lvm
+  chmod 755 /usr/local/libexec/carbonpanel-lvm
 }
 
 write_docker_helper() {
@@ -948,7 +1053,7 @@ HELPER
 # fixed at 150 lines in api/system.py. Docker arguments are checked by the
 # root-owned helper, so no sudoers argument wildcards are needed.
 sudoers_rules() {
-  printf '%s\n' "${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n 150 --output=short-iso, ${DOCKER_HELPER}"
+  printf '%s\n' "${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n 150 --output=short-iso, ${DOCKER_HELPER}, /usr/local/libexec/carbonpanel-lvm pvs, /usr/local/libexec/carbonpanel-lvm vgs, /usr/local/libexec/carbonpanel-lvm lvs"
 }
 
 write_sudoers() {
@@ -992,6 +1097,12 @@ restore_release_sudoers() {
 }
 
 write_update_services() {
+  write_lvm_helper
+  if ! uses_systemd; then
+    write_sudoers
+    warn "SysV: use sudo carbonpanelctl check/update; browser updates require systemd."
+    return
+  fi
   cat > "/etc/systemd/system/$UPDATE_CHECK_SERVICE" <<EOF
 [Unit]
 Description=CarbonPanel GitHub update check
@@ -1038,7 +1149,14 @@ EOF
 }
 
 systemd_reload_enable() {
-  run_silent systemctl daemon-reload
+  if ! uses_systemd; then
+    run_silent update-rc.d carbonpanel-backend defaults
+    run_silent update-rc.d nginx defaults
+    run_silent service carbonpanel-backend start
+    run_silent service nginx start
+    return
+  fi
+  run_silent service_command daemon-reload
   run_silent systemctl enable --now "$BACKEND_SERVICE"
   run_silent systemctl enable --now nginx
   run_silent systemctl enable --now "$UPDATE_CHECK_TIMER"
@@ -1200,10 +1318,10 @@ deploy_release() {
   write_nginx_config
   write_backend_service
   write_update_services
-  run_silent systemctl daemon-reload
+  run_silent service_command daemon-reload
   set_update_progress 96 restarting "Restarting backend and validating health" true
-  run_silent systemctl restart "$BACKEND_SERVICE"
-  run_silent systemctl restart nginx
+  run_silent service_command restart "$BACKEND_SERVICE"
+  run_silent service_command restart nginx
 
   if ! wait_for_http "http://127.0.0.1:$BACKEND_PORT/docs"; then
     restore_release_sudoers "$current_target"
@@ -1211,9 +1329,9 @@ deploy_release() {
     set_update_progress 97 rollback "Health check failed; restoring previous release" false
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
-    run_silent systemctl daemon-reload
-    run_silent systemctl restart "$BACKEND_SERVICE" || true
-    run_silent systemctl restart nginx || true
+    run_silent service_command daemon-reload
+    run_silent service_command restart "$BACKEND_SERVICE" || true
+    run_silent service_command restart nginx || true
     [[ -n "$previous_target" ]] && switch_symlink "$PREVIOUS_LINK" "$previous_target"
     return 1
   fi
@@ -1520,9 +1638,9 @@ rollback_release() {
     switch_symlink "$PREVIOUS_LINK" "$current_target"
   fi
 
-  run_silent systemctl daemon-reload
-  run_silent systemctl restart "$BACKEND_SERVICE"
-  run_silent systemctl restart nginx
+  run_silent service_command daemon-reload
+  run_silent service_command restart "$BACKEND_SERVICE"
+  run_silent service_command restart nginx
   check_for_updates
 
   ok "Rolled back to $(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version) — crisis averted 😅"
@@ -1686,6 +1804,7 @@ fix_carbonpanel() {
 
   # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
   log "Checking sudoers rules..."
+  write_lvm_helper
   write_docker_helper
   local expected_sudoers
   expected_sudoers="$(sudoers_rules)"
@@ -1702,7 +1821,7 @@ fix_carbonpanel() {
   # ── Restart service to pick up any group/permission changes ──────────────
   if [[ "$fixed" -eq 1 ]]; then
     log "Restarting ${BACKEND_SERVICE} to apply changes..."
-    systemctl restart "$BACKEND_SERVICE" 2>/dev/null || warn "Could not restart ${BACKEND_SERVICE} — do it manually: systemctl restart ${BACKEND_SERVICE}"
+    service_command restart "$BACKEND_SERVICE" 2>/dev/null || warn "Could not restart ${BACKEND_SERVICE} — do it manually: service carbonpanel-backend restart"
     ok "Service restarted"
   fi
 
@@ -1750,20 +1869,25 @@ uninstall_carbonpanel() {
   # Only CarbonPanel's own systemd units are removed.
   # nginx, npm, nodejs, and any other system services are left untouched.
   log "Yeeting CarbonPanel services into the void..."
+  if ! uses_systemd; then
+    service carbonpanel-backend stop >/dev/null 2>&1 || true
+    update-rc.d -f carbonpanel-backend remove
+    rm -f /etc/init.d/carbonpanel-backend
+  fi
   for svc in "$UPDATE_CHECK_TIMER" "$UPDATE_CHECK_SERVICE" "$UPDATE_SERVICE" "$BACKEND_SERVICE"; do
     systemctl stop "$svc" >/dev/null 2>&1 || true
     systemctl disable "$svc" >/dev/null 2>&1 || true
     rm -f "/etc/systemd/system/$svc"
   done
-  run_silent systemctl daemon-reload
+  run_silent service_command daemon-reload
 
   # Remove only CarbonPanel's nginx site config — nginx itself is not stopped or removed.
   log "Scrubbing our nginx footprint (nginx itself stays up)..."
   rm -f "$NGINX_SITE" "$NGINX_SITE_LINK"
-  nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true
+  nginx -t >/dev/null 2>&1 && service_command reload nginx >/dev/null 2>&1 || true
 
   log "Revoking the sudo backstage pass..."
-  rm -f "$SUDOERS_FILE" "$DOCKER_HELPER"
+  rm -f "$SUDOERS_FILE" "$DOCKER_HELPER" /usr/local/libexec/carbonpanel-lvm
 
   log "Nuking ${INSTALL_ROOT} from orbit — it's the only way to be sure..."
   rm -rf "$INSTALL_ROOT"
