@@ -25,10 +25,10 @@ sealed interface PollState {
  */
 class PanelRepository(private val context: Context) {
 
-    private val prefs get() = Prefs.get(context)
+    private val prefs = Prefs.get(context)
 
     private suspend fun api(): Api =
-        ApiClient.resolve(context)?.second ?: error("Server unreachable")
+        ApiClient.resolve(context, prefs)?.second ?: error("Server unreachable")
 
     /**
      * Runs [block] against the panel, mapping failures to a readable message.
@@ -36,9 +36,13 @@ class PanelRepository(private val context: Context) {
      * Retrofit throws HttpException for non-2xx, whose message is just the
      * status line; the server's `detail` field is the part worth showing.
      */
-    private suspend fun <T> call(block: suspend (Api) -> T): Result<T> = runCatching {
-        block(api())
-    }.recoverCatching { t -> throw IllegalStateException(readableError(t), t) }
+    private suspend fun <T> call(block: suspend (Api) -> T): Result<T> = try {
+        Result.success(block(api()))
+    } catch (t: kotlinx.coroutines.CancellationException) {
+        throw t
+    } catch (t: Throwable) {
+        Result.failure(IllegalStateException(readableError(t), t))
+    }
 
     private fun readableError(t: Throwable): String {
         val http = t as? retrofit2.HttpException
@@ -69,7 +73,7 @@ class PanelRepository(private val context: Context) {
         }
         emit(PollState.Connecting)
 
-        var resolved = ApiClient.resolve(context)
+        var resolved = ApiClient.resolve(context, prefs)
         if (resolved == null) {
             emit(PollState.Error("No reachable address for this server"))
             return@flow
@@ -83,16 +87,17 @@ class PanelRepository(private val context: Context) {
                 failures = 0
                 emit(PollState.Connected(snapshot, resolved!!.first))
             } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
                 failures++
                 // The phone may have changed networks, which invalidates the
                 // endpoint rather than the pairing. Re-resolve before giving up.
                 if (failures >= 2) {
                     ApiClient.clearCache()
-                    resolved = ApiClient.resolve(context)
+                    resolved = ApiClient.resolve(context, prefs)
                     if (resolved == null) {
                         emit(PollState.Error("Server unreachable"))
                         delay(5_000)
-                        resolved = ApiClient.resolve(context)
+                        resolved = ApiClient.resolve(context, prefs)
                         continue
                     }
                 } else {

@@ -36,7 +36,7 @@ enum class UnitKind(val label: String) {
 class PanelViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = PanelRepository(app)
-    private val prefs get() = Prefs.get(getApplication())
+    private val prefs = Prefs.get(getApplication())
 
     // ── transient UI messages ──────────────────────────────────────────────
 
@@ -424,7 +424,7 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
         _reachability.value = _reachability.value + (url to null)
         val ok = withContext(Dispatchers.IO) {
             withTimeoutOrNull(6_000) {
-                runCatching { ApiClient.forBaseUrl(getApplication(), url).ping().isSuccessful }
+                runCatching { ApiClient.forBaseUrl(getApplication(), url, prefs).ping().isSuccessful }
                     .getOrDefault(false)
             } ?: false
         }
@@ -438,7 +438,7 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
     /** Forces re-selection, e.g. after moving networks. */
     fun reconnect() = viewModelScope.launch {
         ApiClient.clearCache()
-        val resolved = ApiClient.resolve(getApplication())
+        val resolved = ApiClient.resolve(getApplication(), prefs)
         refreshEndpoints()
         say(resolved?.let { "Connected via ${it.first}" } ?: "No address reachable")
     }

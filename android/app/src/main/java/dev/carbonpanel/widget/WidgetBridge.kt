@@ -43,7 +43,7 @@ object WidgetBridge {
         for (id in ids) {
             updateAppWidgetState(context, PreferencesGlanceStateDefinition, id) { store ->
                 store.toMutablePreferences().apply {
-                    if (json != null) this[KEY_STATE] = json
+                    if (json != null) this[KEY_STATE] = json else remove(KEY_STATE)
                     this[KEY_THEME] = prefs.themeMode
                     this[KEY_ACCENT] = prefs.accent
                     this[KEY_NET_UNIT] = prefs.widgetNetUnit

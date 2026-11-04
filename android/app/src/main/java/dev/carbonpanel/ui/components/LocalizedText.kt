@@ -84,6 +84,13 @@ fun localizeUiText(text: String): String {
 }
 
 private val ZH_TEXT = mapOf(
+    "Your servers" to "我的服务器",
+    "Choose a server to open its overview" to "选择服务器以查看概览",
+    "Servers" to "服务器",
+    "Add server" to "添加服务器",
+    "Rename server" to "重命名服务器",
+    "Remove server" to "移除服务器",
+    "Server name" to "服务器名称",
     "Status" to "状态",
     "Services" to "服务",
     "Storage" to "存储",

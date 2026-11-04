@@ -713,7 +713,10 @@ EOF
 ensure_tls_cert() {
   mkdir -p "$TLS_DIR"
   chmod 750 "$TLS_DIR"
-  chown root:root "$TLS_DIR"
+  # The backend reads the public certificate to embed its fingerprint in the
+  # pairing QR. It needs directory traversal even when reusing an existing cert.
+  # The private key remains root-owned and mode 600 below.
+  chown root:"$SERVICE_GROUP" "$TLS_DIR"
 
   # Self-signed, so there's no ACME-style auto-renewal — a fresh cert is only
   # minted on install/update. Skip regen if the existing one isn't expiring

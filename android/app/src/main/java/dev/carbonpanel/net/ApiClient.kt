@@ -33,8 +33,8 @@ object ApiClient {
         explicitNulls = false
     }
 
-    @Volatile
-    private var cached: Pair<String, Api>? = null
+    private data class ClientKey(val serverId: String, val url: String, val token: String?)
+    private val clients = java.util.concurrent.ConcurrentHashMap<ClientKey, Api>()
 
     @Volatile
     private var sharedClient: OkHttpClient? = null
@@ -45,8 +45,9 @@ object ApiClient {
         private set
 
     fun clearCache() {
-        cached = null
+        clients.clear()
         sharedClient = null
+        activeBaseUrl = null
     }
 
     /**
@@ -66,8 +67,7 @@ object ApiClient {
         return base.trimEnd('/') + "/api/v1/settings/background-image/app"
     }
 
-    private fun okHttp(context: Context): OkHttpClient {
-        val prefs = Prefs.get(context)
+    private fun okHttp(context: Context, prefs: Prefs = Prefs.get(context)): OkHttpClient {
         val trustManager = PinnedTrustManager(prefs)
         val sslContext = SSLContext.getInstance("TLS").apply {
             init(null, arrayOf(trustManager), java.security.SecureRandom())
@@ -85,25 +85,28 @@ object ApiClient {
             .build()
     }
 
-    private fun authInterceptor(prefs: Prefs) = Interceptor { chain ->
-        val builder = chain.request().newBuilder()
-        prefs.token?.let { builder.header("Authorization", "Bearer $it") }
-        // Lets the server distinguish this device among several polling
-        // clients when it tracks per-client collection rates.
-        builder.header("X-Device-Id", prefs.deviceId)
-        chain.proceed(builder.build())
+    private fun authInterceptor(prefs: Prefs): Interceptor {
+        val token = prefs.token
+        val deviceId = prefs.deviceId
+        return Interceptor { chain ->
+            val builder = chain.request().newBuilder()
+            token?.let { builder.header("Authorization", "Bearer $it") }
+            builder.header("X-Device-Id", deviceId)
+            chain.proceed(builder.build())
+        }
     }
 
-    fun forBaseUrl(context: Context, baseUrl: String): Api {
-        cached?.let { (url, api) -> if (url == baseUrl) return api }
-        val api = Retrofit.Builder()
-            .baseUrl(baseUrl.trimEnd('/') + "/")
-            .client(okHttp(context))
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(Api::class.java)
-        cached = baseUrl to api
-        return api
+    fun forBaseUrl(context: Context, baseUrl: String, prefs: Prefs = Prefs.get(context)): Api {
+        // Credentials and connection pools are shared only within one server.
+        val key = ClientKey(prefs.serverId, baseUrl, prefs.token)
+        return clients.getOrPut(key) {
+            Retrofit.Builder()
+                .baseUrl(baseUrl.trimEnd('/') + "/")
+                .client(okHttp(context, prefs))
+                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .build()
+                .create(Api::class.java)
+        }
     }
 
     /**
@@ -114,21 +117,20 @@ object ApiClient {
      * leave the local network, every time the app cold-starts. Sequential with
      * a short timeout is slower in the worst case and much better behaved.
      */
-    suspend fun resolve(context: Context): Pair<String, Api>? = withContext(Dispatchers.IO) {
-        val prefs = Prefs.get(context)
+    suspend fun resolve(context: Context, prefs: Prefs = Prefs.get(context)): Pair<String, Api>? = withContext(Dispatchers.IO) {
         val candidates = buildList {
             prefs.lastGoodEndpoint?.let { add(it) }
             addAll(prefs.endpoints.filter { it != prefs.lastGoodEndpoint })
         }.filter { isPermittedEndpoint(it) }
 
         for (url in candidates) {
-            val api = forBaseUrl(context, url)
+            val api = forBaseUrl(context, url, prefs)
             val ok = withTimeoutOrNull(5_000) {
                 runCatching { api.ping().isSuccessful }.getOrDefault(false)
             } ?: false
             if (ok) {
                 prefs.lastGoodEndpoint = url
-                activeBaseUrl = url
+                if (Prefs.get(context).serverId == prefs.serverId) activeBaseUrl = url
                 return@withContext url to api
             }
         }

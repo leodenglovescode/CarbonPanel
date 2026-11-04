@@ -78,7 +78,7 @@ fun SettingsScreen(viewModel: PanelViewModel, onUnpair: () -> Unit) {
 
     if (confirmUnpair) ConfirmDialog(
         title = "Unpair device",
-        body = "This phone will forget its token and every saved server address. " +
+        body = "This phone will forget this server's token and addresses. Other saved servers are kept. " +
             "You'll need to scan a new pairing code to get back in.",
         confirmLabel = "Unpair",
         onConfirm = { viewModel.unpair(); onUnpair() },

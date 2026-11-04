@@ -1,6 +1,16 @@
 package dev.carbonpanel
 
 import android.os.Bundle
+import android.app.Application
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.ViewModelProvider
+import androidx.compose.material3.TextButton
+import dev.carbonpanel.net.ApiClient
+import dev.carbonpanel.widget.WidgetBridge
+import dev.carbonpanel.pairing.PairState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -13,6 +23,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -70,40 +83,86 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun CarbonPanelRoot() {
     val pairingViewModel: PairingViewModel = viewModel()
-    val panelViewModel: PanelViewModel = viewModel()
     val context = LocalContext.current
+    var servers by remember { mutableStateOf(Prefs.get(context).servers) }
+    var selected by rememberSaveable {
+        mutableStateOf(servers.singleOrNull()?.id)
+    }
+    var adding by rememberSaveable { mutableStateOf(servers.isEmpty()) }
+    val pairState by pairingViewModel.state.collectAsStateWithLifecycle()
 
+    fun reload() { servers = Prefs.get(context).servers }
+    fun open(id: String) {
+        Prefs.get(context).activate(id)
+        ApiClient.clearCache()
+        selected = id
+        adding = false
+        StatusWidgetWorker.refreshNow(context)
+    }
+
+    // A fresh store on each visit cancels the previous server's polling and
+    // actions, and prevents cached screen data or navigation crossing servers.
+    val sessionKey = if (adding) "pairing" else selected ?: "servers"
+    val store = remember(sessionKey) { ViewModelStore() }
+    DisposableEffect(store) { onDispose { store.clear() } }
+    val panelViewModel = remember(store) {
+        val owner = object : ViewModelStoreOwner { override val viewModelStore = store }
+        ViewModelProvider(owner, ViewModelProvider.AndroidViewModelFactory.getInstance(
+            context.applicationContext as Application,
+        ))[PanelViewModel::class.java]
+    }
     val themeMode by panelViewModel.themeMode.collectAsStateWithLifecycle()
     val accent by panelViewModel.accent.collectAsStateWithLifecycle()
     val backdropEnabled by panelViewModel.backdropEnabled.collectAsStateWithLifecycle()
+    val showBackdrop = selected != null && !adding && backdropEnabled
 
-    var paired by rememberSaveable { mutableStateOf(Prefs.get(context).isPaired) }
-    // The backdrop only exists once there's a server to fetch it from.
-    val showBackdrop = paired && backdropEnabled
+    LaunchedEffect(sessionKey, servers) { WidgetBridge.push(context) }
+    BackHandler(enabled = adding && servers.isNotEmpty() && pairState !is PairState.Working) {
+        pairingViewModel.reset()
+        adding = false
+    }
 
     CarbonTheme(mode = themeMode, accent = accent, hasBackdrop = showBackdrop) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Backdrop(enabled = showBackdrop) {
-                if (!paired) {
-                    PairingScreen(
-                        viewModel = pairingViewModel,
-                        onPaired = {
-                            paired = true
-                            panelViewModel.refreshEndpoints()
-                        },
-                    )
-                } else {
-                    MainScaffold(
-                        viewModel = panelViewModel,
-                        transparent = showBackdrop,
-                        onUnpair = {
-                            pairingViewModel.reset()
-                            paired = false
-                        },
-                    )
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            key(sessionKey) {
+                Backdrop(enabled = showBackdrop) {
+                    when {
+                        adding -> Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                            PairingScreen(pairingViewModel, onPaired = {
+                                reload()
+                                open(Prefs.get(context).serverId)
+                            })
+                            if (servers.isNotEmpty()) TextButton(
+                                enabled = pairState !is PairState.Working,
+                                onClick = { pairingViewModel.reset(); adding = false },
+                            ) { Text("Cancel") }
+                        }
+                        selected == null -> ServersScreen(
+                            servers = servers,
+                            onSelect = { open(it) },
+                            onAdd = { pairingViewModel.reset(); adding = true },
+                            onRename = { id, name -> Prefs.get(context).renameServer(id, name); reload() },
+                            onRemove = { id ->
+                                Prefs.get(context).removeServer(id)
+                                ApiClient.clearCache()
+                                reload()
+                                if (servers.isEmpty()) { pairingViewModel.reset(); adding = true }
+                                StatusWidgetWorker.refreshNow(context)
+                            },
+                        )
+                        else -> MainScaffold(
+                            viewModel = panelViewModel,
+                            transparent = showBackdrop,
+                            onServers = { reload(); selected = null },
+                            onUnpair = {
+                                ApiClient.clearCache()
+                                reload()
+                                selected = null
+                                if (servers.isEmpty()) { pairingViewModel.reset(); adding = true }
+                                StatusWidgetWorker.refreshNow(context)
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -116,6 +175,7 @@ private fun MainScaffold(
     viewModel: PanelViewModel,
     transparent: Boolean,
     onUnpair: () -> Unit,
+    onServers: () -> Unit,
 ) {
     var dest by rememberSaveable { mutableStateOf(Dest.Dashboard) }
     var openSiteId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -164,6 +224,7 @@ private fun MainScaffold(
                         }
                     }
                 },
+                actions = { TextButton(onClick = onServers) { Text("Servers") } },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color.Transparent,
                 ),

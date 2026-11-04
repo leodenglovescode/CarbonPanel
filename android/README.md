@@ -35,6 +35,21 @@ never enter the QR or the phone.
 Revoke the Android token from **Settings → Active Sessions**. Revocation takes
 effect immediately for request/response calls and open streams.
 
+## Multiple servers
+
+With one saved server, launch opens its overview directly. With two or more,
+launch shows a picker with each server's name, HTTPS addresses, and account.
+Tap a server to open its overview. Use **Servers** in the top bar to return to
+the picker, add another server by QR or manual code, rename, or remove one.
+
+Existing pairings migrate automatically. Credentials, certificate pins,
+addresses, and widget disk/interface choices are kept separately for each
+server. Appearance preferences are shared. The home-screen widget follows
+the last selected server, including while the picker is open.
+
+Removing a server only forgets it on this phone. Revoke the device in that
+server's web panel to invalidate its token.
+
 ## Endpoints
 
 Pairing can include multiple HTTPS endpoints because a LAN address may stop

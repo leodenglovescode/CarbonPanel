@@ -32,7 +32,7 @@ class StatusWidgetWorker(
         val prefs = Prefs.get(applicationContext)
         if (!prefs.isPaired) return Result.success()
 
-        val resolved = ApiClient.resolve(applicationContext)
+        val resolved = ApiClient.resolve(applicationContext, prefs)
         if (resolved == null) {
             Log.w(TAG, "No reachable endpoint; widget keeps its previous reading")
             markStale(prefs)
@@ -90,9 +90,12 @@ class StatusWidgetWorker(
             // Through the bridge, not updateAll() alone — the widget composes
             // from Glance state, so the state has to be written for the
             // composition to invalidate.
-            WidgetBridge.push(applicationContext, encoded)
+            if (Prefs.get(applicationContext).serverId == prefs.serverId) {
+                WidgetBridge.push(applicationContext)
+            }
             Result.success()
         } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
             // Logged rather than swallowed: this runs with no UI attached, so
             // a silent failure looks identical to a widget that was never
             // scheduled, and the two need completely different fixes.
@@ -110,7 +113,9 @@ class StatusWidgetWorker(
         WidgetState.decode(prefs.widgetState)?.let {
             val encoded = WidgetState.encode(it.copy(stale = true))
             prefs.widgetState = encoded
-            runCatching { WidgetBridge.push(applicationContext, encoded) }
+            runCatching {
+                if (Prefs.get(applicationContext).serverId == prefs.serverId) WidgetBridge.push(applicationContext)
+            }
         }
     }
 

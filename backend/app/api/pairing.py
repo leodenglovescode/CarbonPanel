@@ -134,8 +134,13 @@ def _certificate_binding() -> tuple[str | None, set[str]]:
         names = {name.lower() for name in san.get_values_for_type(x509.DNSName)}
         names.update(str(ip).lower() for ip in san.get_values_for_type(x509.IPAddress))
         return fingerprint, names
-    except (OSError, ValueError, x509.ExtensionNotFound):
-        return None, set()
+    except (OSError, ValueError, x509.ExtensionNotFound) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cannot load the configured TLS certificate for Android pairing. "
+                   "Check TLS_CERT_FILE, the certificate's subject alternative names, "
+                   "and the backend user's access to the certificate directory.",
+        ) from exc
 
 
 def _make_qr_png_b64(payload: str) -> str:
@@ -188,8 +193,8 @@ async def start_pairing(
                    "Configure TLS and add an HTTPS endpoint under Paired Devices.",
         )
 
-    code, expires_in = pairing.generate(user.id, user.username)
     fingerprint, certificate_names = _certificate_binding()
+    code, expires_in = pairing.generate(user.id, user.username)
     pinned_hosts = sorted({
         host
         for url in selected

@@ -28,17 +28,20 @@ sealed interface PairState {
 class PairingViewModel(app: Application) : AndroidViewModel(app) {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val prefs get() = Prefs.get(getApplication())
+    private var prefs = Prefs.get(app).newServer()
 
     private val _state = MutableStateFlow<PairState>(PairState.Idle)
     val state: StateFlow<PairState> = _state.asStateFlow()
 
     fun reset() {
+        if (prefs.servers.none { it.id == prefs.serverId }) prefs.clear()
+        prefs = Prefs.get(getApplication()).newServer()
         _state.value = PairState.Idle
     }
 
     /** Handle a scanned QR payload, or a manually typed code plus URL. */
     fun pairFromQr(raw: String) {
+        if (_state.value is PairState.Working) return
         val payload = runCatching { json.decodeFromString<QrPayload>(raw) }.getOrNull()
         if (payload == null) {
             _state.value = PairState.Failed(
@@ -56,6 +59,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun pairManually(baseUrl: String, code: String) {
+        if (_state.value is PairState.Working) return
         val url = baseUrl.trim().trimEnd('/')
         if (!ApiClient.isPermittedEndpoint(url)) {
             _state.value = PairState.Failed("Address must be a valid https:// URL")
@@ -117,12 +121,17 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
             // Endpoints arrive best-first, but only some are reachable from
             // wherever the phone is standing — try each until one answers.
             val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+            val failures = mutableListOf<String>()
             for (url in usable) {
                 val result = withContext(Dispatchers.IO) {
                     withTimeoutOrNull(8_000) {
-                        runCatching {
-                            ApiClient.forBaseUrl(getApplication(), url)
-                                .claim(ClaimRequest(code = code, device_name = deviceName))
+                        try {
+                            Result.success(ApiClient.forBaseUrl(getApplication(), url, prefs)
+                                .claim(ClaimRequest(code = code, device_name = deviceName)))
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            Result.failure(error)
                         }
                     }
                 }
@@ -135,6 +144,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
                     // phone will be on a different network tomorrow.
                     prefs.endpoints = usable
                     prefs.lastGoodEndpoint = url
+                    prefs.saveServer()
                     ApiClient.clearCache()
                     // Any widget placed before pairing is showing "Not paired".
                     // Nothing else would clear it until the next periodic run,
@@ -146,23 +156,19 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     return@launch
                 }
-                // A code is single-use: if the server accepted it on an earlier
-                // address and only the response was lost, retrying elsewhere
-                // will fail too. Surfacing the last error is the honest outcome.
                 val error = result?.exceptionOrNull()
-                if (error != null && error.message?.contains("400") == true) {
+                val detail = error?.let(::pairingError) ?: "Connection timed out."
+                failures += "$url\n$detail"
+                // These responses establish contact with the server; trying
+                // other addresses cannot make an expired or rate-limited code work.
+                if (error is retrofit2.HttpException && error.code() in listOf(400, 422, 429)) {
                     restorePins()
-                    _state.value = PairState.Failed(
-                        "That pairing code was already used or has expired. Generate a new one."
-                    )
+                    _state.value = PairState.Failed(detail)
                     return@launch
                 }
             }
             restorePins()
-            _state.value = PairState.Failed(
-                "Couldn't reach the server at any of its addresses:\n" +
-                    usable.joinToString("\n") { "  • $it" }
-            )
+            _state.value = PairState.Failed(failures.joinToString("\n\n"))
         }
     }
 }
