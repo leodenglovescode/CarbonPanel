@@ -1231,10 +1231,15 @@ restore_sqlite_db() {
 chown_shared_db() {
   local db_path
   db_path="$(sqlite_db_path)"
-  if [[ -n "$db_path" && -f "$db_path" ]]; then
-    chown "$SERVICE_USER:$SERVICE_GROUP" "$db_path"
-    chmod 660 "$db_path"
-  fi
+  [[ -n "$db_path" ]] || return 0
+  # Migrations/seed run as root. Include existing SQLite sidecars so the
+  # service can reopen the database for writing, including after recovery.
+  local db_file
+  for db_file in "$db_path" "${db_path}-wal" "${db_path}-shm" "${db_path}-journal"; do
+    [[ -f "$db_file" ]] || continue
+    chown "$SERVICE_USER:$SERVICE_GROUP" "$db_file"
+    chmod 660 "$db_file"
+  done
 }
 
 cleanup_old_releases() {
@@ -1315,6 +1320,9 @@ deploy_release() {
     return 1
   fi
 
+  # Do this before starting the backend: SQLite connections opened while the
+  # database belongs to root can remain read-only even after a later chown.
+  chown_shared_db
   write_nginx_config
   write_backend_service
   write_update_services
@@ -1329,6 +1337,7 @@ deploy_release() {
     set_update_progress 97 rollback "Health check failed; restoring previous release" false
     [[ -n "$current_target" ]] && switch_symlink "$CURRENT_LINK" "$current_target"
     restore_sqlite_db "$db_backup"
+    chown_shared_db
     run_silent service_command daemon-reload
     run_silent service_command restart "$BACKEND_SERVICE" || true
     run_silent service_command restart nginx || true
@@ -1337,7 +1346,6 @@ deploy_release() {
   fi
 
   set_update_progress 98 verifying "Backend is healthy; finalizing update" false
-  chown_shared_db
   persist_success_status "$version" "$commit" "$source_type" "$installed_at" "$release_url"
   cleanup_old_releases
 }
@@ -1801,6 +1809,12 @@ fix_carbonpanel() {
   else
     ok "Shared directory ownership is correct"
   fi
+
+  # Repair may need to reopen connections that were first opened read-only,
+  # even when the database ownership has already been corrected on disk.
+  log "Repairing SQLite database permissions..."
+  chown_shared_db
+  fixed=1
 
   # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
   log "Checking sudoers rules..."
