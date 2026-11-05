@@ -65,7 +65,7 @@ export function useUserPrefsSync() {
       })
       if (p.displayPrefs) display.loadFromDb(p.displayPrefs as Record<string, string>)
       if (p.alerts) alerts.loadFromDb(p.alerts as Parameters<typeof alerts.loadFromDb>[0])
-      if (p.background) bg.loadFromDb(p.background as Parameters<typeof bg.loadFromDb>[0])
+      if (p.background) await bg.loadFromDb(p.background as Parameters<typeof bg.loadFromDb>[0])
       if (p.siteTraffic) siteTraffic.loadFromDb(p.siteTraffic as Parameters<typeof siteTraffic.loadFromDb>[0])
     } catch { /* silent — localStorage values stay */ } finally {
       _loading = false

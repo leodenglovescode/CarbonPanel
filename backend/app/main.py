@@ -9,6 +9,7 @@ from app.api.router import api_router, ws_logs_router, ws_router
 from app.api.system import router as system_router
 from app.config import settings
 from app.core.dependencies import COOKIE_NAME, is_allowed_http_origin
+from app.core.https import RequireHTTPSMiddleware
 from app.services.metrics.collector import metrics_collector
 from app.services.smart import smart_scanner
 
@@ -145,6 +146,10 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
 
+
+app.add_middleware(
+    RequireHTTPSMiddleware, enabled=bool(settings.cookie_secure or settings.tls_cert_file)
+)
 
 app.include_router(api_router)
 app.include_router(system_router)

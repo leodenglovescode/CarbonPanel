@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import (
-    apps, auth, background_images, bookmarks, cron, dashboard_layout, devices, disks,
+    apps, auth, background_images, bookmarks, cron, dashboard_layout, devices, disks, files,
     docker_api, metrics_history, pairing, preferences, processes, sessions,
     settings, sites, webhooks, ws, ws_logs,
 )
@@ -11,6 +11,7 @@ api_router.include_router(auth.router)
 api_router.include_router(settings.router)
 api_router.include_router(sites.router)
 api_router.include_router(disks.router)
+api_router.include_router(files.router)
 api_router.include_router(apps.router)
 api_router.include_router(docker_api.router)
 api_router.include_router(webhooks.router, prefix="/notifications")

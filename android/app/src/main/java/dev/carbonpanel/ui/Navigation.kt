@@ -36,6 +36,7 @@ enum class Dest(
     Disks("disks", "Storage", Icons.Filled.Storage, primary = true),
     More("more", "More", Icons.Filled.MoreHoriz, primary = true),
 
+    Files("files", "Files", Icons.Filled.Storage),
     Sites("sites", "Sites", Icons.Filled.Language),
     Cron("cron", "Cron", Icons.Filled.Schedule),
     Apps("apps", "Ports", Icons.Filled.Apps),

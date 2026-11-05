@@ -62,9 +62,9 @@ object ApiClient {
         }
 
     /** Absolute URL of the panel's app background image, or null if unpaired. */
-    fun backgroundImageUrl(context: Context): String? {
+    fun backgroundImageUrl(context: Context, target: String = "android-app", version: Long = 0): String? {
         val base = activeBaseUrl ?: Prefs.get(context).lastGoodEndpoint ?: return null
-        return base.trimEnd('/') + "/api/v1/settings/background-image/app"
+        return base.trimEnd('/') + "/api/v1/settings/background-image/$target?v=$version"
     }
 
     private fun okHttp(context: Context, prefs: Prefs = Prefs.get(context)): OkHttpClient {

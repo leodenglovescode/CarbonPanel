@@ -8,7 +8,7 @@ from typing import Literal
 
 from PIL import Image, ImageOps
 
-Target = Literal["app", "login"]
+Target = Literal["app", "login", "android-app", "android-login"]
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB — validated before decoding
 MAX_OUTPUT_BYTES = 2 * 1024 * 1024  # 2 MB — compressed output ceiling
@@ -80,7 +80,10 @@ def compress_to_jpeg(
 
 
 def save_image(target: Target, jpeg_bytes: bytes) -> None:
-    _image_path(target).write_bytes(jpeg_bytes)
+    path = _image_path(target)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_bytes(jpeg_bytes)
+    temporary.replace(path)
 
 
 def load_image(target: Target) -> bytes | None:

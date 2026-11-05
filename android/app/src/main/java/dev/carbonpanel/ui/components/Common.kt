@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.carbonpanel.ui.theme.Accent
 import dev.carbonpanel.ui.theme.Danger
-import dev.carbonpanel.ui.theme.LocalHasBackdrop
 import dev.carbonpanel.ui.theme.Warning
 import kotlin.math.roundToInt
 
@@ -62,13 +61,10 @@ fun PanelCard(
     spacing: Int = 8,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val backdrop = LocalHasBackdrop.current
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
-        // Over a photo the card has to be near-opaque to stay legible; over
-        // flat colour a little translucency keeps it from looking pasted on.
-        color = MaterialTheme.colorScheme.surface.copy(alpha = if (backdrop) 0.90f else 1f),
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(

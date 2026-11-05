@@ -39,6 +39,12 @@
               @click="theme.setTheme('auto')"
             >⟳ Auto</button>
           </div>
+          <label class="style-field" style="margin-top: 20px">
+            <span class="style-lbl">Surface transparency — {{ bg.settings.surfaceTransparency }}%</span>
+            <input type="range" class="interval-slider" min="0" max="90" step="1" :disabled="!bg.ready" :value="bg.settings.surfaceTransparency" @input="bg.setTransparency(+($event.target as HTMLInputElement).value)" />
+            <span class="style-hint">Let the background show through cards, the sidebar, navigation, and controls. Text and icons stay opaque. Shared with Android.</span>
+          </label>
+          <p v-if="bg.error" class="upload-error" role="alert">{{ bg.error }}</p>
         </div>
 
         <!-- Stylistic Settings Section -->
@@ -169,214 +175,7 @@
               {{ bg.hasCustomBg ? 'customized' : 'defaults' }}
             </span>
           </div>
-          <p class="section-desc">
-            Set a gradient, image, or solid color behind the app and login screen. Blur creates a
-            frosted-glass depth effect.
-          </p>
-
-          <!-- App background -->
-          <div class="bg-block">
-            <div class="bg-block-head">
-              <span class="style-lbl">App Background</span>
-              <button v-if="bg.isCustom(bg.appBg) || bg.appBgImage" class="reset-sm" @click="bg.resetAppBg()">Reset</button>
-            </div>
-
-            <div class="bg-type-row">
-              <button
-                v-for="bgType in bgTypes"
-                :key="bgType.key"
-                :class="['type-btn', { active: bg.appBg.type === bgType.key }]"
-                @click="bg.setAppBg({ type: bgType.key })"
-              >{{ bgType.label }}</button>
-            </div>
-
-            <template v-if="bg.appBg.type === 'gradient'">
-              <div class="gradient-preview" :style="{ background: bg.gradientPreview(bg.appBg) }" />
-              <div class="style-grid">
-                <label class="style-field">
-                  <span class="style-lbl">From</span>
-                  <div class="color-control">
-                    <input
-                      type="color" class="color-picker" :value="bg.appBg.gradientStart"
-                      @input="bg.setAppBg({ gradientStart: ($event.target as HTMLInputElement).value })"
-                    />
-                    <code class="color-value">{{ bg.appBg.gradientStart }}</code>
-                  </div>
-                </label>
-                <label class="style-field">
-                  <span class="style-lbl">To</span>
-                  <div class="color-control">
-                    <input
-                      type="color" class="color-picker" :value="bg.appBg.gradientEnd"
-                      @input="bg.setAppBg({ gradientEnd: ($event.target as HTMLInputElement).value })"
-                    />
-                    <code class="color-value">{{ bg.appBg.gradientEnd }}</code>
-                  </div>
-                </label>
-              </div>
-              <label class="style-field">
-                <span class="style-lbl">Angle — {{ bg.appBg.gradientAngle }}°</span>
-                <input
-                  type="range" class="interval-slider" min="0" max="360" step="5"
-                  :value="bg.appBg.gradientAngle"
-                  @input="bg.setAppBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })"
-                />
-              </label>
-            </template>
-
-            <template v-if="bg.appBg.type === 'image'">
-              <div v-if="bg.appBgImage" class="img-preview-row">
-                <img :src="bg.appBgImage" class="img-thumb" alt="App background" />
-                <button class="reset-sm danger-sm" :disabled="uploading === 'app'" @click="removeImage('app')">Remove</button>
-              </div>
-              <button
-                v-else
-                type="button"
-                class="upload-drop"
-                :disabled="uploading === 'app'"
-                @click="triggerUpload('app')"
-              >
-                <span>{{ uploading === 'app' ? 'Uploading…' : 'Click to upload image' }}</span>
-                <span class="upload-hint">JPG, PNG, WEBP · max 20 MB · compressed automatically</span>
-              </button>
-              <input
-                ref="appFileInput" type="file" accept="image/*" class="file-hidden"
-                @change="handleUpload('app', $event)"
-              />
-              <p v-if="uploadError === 'app'" class="upload-error">{{ uploadErrorMsg }}</p>
-            </template>
-
-            <label v-if="bg.appBg.type !== 'color'" class="style-field">
-              <span class="style-lbl">Background blur — {{ bg.appBg.blur }}px</span>
-              <input
-                type="range" class="interval-slider" min="0" max="20" step="1"
-                :value="bg.appBg.blur"
-                @input="bg.setAppBg({ blur: parseInt(($event.target as HTMLInputElement).value) })"
-              />
-            </label>
-
-            <label v-if="bg.appBg.type !== 'color'" class="style-field">
-              <span class="style-lbl">Background brightness — {{ bg.appBg.brightness }}%</span>
-              <input
-                type="range" class="interval-slider" min="30" max="150" step="5"
-                :value="bg.appBg.brightness"
-                @input="bg.setAppBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })"
-              />
-            </label>
-
-            <label v-if="bg.appBg.type !== 'color'" class="style-field">
-              <span class="style-lbl">Text contrast overlay — {{ bg.appBg.overlay }}%</span>
-              <input
-                type="range" class="interval-slider" min="0" max="80" step="5"
-                :value="bg.appBg.overlay"
-                @input="bg.setAppBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })"
-              />
-              <span class="style-hint">Dims the background so text and controls stay readable. Raise this if a bright image washes out the UI.</span>
-            </label>
-          </div>
-
-          <div class="bg-divider" />
-
-          <!-- Login background -->
-          <div class="bg-block">
-            <div class="bg-block-head">
-              <span class="style-lbl">Login Screen Background</span>
-              <button v-if="bg.isCustom(bg.loginBg) || bg.loginBgImage" class="reset-sm" @click="bg.resetLoginBg()">Reset</button>
-            </div>
-
-            <div class="bg-type-row">
-              <button
-                v-for="bgType in bgTypes"
-                :key="bgType.key"
-                :class="['type-btn', { active: bg.loginBg.type === bgType.key }]"
-                @click="bg.setLoginBg({ type: bgType.key })"
-              >{{ bgType.label }}</button>
-            </div>
-
-            <template v-if="bg.loginBg.type === 'gradient'">
-              <div class="gradient-preview" :style="{ background: bg.gradientPreview(bg.loginBg) }" />
-              <div class="style-grid">
-                <label class="style-field">
-                  <span class="style-lbl">From</span>
-                  <div class="color-control">
-                    <input
-                      type="color" class="color-picker" :value="bg.loginBg.gradientStart"
-                      @input="bg.setLoginBg({ gradientStart: ($event.target as HTMLInputElement).value })"
-                    />
-                    <code class="color-value">{{ bg.loginBg.gradientStart }}</code>
-                  </div>
-                </label>
-                <label class="style-field">
-                  <span class="style-lbl">To</span>
-                  <div class="color-control">
-                    <input
-                      type="color" class="color-picker" :value="bg.loginBg.gradientEnd"
-                      @input="bg.setLoginBg({ gradientEnd: ($event.target as HTMLInputElement).value })"
-                    />
-                    <code class="color-value">{{ bg.loginBg.gradientEnd }}</code>
-                  </div>
-                </label>
-              </div>
-              <label class="style-field">
-                <span class="style-lbl">Angle — {{ bg.loginBg.gradientAngle }}°</span>
-                <input
-                  type="range" class="interval-slider" min="0" max="360" step="5"
-                  :value="bg.loginBg.gradientAngle"
-                  @input="bg.setLoginBg({ gradientAngle: parseInt(($event.target as HTMLInputElement).value) })"
-                />
-              </label>
-            </template>
-
-            <template v-if="bg.loginBg.type === 'image'">
-              <div v-if="bg.loginBgImage" class="img-preview-row">
-                <img :src="bg.loginBgImage" class="img-thumb" alt="Login background" />
-                <button class="reset-sm danger-sm" :disabled="uploading === 'login'" @click="removeImage('login')">Remove</button>
-              </div>
-              <button
-                v-else
-                type="button"
-                class="upload-drop"
-                :disabled="uploading === 'login'"
-                @click="triggerUpload('login')"
-              >
-                <span>{{ uploading === 'login' ? 'Uploading…' : 'Click to upload image' }}</span>
-                <span class="upload-hint">JPG, PNG, WEBP · max 20 MB · compressed automatically</span>
-              </button>
-              <input
-                ref="loginFileInput" type="file" accept="image/*" class="file-hidden"
-                @change="handleUpload('login', $event)"
-              />
-              <p v-if="uploadError === 'login'" class="upload-error">{{ uploadErrorMsg }}</p>
-            </template>
-
-            <label v-if="bg.loginBg.type !== 'color'" class="style-field">
-              <span class="style-lbl">Background blur — {{ bg.loginBg.blur }}px</span>
-              <input
-                type="range" class="interval-slider" min="0" max="20" step="1"
-                :value="bg.loginBg.blur"
-                @input="bg.setLoginBg({ blur: parseInt(($event.target as HTMLInputElement).value) })"
-              />
-            </label>
-
-            <label v-if="bg.loginBg.type !== 'color'" class="style-field">
-              <span class="style-lbl">Background brightness — {{ bg.loginBg.brightness }}%</span>
-              <input
-                type="range" class="interval-slider" min="30" max="150" step="5"
-                :value="bg.loginBg.brightness"
-                @input="bg.setLoginBg({ brightness: parseInt(($event.target as HTMLInputElement).value) })"
-              />
-            </label>
-
-            <label v-if="bg.loginBg.type !== 'color'" class="style-field">
-              <span class="style-lbl">Text contrast overlay — {{ bg.loginBg.overlay }}%</span>
-              <input
-                type="range" class="interval-slider" min="0" max="80" step="5"
-                :value="bg.loginBg.overlay"
-                @input="bg.setLoginBg({ overlay: parseInt(($event.target as HTMLInputElement).value) })"
-              />
-              <span class="style-hint">Dims the background so the logo and login form stay readable. Raise this if a bright image washes out the text.</span>
-            </label>
-          </div>
+          <BackgroundSettings />
         </div>
 
         <!-- Display Preferences Section -->
@@ -611,14 +410,14 @@
                 versionInfo?.browser_updates_available === false
                   ? 'Manual updates'
                   : restarting || versionInfo?.restart_pending
-                  ? 'Restarting'
-                  : versionInfo?.update_in_progress
-                    ? 'Installing'
-                    : versionInfo?.check_in_progress
-                      ? 'Checking'
-                      : versionInfo?.update_available
-                        ? 'Update available'
-                        : 'Up to date'
+                    ? 'Restarting'
+                    : versionInfo?.update_in_progress
+                      ? 'Installing'
+                      : versionInfo?.check_in_progress
+                        ? 'Checking'
+                        : versionInfo?.update_available
+                          ? 'Update available'
+                          : 'Up to date'
               }}
             </span>
           </div>
@@ -1342,12 +1141,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useMetricsStore } from '@/stores/metrics'
 import { useThemeStore, type AnimationLevel } from '@/stores/theme'
 import { useAlertsStore, type AlertRuleKey, type AlertSeverity } from '@/stores/alerts'
+import BackgroundSettings from '@/components/settings/BackgroundSettings.vue'
 import { useBackgroundStore } from '@/stores/background'
 import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, backgroundImageApi, type SystemVersionResponse, type WebhookResponse, type WebhookCreate, type NotificationKind, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, type SystemVersionResponse, type WebhookResponse, type WebhookCreate, type NotificationKind, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart } from '@/api'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -1394,63 +1194,6 @@ watch(() => route.hash, (hash) => {
   if (!hash) return
   nextTick(() => scrollTo(hash.slice(1)))
 }, { immediate: true })
-
-const bgTypes = [
-  { key: 'color' as const, label: 'Color' },
-  { key: 'gradient' as const, label: 'Gradient' },
-  { key: 'image' as const, label: 'Image' },
-]
-
-const appFileInput = ref<HTMLInputElement | null>(null)
-const loginFileInput = ref<HTMLInputElement | null>(null)
-const uploadError = ref<'app' | 'login' | null>(null)
-const uploadErrorMsg = ref('')
-const uploading = ref<'app' | 'login' | null>(null)
-
-function triggerUpload(target: 'app' | 'login') {
-  uploadError.value = null
-  if (target === 'app') appFileInput.value?.click()
-  else loginFileInput.value?.click()
-}
-
-async function handleUpload(target: 'app' | 'login', event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  input.value = ''
-
-  if (file.size > 20 * 1024 * 1024) {
-    uploadError.value = target
-    uploadErrorMsg.value = 'Image too large — max 20 MB'
-    return
-  }
-
-  uploadError.value = null
-  uploading.value = target
-  try {
-    await backgroundImageApi.upload(target, file)
-    const version = Date.now()
-    if (target === 'app') bg.setAppBgImageVersion(version)
-    else bg.setLoginBgImageVersion(version)
-  } catch (e: any) {
-    uploadError.value = target
-    uploadErrorMsg.value = e.response?.data?.detail || 'Upload failed'
-  } finally {
-    uploading.value = null
-  }
-}
-
-async function removeImage(target: 'app' | 'login') {
-  uploadError.value = null
-  try {
-    await backgroundImageApi.remove(target)
-    if (target === 'app') bg.setAppBgImageVersion(null)
-    else bg.setLoginBgImageVersion(null)
-  } catch (e: any) {
-    uploadError.value = target
-    uploadErrorMsg.value = e.response?.data?.detail || 'Failed to remove image'
-  }
-}
 
 const alertMetrics: Array<{
   key: AlertRuleKey

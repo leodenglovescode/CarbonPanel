@@ -129,6 +129,7 @@ const navItems = computed(() => [
   { to: '/sites', label: t('nav.sites') },
   { to: '/system-services', label: t('nav.systemServices') },
   { to: '/disks', label: t('nav.disks') },
+  { to: '/files', label: 'Files' },
   { to: '/apps', label: t('nav.apps') },
   { to: '/docker', label: t('nav.docker') },
   { to: '/logs', label: t('nav.logs') },

@@ -55,6 +55,15 @@ import retrofit2.http.Query
  * which is the one call made before a token exists.
  */
 interface Api {
+    @GET("api/v1/files")
+    suspend fun files(@Query("path") path: String, @Query("offset") offset: Int = 0): dev.carbonpanel.data.FileListing
+
+    @GET("api/v1/files/preview")
+    suspend fun filePreview(@Query("path") path: String): okhttp3.ResponseBody
+
+    @GET("api/v1/settings/background-image/config")
+    suspend fun backgrounds(): dev.carbonpanel.data.BackgroundSettings
+
 
     @GET("api/v1/disks/nas")
     suspend fun nasInventory(): dev.carbonpanel.data.NasInventory

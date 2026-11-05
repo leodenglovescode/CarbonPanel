@@ -864,7 +864,7 @@ server {
     add_header Referrer-Policy "no-referrer" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self'; media-src 'self'; frame-src 'self'; upgrade-insecure-requests; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
 
     location /api/ {
         proxy_pass http://127.0.0.1:$BACKEND_PORT;
@@ -927,7 +927,7 @@ export CARBONPANEL_INIT_SYSTEM=sysv
 export CARBONPANEL_INSTALL_ROOT="$INSTALL_ROOT"
 export CARBONPANEL_BACKEND_PORT="$BACKEND_PORT"
 cd "$CURRENT_LINK/backend"
-exec "$CURRENT_LINK/backend/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$BACKEND_PORT"
+exec "$CURRENT_LINK/backend/.venv/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$BACKEND_PORT" --proxy-headers --forwarded-allow-ips 127.0.0.1
 EOF
   chown root:root "$BIN_DIR/carbonpanel-backend"
   chmod 755 "$BIN_DIR/carbonpanel-backend"
@@ -984,7 +984,7 @@ WorkingDirectory=$CURRENT_LINK/backend
 Environment=CARBONPANEL_INSTALL_ROOT=$INSTALL_ROOT
 Environment=CARBONPANEL_BACKEND_PORT=$BACKEND_PORT
 EnvironmentFile=$BACKEND_ENV_FILE
-ExecStart=$CURRENT_LINK/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port $BACKEND_PORT
+ExecStart=$CURRENT_LINK/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port $BACKEND_PORT --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=always
 RestartSec=3
 

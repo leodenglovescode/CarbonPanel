@@ -1,6 +1,8 @@
 :root {
   --bg: #0d0d0d;
   --bg-card: #111111;
+  --surface-opacity: 100%;
+  --bg-card-solid: #111111;
   --bg-card-hover: #161616;
   --bg-input: #1a1a1a;
   --border: #222222;
@@ -36,7 +38,7 @@
   --border-row: rgba(255,255,255,0.03);
   --bg-badge:   rgba(255,255,255,0.05);
   --surface-glass: color-mix(in srgb, var(--bg-card) 92%, transparent);
-  --surface-page-glass: color-mix(in srgb, var(--bg) 94%, transparent);
+  --surface-page-glass: color-mix(in srgb, var(--bg) var(--surface-opacity), transparent);
   --surface-panel: color-mix(in srgb, var(--bg-card) 98%, transparent);
   --accent-hover: #33ffaa;
   /* scrim tint for custom app/login backgrounds — dark theme text is light-on-dark,

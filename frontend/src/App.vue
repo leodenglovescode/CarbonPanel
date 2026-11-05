@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="bg.appBgLayerVisible" class="app-bg-layer" :style="bg.appBgLayerStyle" />
+    <div v-if="!isPublicRoute && bg.appBgLayerVisible" class="app-bg-layer" :style="bg.appBgLayerStyle" />
   </Teleport>
   <router-view v-if="!isPublicRoute" v-slot="{ Component }">
     <AuthLayout>
@@ -37,6 +37,7 @@ const UPDATE_PROMPT_STORAGE_KEY = 'cp_update_prompt_version'
 
 useThemeStore()
 const bg = useBackgroundStore()
+void bg.loadShared()
 const dialog = useDialogStore()
 
 const prefsSync = useUserPrefsSync()
@@ -97,8 +98,7 @@ watch(
   () => auth.isAuthenticated,
   (authenticated) => {
     if (authenticated) {
-      void prefsSync.load()
-      bg.migrateLegacyImages()
+      void prefsSync.load().then(() => bg.migrateLegacyImages())
     }
   },
   { immediate: true },

@@ -11,14 +11,20 @@ import '@fontsource/jetbrains-mono/600.css'
 import '@fontsource/jetbrains-mono/700.css'
 import './assets/main.css'
 
-// Apply saved theme before first render to avoid flash
-const savedTheme = localStorage.getItem('cp_theme') ?? 'dark'
-const resolvedTheme = savedTheme === 'auto'
-  ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-  : savedTheme
-document.documentElement.setAttribute('data-theme', resolvedTheme)
+// Installed panels use TLS. Keep loopback HTTP available for local development.
+const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+if (window.location.protocol === 'http:' && !loopback) {
+  window.location.replace(`https://${window.location.host}${window.location.pathname}${window.location.search}${window.location.hash}`)
+} else {
+  // Apply saved theme before first render to avoid flash
+  const savedTheme = localStorage.getItem('cp_theme') ?? 'dark'
+  const resolvedTheme = savedTheme === 'auto'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : savedTheme
+  document.documentElement.setAttribute('data-theme', resolvedTheme)
 
-const app = createApp(App)
-app.use(createPinia())
-app.use(router)
-app.mount('#app')
+  const app = createApp(App)
+  app.use(createPinia())
+  app.use(router)
+  app.mount('#app')
+}

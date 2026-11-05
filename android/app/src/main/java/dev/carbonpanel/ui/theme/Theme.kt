@@ -161,6 +161,7 @@ fun CarbonTheme(
     mode: ThemeMode = ThemeMode.System,
     accent: AccentChoice = AccentChoice.Carbon,
     hasBackdrop: Boolean = false,
+    surfaceTransparency: Int = 0,
     content: @Composable () -> Unit,
 ) {
     val dark = when (mode) {
@@ -177,7 +178,14 @@ fun CarbonTheme(
         else -> lightSchemeFor(accent.seed)
     }
 
+    val opacity = 1f - surfaceTransparency.coerceIn(0, 90) / 100f
+    val surfaces = scheme.copy(
+        surface = scheme.surface.copy(alpha = opacity),
+        surfaceVariant = scheme.surfaceVariant.copy(alpha = opacity),
+        surfaceContainer = scheme.surfaceContainer.copy(alpha = opacity),
+        surfaceContainerHigh = scheme.surfaceContainerHigh.copy(alpha = opacity),
+    )
     CompositionLocalProvider(LocalHasBackdrop provides hasBackdrop) {
-        MaterialTheme(colorScheme = scheme, typography = MonoTypography, content = content)
+        MaterialTheme(colorScheme = surfaces, typography = MonoTypography, content = content)
     }
 }

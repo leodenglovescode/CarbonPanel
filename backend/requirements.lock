@@ -36,8 +36,12 @@ idna==3.18
     # via anyio
 mako==1.4.1
     # via alembic
+markdown-it-py==4.2.0
+    # via carbonpanel (pyproject.toml)
 markupsafe==3.0.3
     # via mako
+mdurl==0.1.2
+    # via markdown-it-py
 pillow==12.3.0
     # via carbonpanel (pyproject.toml)
 psutil==7.2.2
@@ -51,6 +55,8 @@ pydantic==2.13.4
 pydantic-core==2.46.4
     # via pydantic
 pydantic-settings==2.15.0
+    # via carbonpanel (pyproject.toml)
+pygments==2.21.0
     # via carbonpanel (pyproject.toml)
 pyjwt==2.13.0
     # via carbonpanel (pyproject.toml)

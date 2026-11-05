@@ -556,6 +556,12 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── appearance ─────────────────────────────────────────────────────────
 
+    private val _backgrounds = MutableStateFlow(dev.carbonpanel.data.BackgroundSettings())
+    val backgrounds = _backgrounds.asStateFlow()
+    fun refreshBackgrounds() = viewModelScope.launch {
+        repo.backgrounds().onSuccess { _backgrounds.value = it }
+    }
+
     private val _backdropEnabled = MutableStateFlow(prefs.backdropEnabled)
     val backdropEnabled: StateFlow<Boolean> = _backdropEnabled.asStateFlow()
 

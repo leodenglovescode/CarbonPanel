@@ -131,3 +131,28 @@ Idea and logic by @leodenglovescode, code assisted by AI
 
 See [NAS compatibility and setup](docs/NAS.md) for Linux MD RAID, LVM, fan/PWM
 monitoring, SysV service commands, and vendor-kernel limitations.
+
+### Backgrounds and file previews
+
+Settings → Backgrounds stores four independent destinations on the server:
+web app, web login, Android app, and Android login. Upload an image to crop,
+zoom, position, and resize it before saving. Choose multiple destinations in
+the crop dialog, or use **Apply to all four** to reuse a saved background.
+The **Surface transparency** slider under Appearance changes surface fills
+while keeping text and icons opaque. Android reads these settings when a known
+server is opened or the app returns to the foreground; an unpaired phone has
+no server background to load yet.
+
+**Files** in the web sidebar and Android's More menu provides read-only browsing,
+previews, and downloads. It runs with the CarbonPanel service account's existing
+filesystem permissions, without sudo or filesystem write operations. Regular
+image, video, and audio formats preview where the client supports their codec;
+Markdown renders with raw HTML and external images disabled, and code files
+receive syntax highlighting. Text previews are capped at 1 MiB; larger files
+can still be downloaded. Device, proc, and sys files are excluded. Directories
+are paginated and limited to 10,000 entries per listing.
+
+Installed panels require HTTPS for API and WebSocket traffic. The TLS nginx
+listener redirects plain HTTP, and only the loopback proxy is trusted to report
+the original protocol. The internal loopback readiness probe and local HTTP
+development configuration remain available. Android continues to require HTTPS.

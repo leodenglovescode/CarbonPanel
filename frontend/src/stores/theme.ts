@@ -311,9 +311,10 @@ function applyStyleSettings(t: Theme, styleSettings: StyleSettings) {
   rootStyle.setProperty('--route-leave-scale', motion.routeLeaveScale)
 
   rootStyle.setProperty('--bg', resolved.bg)
-  rootStyle.setProperty('--bg-card', resolved.bgCard)
-  rootStyle.setProperty('--bg-card-hover', effectiveDark ? lightenColor(resolved.bgCard, 0.04) : darkenColor(resolved.bgCard, 0.03))
-  rootStyle.setProperty('--bg-input', resolved.bgInput)
+  rootStyle.setProperty('--bg-card-solid', resolved.bgCard)
+  rootStyle.setProperty('--bg-card', `color-mix(in srgb, ${resolved.bgCard} var(--surface-opacity, 100%), transparent)`)
+  rootStyle.setProperty('--bg-card-hover', `color-mix(in srgb, ${effectiveDark ? lightenColor(resolved.bgCard, 0.04) : darkenColor(resolved.bgCard, 0.03)} var(--surface-opacity, 100%), transparent)`)
+  rootStyle.setProperty('--bg-input', `color-mix(in srgb, ${resolved.bgInput} var(--surface-opacity, 100%), transparent)`)
   rootStyle.setProperty('--border', resolved.border)
   rootStyle.setProperty('--border-subtle', effectiveDark ? lightenColor(resolved.bgInput, 0.03) : darkenColor(resolved.bgInput, 0.03))
   rootStyle.setProperty('--fg', resolved.fg)

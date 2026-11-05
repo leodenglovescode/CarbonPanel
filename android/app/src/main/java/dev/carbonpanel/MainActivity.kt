@@ -123,7 +123,20 @@ private fun CarbonPanelRoot() {
     val themeMode by panelViewModel.themeMode.collectAsStateWithLifecycle()
     val accent by panelViewModel.accent.collectAsStateWithLifecycle()
     val backdropEnabled by panelViewModel.backdropEnabled.collectAsStateWithLifecycle()
-    val showBackdrop = selected != null && !adding && !appSettings && backdropEnabled
+    val backgrounds by panelViewModel.backgrounds.collectAsStateWithLifecycle()
+    val backgroundTarget = if (selected != null && !adding) "android-app" else "android-login"
+    val background = backgrounds.targets[backgroundTarget]
+    val showBackdrop = !appSettings && backdropEnabled && background != null &&
+        (background.type == "gradient" || (background.type == "image" && background.version > 0))
+    val rootLifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(rootLifecycleOwner, panelViewModel) {
+        rootLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                if (Prefs.get(context).servers.isNotEmpty()) panelViewModel.refreshBackgrounds().join()
+                kotlinx.coroutines.delay(30_000)
+            }
+        }
+    }
 
     LaunchedEffect(sessionKey, servers) { WidgetBridge.push(context) }
     BackHandler(enabled = appSettings && !adding) {
@@ -136,10 +149,10 @@ private fun CarbonPanelRoot() {
         adding = false
     }
 
-    CarbonTheme(mode = themeMode, accent = accent, hasBackdrop = showBackdrop) {
+    CarbonTheme(mode = themeMode, accent = accent, hasBackdrop = showBackdrop, surfaceTransparency = backgrounds.surfaceTransparency) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             key(sessionKey) {
-                Backdrop(enabled = showBackdrop) {
+                Backdrop(enabled = showBackdrop, config = background, target = backgroundTarget) {
                     when {
                         adding -> Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                             PairingScreen(pairingViewModel, onPaired = {
@@ -267,14 +280,13 @@ private fun MainScaffold(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent,
+                    containerColor = MaterialTheme.colorScheme.surface,
                 ),
             )
         },
         bottomBar = {
             NavigationBar(
-                containerColor = if (transparent) Color.Transparent
-                                 else MaterialTheme.colorScheme.surface,
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 Dest.primaries(dockerInstalled).forEach { entry ->
                     NavigationBarItem(
@@ -311,6 +323,7 @@ private fun MainScaffold(
                         Dest.Services -> ServicesScreen(viewModel)
                         Dest.Disks -> DisksScreen(viewModel)
                         Dest.More -> MoreScreen(onNavigate = { dest = it })
+                        Dest.Files -> dev.carbonpanel.ui.screens.FilesScreen()
                         Dest.Sites -> SitesScreen(viewModel) { openSiteId = it }
                         Dest.Cron -> CronScreen(viewModel)
                         Dest.Apps -> AppsScreen(viewModel)

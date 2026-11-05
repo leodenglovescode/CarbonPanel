@@ -454,3 +454,42 @@ data class VersionStatus(
 
 /** Free-form JSON blobs the panel round-trips without interpreting. */
 @Serializable data class PrefsPayload(val prefs: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap())
+
+@Serializable
+data class BackgroundConfig(
+    val type: String = "color",
+    val gradientAngle: Float = 135f,
+    val gradientStart: String = "#0d0d0d",
+    val gradientEnd: String = "#1a1a3e",
+    val blur: Float = 0f,
+    val brightness: Float = 100f,
+    val overlay: Float = 40f,
+    val version: Long = 0,
+)
+
+@Serializable
+data class BackgroundSettings(
+    val targets: Map<String, BackgroundConfig> = emptyMap(),
+    val surfaceTransparency: Int = 0,
+)
+
+@Serializable
+data class FileEntry(
+    val name: String,
+    val path: String,
+    val directory: Boolean,
+    val symlink: Boolean = false,
+    val size: Long? = null,
+    val modified: Double = 0.0,
+    val kind: String = "file",
+)
+
+@Serializable
+data class FileListing(
+    val path: String = "/",
+    val parent: String? = null,
+    val entries: List<FileEntry> = emptyList(),
+    val total: Int = 0,
+    val offset: Int = 0,
+    val has_more: Boolean = false,
+)

@@ -5,6 +5,7 @@ import dev.carbonpanel.data.*
 import dev.carbonpanel.net.Api
 import dev.carbonpanel.net.ApiClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -26,6 +27,13 @@ sealed interface PollState {
 class PanelRepository(private val context: Context) {
 
     private val prefs = Prefs.get(context)
+
+    suspend fun files(path: String, offset: Int = 0) = call { it.files(path, offset) }
+    suspend fun filePreview(path: String) = call { api ->
+        withContext(Dispatchers.IO) { api.filePreview(path).use { it.string() } }
+    }
+
+    suspend fun backgrounds() = call { it.backgrounds() }
 
     private suspend fun api(): Api =
         ApiClient.resolve(context, prefs)?.second ?: error("Server unreachable")
