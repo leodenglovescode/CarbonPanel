@@ -74,13 +74,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useMetricsStore } from '@/stores/metrics'
 import { dockerApi, type ContainerInfo } from '@/api/index'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 
 const { t } = useLocaleStore()
 const dialog = useDialogStore()
+const metrics = useMetricsStore()
+const router = useRouter()
+
+watch(() => metrics.dockerAvailable, (available) => {
+  if (!available) void router.replace('/')
+}, { immediate: true })
 
 const containers = ref<ContainerInfo[]>([])
 const loading = ref(false)
@@ -96,6 +104,7 @@ function scheduleRefresh(delay: number) {
 }
 
 async function load(showSpinner = true) {
+  if (!metrics.dockerAvailable) return
   if (showSpinner) loading.value = true
   error.value = ''
   let nextRefresh = 10_000
@@ -109,7 +118,7 @@ async function load(showSpinner = true) {
     error.value = e.response?.data?.detail || 'Failed to load containers'
   } finally {
     if (showSpinner) loading.value = false
-    scheduleRefresh(nextRefresh)
+    if (metrics.dockerAvailable) scheduleRefresh(nextRefresh)
   }
 }
 

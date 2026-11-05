@@ -55,6 +55,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLocaleStore } from '@/stores/locale'
+import { useMetricsStore } from '@/stores/metrics'
 import { sitesApi, dockerApi } from '@/api'
 
 interface PaletteItem {
@@ -66,6 +67,7 @@ interface PaletteItem {
 }
 
 const router = useRouter()
+const metrics = useMetricsStore()
 const { t } = useLocaleStore()
 
 const open = ref(false)
@@ -88,7 +90,7 @@ const pages = computed<PaletteItem[]>(() => [
   { key: 'page-/cron', label: t('nav.cron'), category: 'Pages', go: () => router.push('/cron') },
   { key: 'page-/sessions', label: t('nav.sessions'), category: 'Pages', go: () => router.push('/sessions') },
   { key: 'page-/settings', label: t('nav.settings'), category: 'Pages', go: () => router.push('/settings') },
-])
+].filter(item => item.key !== 'page-/docker' || metrics.dockerAvailable))
 
 function goSettings(id: string) {
   router.push({ path: '/settings', hash: `#${id}` })
@@ -123,7 +125,7 @@ async function loadDynamic() {
   dynamicLoading = true
   const [sitesRes, containersRes, servicesRes] = await Promise.allSettled([
     sitesApi.list(),
-    dockerApi.list(),
+    metrics.dockerAvailable ? dockerApi.list() : Promise.resolve({ data: [] }),
     sitesApi.listSystemServices(),
   ])
   if (sitesRes.status === 'fulfilled') sites.value = sitesRes.value.data
@@ -138,7 +140,7 @@ const dynamicItems = computed<PaletteItem[]>(() => [
     key: `site-${s.id}`, label: s.name, sub: 'Site', category: 'Sites',
     go: () => router.push({ name: 'site-detail', params: { id: s.id } }),
   })),
-  ...containers.value.map((c): PaletteItem => ({
+  ...(metrics.dockerAvailable ? containers.value : []).map((c): PaletteItem => ({
     key: `container-${c.id}`, label: c.name, sub: 'Container', category: 'Docker',
     go: () => router.push('/docker'),
   })),
@@ -147,6 +149,12 @@ const dynamicItems = computed<PaletteItem[]>(() => [
     go: () => router.push('/system-services'),
   })),
 ])
+
+watch(() => metrics.dockerAvailable, () => {
+  containers.value = []
+  dynamicLoaded = false
+  if (open.value) void loadDynamic()
+})
 
 const allItems = computed<PaletteItem[]>(() => [...pages.value, ...settingsSections.value, ...dynamicItems.value])
 

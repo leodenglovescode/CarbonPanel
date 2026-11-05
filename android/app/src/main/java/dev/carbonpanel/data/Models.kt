@@ -121,6 +121,8 @@ data class SystemMetrics(
     val timezone: String = "",
     /** Server's UTC offset. Epoch ts alone can't convey this. */
     val utc_offset_seconds: Int = 0,
+    /** Null preserves compatibility with servers that do not report capabilities. */
+    val docker_installed: Boolean? = null,
 )
 
 @Serializable

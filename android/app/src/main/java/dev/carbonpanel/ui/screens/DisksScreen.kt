@@ -20,6 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import dev.carbonpanel.data.DiskInfo
 import dev.carbonpanel.ui.PanelViewModel
 import dev.carbonpanel.ui.components.*
@@ -30,9 +35,19 @@ import dev.carbonpanel.ui.theme.Warning
 @Composable
 fun DisksScreen(viewModel: PanelViewModel) {
     val state by viewModel.disks.collectAsStateWithLifecycle()
+    val raid by viewModel.raid.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val busy by viewModel.busy.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.loadDisks() }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                viewModel.loadRaid().join()
+                delay(30_000)
+            }
+        }
+    }
 
     var unmountTarget by remember { mutableStateOf<String?>(null) }
 
@@ -50,9 +65,10 @@ fun DisksScreen(viewModel: PanelViewModel) {
 
     LoadList(
         state = state,
-        onRefresh = { viewModel.loadDisks(refresh = true) },
+        onRefresh = { viewModel.loadDisks(refresh = true); viewModel.loadRaid() },
         emptyTitle = "No disks reported",
         header = {
+            item { RaidSection(raid, onRefresh = { viewModel.loadRaid() }) }
             item {
                 Row(
                     Modifier.fillMaxWidth(),

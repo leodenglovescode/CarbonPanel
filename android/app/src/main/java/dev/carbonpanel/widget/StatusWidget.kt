@@ -45,6 +45,7 @@ import dev.carbonpanel.data.Prefs
 import dev.carbonpanel.data.WidgetState
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
+import kotlin.math.ceil
 
 
 /**
@@ -89,7 +90,12 @@ class StatusWidget : GlanceAppWidget() {
             )
 
             val size = LocalSize.current
-            val layout = rememberLayout(size.width, size.height, state?.gpuPresent == true)
+            val layout = widgetLayout(
+                size.width, size.height, state?.gpuPresent == true,
+                LocalContext.current.resources.displayMetrics.density,
+                LocalContext.current.resources.configuration.fontScale,
+                state?.stale == true,
+            )
 
             Column(
                 modifier = GlanceModifier
@@ -191,6 +197,7 @@ class StatusWidget : GlanceAppWidget() {
                                 style = TextStyle(
                                     color = ColorProvider(WidgetPalette.Blue), fontSize = layout.bodySp,
                                 ),
+                                modifier = GlanceModifier.defaultWeight(),
                             )
                             Spacer(GlanceModifier.width(10.dp))
                             Text(
@@ -199,11 +206,12 @@ class StatusWidget : GlanceAppWidget() {
                                 style = TextStyle(
                                     color = ColorProvider(palette.accent), fontSize = layout.bodySp,
                                 ),
+                                modifier = GlanceModifier.defaultWeight(),
                             )
                         }
                     }
 
-                    if (state.stale && layout.showHeader) {
+                    if (layout.showStale) {
                         Spacer(GlanceModifier.height(4.dp))
                         Text(
                             "Server unreachable — showing last known",
@@ -243,7 +251,7 @@ class StatusWidget : GlanceAppWidget() {
  * dropped in priority order as space runs out — sub-labels, then the network
  * row, then the header. The rings are the point and are the last thing to go.
  */
-private data class Layout(
+internal data class Layout(
     val ring: Dp,
     val ringPx: Int,
     val pad: Dp,
@@ -256,6 +264,8 @@ private data class Layout(
     val showHeader: Boolean,
     val showNetwork: Boolean,
     val showSubLabels: Boolean,
+    val showStale: Boolean,
+    val requiredHeight: Dp,
 )
 
 // Bitmaps reach the launcher inside a Binder transaction capped near 1MB for
@@ -266,47 +276,67 @@ private data class Layout(
 // is at most a 1.4x upscale at typical widget sizes.
 private const val MAX_RING_PX = 160
 
-@Composable
-private fun rememberLayout(width: Dp, height: Dp, hasGpu: Boolean): Layout {
-    val density = LocalContext.current.resources.displayMetrics.density
+/** Budget every rendered row, including font padding and accessibility scaling. */
+internal fun widgetLayout(
+    width: Dp,
+    height: Dp,
+    hasGpu: Boolean,
+    density: Float,
+    fontScale: Float,
+    stale: Boolean,
+): Layout {
     val gaugeCount = if (hasGpu) 4 else 3
-
     val pad = if (height < 100.dp) 8.dp else 12.dp
-    val showHeader = height >= 96.dp
-    val showNetwork = height >= 132.dp
-
-    // Width budget: padding, plus a little breathing room between gauges.
-    val byWidth = (width - pad * 2 - (6.dp * (gaugeCount - 1))) / gaugeCount
-
-    // Height budget: what's left once the chrome that will actually be drawn
-    // has taken its share.
-    val chrome = pad * 2 +
-        (if (showHeader) 22.dp else 0.dp) +
-        (if (showNetwork) 42.dp else 0.dp) +
-        16.dp // gauge caption
-    val byHeight = height - chrome
-
-    val ring = Dp(min(byWidth.value, byHeight.value)).coerceIn(36.dp, 104.dp)
-    val ringPx = min((ring.value * density).toInt(), MAX_RING_PX).coerceAtLeast(72)
-
-    // Text inside the ring stops being legible much below this.
-    val showSubLabels = ring >= 64.dp
-    val scale = (ring.value / 54f).coerceIn(0.85f, 1.5f)
-
-    return Layout(
-        ring = ring,
-        ringPx = ringPx,
-        pad = pad,
-        gap = if (height < 120.dp) 6.dp else 10.dp,
-        netPadV = if (height < 160.dp) 6.dp else 8.dp,
-        headerSp = (12 * scale).sp,
-        bodySp = (12 * scale).sp,
-        tinySp = (10 * scale).sp,
-        labelSp = (9 * scale).coerceAtMost(12f).sp,
-        showHeader = showHeader,
-        showNetwork = showNetwork,
-        showSubLabels = showSubLabels,
-    )
+    val gap = if (height < 120.dp) 6.dp else 10.dp
+    val netPadV = if (height < 160.dp) 6.dp else 8.dp
+    val byWidth = ((width - pad * 2 - 6.dp * (gaugeCount - 1)) / gaugeCount)
+        .value.coerceIn(1f, 104f)
+    // TextView includes font padding. Leave room for its whole line rather than
+    // treating a sp font size as the measured height in dp.
+    fun line(sp: Float) = ceil(sp * fontScale.coerceAtLeast(1f) * 1.5f).dp
+    var showHeader = height >= 96.dp
+    var showNetwork = height >= 132.dp
+    var ring = byWidth
+    while (true) {
+        val scale = (ring / 54f).coerceIn(0.85f, 1.5f)
+        val header = 12 * scale
+        val tiny = 10 * scale
+        val label = (9 * scale).coerceAtMost(12f)
+        val showStale = stale && showHeader
+        val required = pad * 2 + ring.dp + 3.dp + line(label) +
+            (if (showHeader) line(header) + gap else 0.dp) +
+            (if (showNetwork) line(header) + netPadV * 2 + gap else 0.dp) +
+            (if (showStale) 4.dp + line(tiny) else 0.dp)
+        if (required <= height || ring <= 1f) {
+            return Layout(
+                ring = ring.dp,
+                ringPx = min((ring * density).toInt(), MAX_RING_PX).coerceAtLeast(72),
+                pad = pad,
+                gap = gap,
+                netPadV = netPadV,
+                headerSp = header.sp,
+                bodySp = header.sp,
+                tinySp = tiny.sp,
+                labelSp = label.sp,
+                showHeader = showHeader,
+                showNetwork = showNetwork,
+                showSubLabels = ring >= 64f,
+                showStale = showStale,
+                requiredHeight = required,
+            )
+        }
+        if (ring > 36f) {
+            ring = (ring - 1f).coerceAtLeast(36f.coerceAtMost(byWidth))
+        } else if (showNetwork) {
+            showNetwork = false
+            ring = byWidth
+        } else if (showHeader) {
+            showHeader = false
+            ring = byWidth
+        } else {
+            ring -= 1f
+        }
+    }
 }
 
 @Composable

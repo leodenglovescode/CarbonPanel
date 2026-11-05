@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { MetricsSnapshot } from '@/types/metrics'
 
 const HISTORY_LEN = 60
@@ -13,6 +13,9 @@ function pushRing(arr: number[], val: number): number[] {
 export const useMetricsStore = defineStore('metrics', () => {
   const latest = ref<MetricsSnapshot | null>(null)
   const connected = ref(false)
+  // Only an explicit server report hides Docker. Older servers and temporary
+  // connectivity or daemon failures keep their existing navigation.
+  const dockerAvailable = computed(() => latest.value?.system.docker_installed !== false)
 
   const cpuHistory = ref<number[]>([])
   const memHistory = ref<number[]>([])
@@ -57,6 +60,7 @@ export const useMetricsStore = defineStore('metrics', () => {
   return {
     latest,
     connected,
+    dockerAvailable,
     cpuHistory,
     memHistory,
     gpuHistory,

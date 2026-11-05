@@ -74,6 +74,7 @@ export interface ProcessMetrics {
 }
 
 export interface SystemMetrics {
+  docker_installed?: boolean | null
   hostname: string
   uptime_seconds: number
   boot_time_ts: number

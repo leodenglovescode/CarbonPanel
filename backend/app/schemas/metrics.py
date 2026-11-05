@@ -78,6 +78,9 @@ class SystemMetrics(BaseModel):
     # let a client show the server's wall clock and label the offset.
     timezone: str = ""
     utc_offset_seconds: int = 0
+    # None means an older or not-yet-collected snapshot; an empty container
+    # list or stopped daemon must not imply Docker is absent.
+    docker_installed: bool | None = None
 
 
 class HistoryPoint(BaseModel):

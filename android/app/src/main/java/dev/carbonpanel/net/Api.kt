@@ -56,6 +56,10 @@ import retrofit2.http.Query
  */
 interface Api {
 
+    @GET("api/v1/disks/nas")
+    suspend fun nasInventory(): dev.carbonpanel.data.NasInventory
+
+
     // ── pairing ────────────────────────────────────────────────────────────
 
     @POST("api/v1/pairing/claim")

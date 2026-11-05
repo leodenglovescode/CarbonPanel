@@ -161,6 +161,7 @@ class PanelRepository(private val context: Context) {
     // ── disks ──────────────────────────────────────────────────────────────
 
     suspend fun disks() = call { it.disks() }
+    suspend fun raid() = call { it.nasInventory().raid }
     suspend fun refreshSmart() = call { it.refreshSmart() }
     suspend fun unmount(mountpoint: String) = call { api ->
         val r = api.unmount(UnmountRequest(mountpoint))

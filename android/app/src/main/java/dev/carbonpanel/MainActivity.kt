@@ -53,11 +53,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.awaitCancellation
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.carbonpanel.data.Prefs
 import dev.carbonpanel.pairing.PairingViewModel
 import dev.carbonpanel.ui.Dest
 import dev.carbonpanel.ui.PanelViewModel
+import dev.carbonpanel.ui.ServersViewModel
+import androidx.compose.material.icons.filled.Settings
 import dev.carbonpanel.ui.components.Backdrop
 import dev.carbonpanel.ui.components.localizeUiText
 import dev.carbonpanel.ui.screens.*
@@ -83,12 +89,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun CarbonPanelRoot() {
     val pairingViewModel: PairingViewModel = viewModel()
+    val serversViewModel: ServersViewModel = viewModel()
     val context = LocalContext.current
     var servers by remember { mutableStateOf(Prefs.get(context).servers) }
     var selected by rememberSaveable {
         mutableStateOf(servers.singleOrNull()?.id)
     }
     var adding by rememberSaveable { mutableStateOf(servers.isEmpty()) }
+    var appSettings by rememberSaveable { mutableStateOf(false) }
     val pairState by pairingViewModel.state.collectAsStateWithLifecycle()
 
     fun reload() { servers = Prefs.get(context).servers }
@@ -96,13 +104,14 @@ private fun CarbonPanelRoot() {
         Prefs.get(context).activate(id)
         ApiClient.clearCache()
         selected = id
+        appSettings = false
         adding = false
         StatusWidgetWorker.refreshNow(context)
     }
 
     // A fresh store on each visit cancels the previous server's polling and
     // actions, and prevents cached screen data or navigation crossing servers.
-    val sessionKey = if (adding) "pairing" else selected ?: "servers"
+    val sessionKey = when { adding -> "pairing"; appSettings -> "app-settings"; else -> selected ?: "servers" }
     val store = remember(sessionKey) { ViewModelStore() }
     DisposableEffect(store) { onDispose { store.clear() } }
     val panelViewModel = remember(store) {
@@ -114,9 +123,14 @@ private fun CarbonPanelRoot() {
     val themeMode by panelViewModel.themeMode.collectAsStateWithLifecycle()
     val accent by panelViewModel.accent.collectAsStateWithLifecycle()
     val backdropEnabled by panelViewModel.backdropEnabled.collectAsStateWithLifecycle()
-    val showBackdrop = selected != null && !adding && backdropEnabled
+    val showBackdrop = selected != null && !adding && !appSettings && backdropEnabled
 
     LaunchedEffect(sessionKey, servers) { WidgetBridge.push(context) }
+    BackHandler(enabled = appSettings && !adding) {
+        reload()
+        appSettings = false
+        if (servers.isEmpty()) adding = true
+    }
     BackHandler(enabled = adding && servers.isNotEmpty() && pairState !is PairState.Working) {
         pairingViewModel.reset()
         adding = false
@@ -137,23 +151,32 @@ private fun CarbonPanelRoot() {
                                 onClick = { pairingViewModel.reset(); adding = false },
                             ) { Text("Cancel") }
                         }
-                        selected == null -> ServersScreen(
+                        appSettings -> AppSettingsScreen(
+                            viewModel = panelViewModel,
                             servers = servers,
-                            onSelect = { open(it) },
+                            activeServerId = Prefs.get(context).activeServerId,
+                            onBack = { reload(); appSettings = false; if (servers.isEmpty()) adding = true },
                             onAdd = { pairingViewModel.reset(); adding = true },
                             onRename = { id, name -> Prefs.get(context).renameServer(id, name); reload() },
                             onRemove = { id ->
                                 Prefs.get(context).removeServer(id)
                                 ApiClient.clearCache()
                                 reload()
-                                if (servers.isEmpty()) { pairingViewModel.reset(); adding = true }
+                                if (selected == id) selected = null
                                 StatusWidgetWorker.refreshNow(context)
                             },
+                        )
+                        selected == null -> ServersScreen(
+                            servers = servers,
+                            viewModel = serversViewModel,
+                            onSelect = { open(it) },
+                            onSettings = { appSettings = true },
                         )
                         else -> MainScaffold(
                             viewModel = panelViewModel,
                             transparent = showBackdrop,
                             onServers = { reload(); selected = null },
+                            onAppSettings = { appSettings = true },
                             onUnpair = {
                                 ApiClient.clearCache()
                                 reload()
@@ -176,8 +199,21 @@ private fun MainScaffold(
     transparent: Boolean,
     onUnpair: () -> Unit,
     onServers: () -> Unit,
+    onAppSettings: () -> Unit,
 ) {
+    val dockerInstalled by viewModel.dockerInstalled.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
     var dest by rememberSaveable { mutableStateOf(Dest.Dashboard) }
+
+    LaunchedEffect(lifecycleOwner, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.refreshDockerAvailability().join()
+            awaitCancellation()
+        }
+    }
+    LaunchedEffect(dockerInstalled) {
+        if (dockerInstalled == false && dest == Dest.Docker) dest = Dest.Dashboard
+    }
     var openSiteId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -224,7 +260,12 @@ private fun MainScaffold(
                         }
                     }
                 },
-                actions = { TextButton(onClick = onServers) { Text("Servers") } },
+                actions = {
+                    TextButton(onClick = onServers) { Text("Servers") }
+                    IconButton(onClick = onAppSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = localizeUiText("App settings"))
+                    }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color.Transparent,
                 ),
@@ -235,7 +276,7 @@ private fun MainScaffold(
                 containerColor = if (transparent) Color.Transparent
                                  else MaterialTheme.colorScheme.surface,
             ) {
-                Dest.primaries.forEach { entry ->
+                Dest.primaries(dockerInstalled).forEach { entry ->
                     NavigationBarItem(
                         selected = dest == entry || (entry == Dest.More && !dest.primary),
                         onClick = { dest = entry; openSiteId = null },
@@ -278,7 +319,7 @@ private fun MainScaffold(
                         Dest.Bookmarks -> BookmarksScreen(viewModel)
                         Dest.Webhooks -> WebhooksScreen(viewModel)
                         Dest.Logs -> LogsScreen(viewModel)
-                        Dest.Settings -> SettingsScreen(viewModel, onUnpair = onUnpair)
+                        Dest.Settings -> SettingsScreen(viewModel, onUnpair = onUnpair, onAppSettings = onAppSettings)
                         null -> DashboardScreen(viewModel)
                     }
                 }

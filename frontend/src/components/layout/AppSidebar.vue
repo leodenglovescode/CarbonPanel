@@ -44,6 +44,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useMetricsStore } from '@/stores/metrics'
 import { useLocaleStore } from '@/stores/locale'
 import type { SystemMetrics } from '@/types/metrics'
 
@@ -53,6 +54,7 @@ const emit = defineEmits<{ close: [] }>()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const metrics = useMetricsStore()
 const { t } = useLocaleStore()
 const sidebarEl = ref<HTMLElement | null>(null)
 const closeButtonEl = ref<HTMLButtonElement | null>(null)
@@ -133,7 +135,7 @@ const navItems = computed(() => [
   { to: '/cron', label: t('nav.cron') },
   { to: '/sessions', label: t('nav.sessions') },
   { to: '/settings', label: t('nav.settings') },
-])
+].filter(item => item.to !== '/docker' || metrics.dockerAvailable))
 
 function isActive(to: string) {
   if (to === '/') return route.path === '/'

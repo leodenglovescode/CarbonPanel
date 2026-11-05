@@ -77,6 +77,6 @@ private fun descriptionFor(dest: Dest): String = when (dest) {
     Dest.Bookmarks -> "Your saved links"
     Dest.Webhooks -> "Alert delivery endpoints"
     Dest.Logs -> "journalctl for the update services"
-    Dest.Settings -> "Server addresses, theme, account"
+    Dest.Settings -> "Server addresses, account and widgets"
     else -> ""
 }

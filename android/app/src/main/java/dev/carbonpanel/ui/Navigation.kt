@@ -44,11 +44,13 @@ enum class Dest(
     Bookmarks("bookmarks", "Bookmarks", Icons.Filled.Bookmark),
     Webhooks("webhooks", "Webhooks", Icons.Filled.Notifications),
     Logs("logs", "Update logs", Icons.AutoMirrored.Filled.List),
-    Settings("settings", "Settings", Icons.Filled.Settings),
+    Settings("settings", "Server settings", Icons.Filled.Settings),
     ;
 
     companion object {
-        val primaries = entries.filter { it.primary }
+        fun primaries(dockerInstalled: Boolean?) = entries.filter {
+            it.primary && (it != Docker || dockerInstalled != false)
+        }
         val secondaries = entries.filter { !it.primary }
         fun byRoute(route: String?) = entries.firstOrNull { it.route == route }
     }

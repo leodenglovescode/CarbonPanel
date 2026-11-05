@@ -39,8 +39,13 @@ effect immediately for request/response calls and open streams.
 
 With one saved server, launch opens its overview directly. With two or more,
 launch shows a picker with each server's name, HTTPS addresses, and account.
-Tap a server to open its overview. Use **Servers** in the top bar to return to
-the picker, add another server by QR or manual code, rename, or remove one.
+The picker shows circular CPU, memory, and storage gauges, connection status,
+and uptime; previews refresh every 15 seconds while visible. Each card has
+one **Open** action. Use **Servers** in the top bar to return to the picker.
+
+The gear button opens **App settings**: shared appearance, polling and widget
+preferences, plus adding, renaming, and removing saved servers. Per-server
+settings keep addresses, accounts, and widget disk/interface choices.
 
 Existing pairings migrate automatically. Credentials, certificate pins,
 addresses, and widget disk/interface choices are kept separately for each
@@ -84,6 +89,19 @@ intentionally replaced, re-pair the device.
 Pairing payload version 2 introduced HTTPS-only, QR-bound certificate trust.
 After upgrading from an older HTTP-capable app, re-pair if the saved endpoint
 list contains no usable HTTPS address.
+
+The Docker tab is hidden when the server reports Docker is not installed.
+Installed Docker remains visible with an empty or stopped daemon. This needs
+an updated backend; older servers retain their existing navigation.
+
+## RAID monitoring
+
+Storage includes read-only Linux MD RAID monitoring from `/disks/nas`: array
+state, RAID level, capacity, degraded count, member slots and states, and
+sync/rebuild progress. It refreshes every 30 seconds while Storage is visible.
+Unknown readings remain unknown; a failed refresh retains and labels the last
+reading. Hardware and vendor RAID controllers are not reported by this API.
+Android exposes no RAID configuration, assembly, repair, or removal controls.
 
 ## Battery model
 

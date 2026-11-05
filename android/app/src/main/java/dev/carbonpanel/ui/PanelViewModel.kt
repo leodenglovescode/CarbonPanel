@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -32,6 +33,12 @@ enum class UnitKind(val label: String) {
         Timers -> unitName.endsWith(".timer")
     }
 }
+
+data class RaidState(
+    val inventory: RaidInventory? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+)
 
 class PanelViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -56,6 +63,15 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private val _dockerInstalled = MutableStateFlow<Boolean?>(null)
+    val dockerInstalled: StateFlow<Boolean?> = _dockerInstalled.asStateFlow()
+
+    fun refreshDockerAvailability() = viewModelScope.launch {
+        repo.snapshot(fields = "system").onSuccess { snapshot ->
+            snapshot.system?.docker_installed?.let { _dockerInstalled.value = it }
+        }
+    }
+
     // ── live metrics ───────────────────────────────────────────────────────
 
     /**
@@ -72,6 +88,11 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
     // both redundant and a second, inconsistent source of truth.
     val metrics: StateFlow<PollState> = repo
         .metricsStream(fields = "cpu,memory,gpu,network,system")
+        .onEach { state ->
+            (state as? PollState.Connected)?.snapshot?.system?.docker_installed?.let {
+                _dockerInstalled.value = it
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PollState.Connecting)
 
     private val _history = MutableStateFlow<List<HistoryPoint>>(emptyList())
@@ -205,6 +226,23 @@ class PanelViewModel(app: Application) : AndroidViewModel(app) {
     // ── disks ──────────────────────────────────────────────────────────────
 
     val disks = MutableStateFlow<Load<List<DiskInfo>>>(Load.Loading)
+
+    val raid = MutableStateFlow(RaidState())
+    private var raidJob: kotlinx.coroutines.Job? = null
+    fun loadRaid(): kotlinx.coroutines.Job {
+        raidJob?.takeIf { it.isActive }?.let { return it }
+        return viewModelScope.launch {
+            raid.value = raid.value.copy(loading = true)
+            repo.raid().onSuccess {
+                raid.value = RaidState(inventory = it, loading = false)
+            }.onFailure {
+                val message = if (it.message == "HTTP 404")
+                    "RAID monitoring is not available on this server. Update the server to enable it."
+                else it.message ?: "Could not refresh RAID status"
+                raid.value = raid.value.copy(loading = false, error = message)
+            }
+        }.also { raidJob = it }
+    }
 
     fun loadDisks(refresh: Boolean = false) = viewModelScope.launch {
         if (refresh) disks.markRefreshing() else if (disks.value !is Load.Ok) disks.value = Load.Loading
