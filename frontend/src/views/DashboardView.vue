@@ -7,6 +7,11 @@
       Live metrics disconnected. Reconnecting… Displaying the last received values.
     </p>
 
+    <div id="dashboard-layout" class="layout-controls">
+      <label><input type="checkbox" role="switch" :checked="layoutStore.automatic" @change="setAutomatic(($event.target as HTMLInputElement).checked)" /> Automatic placement</label>
+      <span>{{ layoutStore.automatic ? 'Related metrics stay together. Cards adapt to the available space.' : 'Using your saved manual layout.' }}</span>
+    </div>
+
     <!-- Edit toolbar -->
     <Transition name="toolbar">
       <div v-if="editMode" class="edit-toolbar">
@@ -36,6 +41,15 @@
     <div v-if="!metrics.latest && visibleWidgets.length === 0" class="loading">
       <span class="loading-dot" /><span class="loading-dot" /><span class="loading-dot" />
       <span class="loading-text">Connecting…</span>
+    </div>
+
+
+    <div v-else-if="layoutStore.automatic && !editMode" class="auto-layout">
+      <section v-for="group in automaticGroups" :key="group.label" class="auto-group" :class="`items-${group.widgets.length}`" :aria-label="group.label">
+        <div v-for="w in group.widgets" :key="w.id" class="grid-item" :class="w.id">
+          <div class="widget-body"><component :is="w.comp" v-bind="w.props" /></div>
+        </div>
+      </section>
     </div>
 
     <!-- ── Unified grid (normal + edit mode) ── -->
@@ -300,6 +314,7 @@ function finishPointerEdit() {
 }
 
 async function enterEdit() {
+  if (layoutStore.automatic) layoutStore.setAutomatic(false)
   editMode.value = true
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', finishPointerEdit)
@@ -428,6 +443,26 @@ function onAddWidget(e: Event) {
   select.value = ''
 }
 
+function setAutomatic(enabled: boolean) {
+  if (enabled && editMode.value) void exitEdit()
+  layoutStore.setAutomatic(enabled)
+}
+
+// Groups preserve reading order, while CSS chooses one, two, or three columns.
+// Automatic placement never writes coordinates into the saved manual layout.
+const AUTO_GROUPS = [
+  { label: 'Compute', ids: ['cpu', 'ram', 'gpu'] },
+  { label: 'System and cooling', ids: ['system', 'cpuTemp', 'bandwidth'] },
+  { label: 'Storage and traffic', ids: ['disk', 'network', 'siteTraffic'] },
+  { label: 'History', ids: ['history'] },
+  { label: 'Processes', ids: ['processes'] },
+  { label: 'Bookmarks', ids: ['bookmarks'] },
+] as const
+const automaticGroups = computed(() => AUTO_GROUPS.map(group => ({
+  label: group.label,
+  widgets: group.ids.flatMap(id => visibleWidgets.value.filter(w => w.id === id)),
+})).filter(group => group.widgets.length))
+
 // Sort by row then col so tab order matches visual order
 const sortedWidgets = computed(() =>
   visibleWidgets.value.slice().sort((a, b) => {
@@ -463,25 +498,25 @@ const sortedWidgets = computed(() =>
 }
 .grid-item { min-width: 0; overflow: hidden; }
 
-/* Wide screens: repack the small stat widgets 3-per-row instead of 2 so they
-   don't just stretch wider. Only applies outside edit mode — edit mode always
-   shows your saved drag/resize positions, since a screen-width-only rule can't
-   participate in the resize interaction.
-   Queries the actual content-area width (via .content's container-type:
-   inline-size in AuthLayout.vue), not the raw viewport — the 178px sidebar
-   otherwise throws off the breakpoint math. */
-@container (min-width: 1900px) {
-  .grid:not(.grid-edit) .grid-item.cpu       { grid-column: 1 / span 4  !important; grid-row: 6 / span 7  !important; }
-  .grid:not(.grid-edit) .grid-item.ram       { grid-column: 5 / span 4  !important; grid-row: 6 / span 7  !important; }
-  .grid:not(.grid-edit) .grid-item.gpu       { grid-column: 9 / span 4  !important; grid-row: 6 / span 7  !important; }
-  .grid:not(.grid-edit) .grid-item.system    { grid-column: 1 / span 4  !important; grid-row: 13 / span 7 !important; }
-  .grid:not(.grid-edit) .grid-item.cpuTemp   { grid-column: 5 / span 4  !important; grid-row: 13 / span 7 !important; }
-  .grid:not(.grid-edit) .grid-item.bandwidth { grid-column: 9 / span 4  !important; grid-row: 13 / span 7 !important; }
-  .grid:not(.grid-edit) .grid-item.disk        { grid-column: 1 / span 4 !important; grid-row: 20 / span 6  !important; }
-  .grid:not(.grid-edit) .grid-item.network     { grid-column: 5 / span 4 !important; grid-row: 20 / span 6  !important; }
-  .grid:not(.grid-edit) .grid-item.siteTraffic { grid-column: 9 / span 4 !important; grid-row: 20 / span 6  !important; }
-  .grid:not(.grid-edit) .grid-item.history     { grid-row: 26 / span 6  !important; }
-  .grid:not(.grid-edit) .grid-item.processes   { grid-row: 32 / span 11 !important; }
+/* Automatic groups use natural card heights and the actual content width. */
+.layout-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
+.layout-controls label { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fg); cursor: pointer; }
+.layout-controls input { accent-color: var(--accent); }
+.layout-controls span { font-size: 10px; color: var(--fg-dim); line-height: 1.6; }
+.auto-layout { display: flex; flex-direction: column; gap: 12px; }
+.auto-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.auto-group.items-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.auto-group.items-1 { grid-template-columns: minmax(0, 1fr); }
+.auto-layout .grid-item { overflow: visible; }
+.auto-layout .widget-body { height: 100%; overflow: visible; }
+.auto-layout .widget-body :deep(.card-body) { flex: 1 0 auto; overflow: visible; }
+.auto-layout .history :deep(.chart-area) { flex: none; height: 150px; }
+@container (max-width: 1100px) {
+  .auto-group.items-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .auto-group.items-3 > :last-child { grid-column: 1 / -1; }
+}
+@container (max-width: 700px) {
+  .auto-group.items-3, .auto-group.items-2 { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Below 900px of actual content width the drag/resize grid gives way to a

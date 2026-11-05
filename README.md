@@ -134,14 +134,22 @@ monitoring, SysV service commands, and vendor-kernel limitations.
 
 ### Backgrounds and file previews
 
-Settings → Backgrounds stores four independent destinations on the server:
-web app, web login, Android app, and Android login. Upload an image to crop,
-zoom, position, and resize it before saving. Choose multiple destinations in
-the crop dialog, or use **Apply to all four** to reuse a saved background.
+Settings → Backgrounds stores three independent destinations on the server:
+web app, web login, and Android app. **Choose photo** opens one crop editor with
+all three screens selected. Use one crop everywhere, or adjust separate web
+and portrait phone crops, then save them together. The original photo is kept
+on the server so **Adjust last uploaded photo** can recrop it without another
+upload. Individual screen styles remain available under the advanced settings.
+The Android server chooser uses a separate photo selected in the phone's
+**App settings**. It stays in the phone's private storage, is never uploaded,
+and is independent of every server. Pairing has no login background.
 The **Surface transparency** slider under Appearance changes surface fills
-while keeping text and icons opaque. Android reads these settings when a known
-server is opened or the app returns to the foreground; an unpaired phone has
-no server background to load yet.
+while keeping text and icons opaque.
+
+**Automatic placement** on the web dashboard groups CPU, memory, and GPU,
+then system/cooling and storage/traffic cards, adapting to the actual content
+width and browser zoom. Turn it off to restore your saved manual positions.
+Editing switches to manual mode; neither mode overwrites the other’s positions.
 
 **Files** in the web sidebar and Android's More menu provides read-only browsing,
 previews, and downloads. It runs with the CarbonPanel service account's existing

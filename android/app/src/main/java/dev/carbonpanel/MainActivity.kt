@@ -99,7 +99,11 @@ private fun CarbonPanelRoot() {
     var appSettings by rememberSaveable { mutableStateOf(false) }
     val pairState by pairingViewModel.state.collectAsStateWithLifecycle()
 
-    fun reload() { servers = Prefs.get(context).servers }
+    var chooserVersion by remember { mutableStateOf(dev.carbonpanel.data.ChooserBackground.version(context)) }
+    fun reload() {
+        servers = Prefs.get(context).servers
+        chooserVersion = dev.carbonpanel.data.ChooserBackground.version(context)
+    }
     fun open(id: String) {
         Prefs.get(context).activate(id)
         ApiClient.clearCache()
@@ -124,15 +128,16 @@ private fun CarbonPanelRoot() {
     val accent by panelViewModel.accent.collectAsStateWithLifecycle()
     val backdropEnabled by panelViewModel.backdropEnabled.collectAsStateWithLifecycle()
     val backgrounds by panelViewModel.backgrounds.collectAsStateWithLifecycle()
-    val backgroundTarget = if (selected != null && !adding) "android-app" else "android-login"
-    val background = backgrounds.targets[backgroundTarget]
-    val showBackdrop = !appSettings && backdropEnabled && background != null &&
+    val serverOpen = selected != null && !adding && !appSettings
+    val chooserOpen = selected == null && !adding && !appSettings
+    val background = backgrounds.targets["android-app"]
+    val showBackdrop = serverOpen && backdropEnabled && background != null &&
         (background.type == "gradient" || (background.type == "image" && background.version > 0))
     val rootLifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(rootLifecycleOwner, panelViewModel) {
+    LaunchedEffect(rootLifecycleOwner, panelViewModel, serverOpen) {
         rootLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                if (Prefs.get(context).servers.isNotEmpty()) panelViewModel.refreshBackgrounds().join()
+                if (serverOpen) panelViewModel.refreshBackgrounds().join()
                 kotlinx.coroutines.delay(30_000)
             }
         }
@@ -149,55 +154,57 @@ private fun CarbonPanelRoot() {
         adding = false
     }
 
-    CarbonTheme(mode = themeMode, accent = accent, hasBackdrop = showBackdrop, surfaceTransparency = backgrounds.surfaceTransparency) {
+    CarbonTheme(mode = themeMode, accent = accent, hasBackdrop = showBackdrop || (chooserOpen && chooserVersion > 0), surfaceTransparency = if (serverOpen) backgrounds.surfaceTransparency else 0) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             key(sessionKey) {
-                Backdrop(enabled = showBackdrop, config = background, target = backgroundTarget) {
-                    when {
-                        adding -> Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-                            PairingScreen(pairingViewModel, onPaired = {
-                                reload()
-                                open(Prefs.get(context).serverId)
-                            })
-                            if (servers.isNotEmpty()) TextButton(
-                                enabled = pairState !is PairState.Working,
-                                onClick = { pairingViewModel.reset(); adding = false },
-                            ) { Text("Cancel") }
+                Backdrop(enabled = showBackdrop, config = background, target = "android-app") {
+                    dev.carbonpanel.ui.components.LocalChooserBackdrop(enabled = chooserOpen, version = chooserVersion) {
+                        when {
+                            adding -> Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                                PairingScreen(pairingViewModel, onPaired = {
+                                    reload()
+                                    open(Prefs.get(context).serverId)
+                                })
+                                if (servers.isNotEmpty()) TextButton(
+                                    enabled = pairState !is PairState.Working,
+                                    onClick = { pairingViewModel.reset(); adding = false },
+                                ) { Text("Cancel") }
+                            }
+                            appSettings -> AppSettingsScreen(
+                                viewModel = panelViewModel,
+                                servers = servers,
+                                activeServerId = Prefs.get(context).activeServerId,
+                                onBack = { reload(); appSettings = false; if (servers.isEmpty()) adding = true },
+                                onAdd = { pairingViewModel.reset(); adding = true },
+                                onRename = { id, name -> Prefs.get(context).renameServer(id, name); reload() },
+                                onRemove = { id ->
+                                    Prefs.get(context).removeServer(id)
+                                    ApiClient.clearCache()
+                                    reload()
+                                    if (selected == id) selected = null
+                                    StatusWidgetWorker.refreshNow(context)
+                                },
+                            )
+                            selected == null -> ServersScreen(
+                                servers = servers,
+                                viewModel = serversViewModel,
+                                onSelect = { open(it) },
+                                onSettings = { appSettings = true },
+                            )
+                            else -> MainScaffold(
+                                viewModel = panelViewModel,
+                                transparent = showBackdrop,
+                                onServers = { reload(); selected = null },
+                                onAppSettings = { appSettings = true },
+                                onUnpair = {
+                                    ApiClient.clearCache()
+                                    reload()
+                                    selected = null
+                                    if (servers.isEmpty()) { pairingViewModel.reset(); adding = true }
+                                    StatusWidgetWorker.refreshNow(context)
+                                },
+                            )
                         }
-                        appSettings -> AppSettingsScreen(
-                            viewModel = panelViewModel,
-                            servers = servers,
-                            activeServerId = Prefs.get(context).activeServerId,
-                            onBack = { reload(); appSettings = false; if (servers.isEmpty()) adding = true },
-                            onAdd = { pairingViewModel.reset(); adding = true },
-                            onRename = { id, name -> Prefs.get(context).renameServer(id, name); reload() },
-                            onRemove = { id ->
-                                Prefs.get(context).removeServer(id)
-                                ApiClient.clearCache()
-                                reload()
-                                if (selected == id) selected = null
-                                StatusWidgetWorker.refreshNow(context)
-                            },
-                        )
-                        selected == null -> ServersScreen(
-                            servers = servers,
-                            viewModel = serversViewModel,
-                            onSelect = { open(it) },
-                            onSettings = { appSettings = true },
-                        )
-                        else -> MainScaffold(
-                            viewModel = panelViewModel,
-                            transparent = showBackdrop,
-                            onServers = { reload(); selected = null },
-                            onAppSettings = { appSettings = true },
-                            onUnpair = {
-                                ApiClient.clearCache()
-                                reload()
-                                selected = null
-                                if (servers.isEmpty()) { pairingViewModel.reset(); adding = true }
-                                StatusWidgetWorker.refreshNow(context)
-                            },
-                        )
                     }
                 }
             }

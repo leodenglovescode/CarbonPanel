@@ -83,6 +83,7 @@ const pages = computed<PaletteItem[]>(() => [
   { key: 'page-/sites', label: t('nav.sites'), category: 'Pages', go: () => router.push('/sites') },
   { key: 'page-/system-services', label: t('nav.systemServices'), category: 'Pages', go: () => router.push('/system-services') },
   { key: 'page-nas', label: 'RAID, LVM & Fans', category: 'Pages', go: () => router.push('/disks#nas-monitor') },
+  { key: 'page-auto-placement', label: 'Automatic dashboard placement', category: 'Settings', go: () => router.push('/#dashboard-layout') },
   { key: 'page-/files', label: 'Files', category: 'Pages', go: () => router.push('/files') },
   { key: 'page-/disks', label: t('nav.disks'), category: 'Pages', go: () => router.push('/disks') },
   { key: 'page-/apps', label: t('nav.apps'), category: 'Pages', go: () => router.push('/apps') },

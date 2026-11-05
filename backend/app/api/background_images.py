@@ -11,8 +11,8 @@ from app.services import background_image_service as images
 from app.services.settings_store import get_key, set_key
 
 router = APIRouter(prefix="/settings/background-image", tags=["background-image"])
-Target = Literal["app", "login", "android-app", "android-login"]
-TARGETS = ("app", "login", "android-app", "android-login")
+Target = Literal["app", "login", "android-app"]
+TARGETS = ("app", "login", "android-app")
 _lock = asyncio.Lock()
 
 
@@ -34,7 +34,7 @@ class BackgroundPatch(BaseModel):
 
 class CopyBackground(BaseModel):
     source: Target
-    targets: list[Target] = Field(min_length=1, max_length=4)
+    targets: list[Target] = Field(min_length=1, max_length=3)
 
 
 def configuration():
@@ -52,6 +52,11 @@ def configuration():
         "targets": targets,
         "surfaceTransparency": saved.get("surfaceTransparency", 0),
         "configured": bool(saved),
+        "sourceVersion": (
+            images._image_path("source").stat().st_mtime_ns // 1_000
+            if images._image_path("source").is_file()
+            else 0
+        ),
     }
 
 
@@ -96,7 +101,7 @@ def persist_image(config, target, data):
 @router.post("/apply")
 async def apply_image(
     file: UploadFile,
-    targets: Annotated[list[Target], Query(min_length=1, max_length=4)],
+    targets: Annotated[list[Target], Query(min_length=1, max_length=3)],
     _: User = Depends(get_current_user),
 ):
     compressed = await decode(file)
@@ -106,6 +111,39 @@ async def apply_image(
             persist_image(config, target, compressed)
         set_key("backgrounds", config)
         return configuration()
+
+
+@router.post("/apply-crops")
+async def apply_crops(
+    source: UploadFile,
+    web: UploadFile,
+    targets: Annotated[list[Target], Query(min_length=1, max_length=3)],
+    android: UploadFile | None = None,
+    _: User = Depends(get_current_user),
+):
+    # Decode everything before changing any destination, so an invalid second
+    # crop cannot leave only half of an upload applied.
+    try:
+        original = await decode(source)
+        web_crop = await decode(web)
+        phone_crop = await decode(android) if android is not None else web_crop
+    finally:
+        await source.close()
+        await web.close()
+        if android is not None:
+            await android.close()
+    async with _lock:
+        config = configuration()
+        images.save_image("source", original)
+        for target in set(targets):
+            persist_image(config, target, phone_crop if target == "android-app" else web_crop)
+        set_key("backgrounds", config)
+        return configuration()
+
+
+@router.get("/source")
+async def get_source_image(_: User = Depends(get_current_user)):
+    return image_response("source")
 
 
 @router.post("/copy")
@@ -168,8 +206,3 @@ async def get_android_app_background_image(_: User = Depends(get_current_user)):
 @router.get("/login")
 async def get_login_background_image():
     return image_response("login")
-
-
-@router.get("/android-login")
-async def get_android_login_background_image():
-    return image_response("android-login")

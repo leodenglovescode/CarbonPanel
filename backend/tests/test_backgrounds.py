@@ -42,7 +42,7 @@ def test_apply_copy_and_discover_in_new_session(api):
     request, app = api
     response = request(
         "POST",
-        "/apply?targets=android-app&targets=android-login&targets=app&targets=login",
+        "/apply?targets=android-app&targets=app&targets=login",
         files={"file": ("crop.png", photo(), "image/png")},
     )
     assert response.status_code == 200
@@ -52,7 +52,7 @@ def test_apply_copy_and_discover_in_new_session(api):
     app.dependency_overrides.clear()
     assert request("GET", "/config").json()["targets"]["login"]["version"] > 0
     assert request("GET", "/login").status_code == 200
-    assert request("GET", "/android-login").status_code == 200
+    assert request("GET", "/android-login").status_code in (404, 405)
     assert request("GET", "/app").status_code == 401
     assert request("GET", "/android-app").status_code == 401
     assert request("PUT", "/config", json={"surfaceTransparency": 50}).status_code == 401
@@ -73,14 +73,14 @@ def test_display_settings_persist_and_images_reset(api):
         request(
             "POST",
             "/copy",
-            json={"source": "app", "targets": ["login", "android-app", "android-login"]},
+            json={"source": "app", "targets": ["login", "android-app"]},
         ).status_code
         == 200
     )
     config = request("GET", "/config").json()
     assert config["surfaceTransparency"] == 55
     assert config["targets"]["android-app"]["blur"] == 4
-    saved = request("GET", "/android-login")
+    saved = request("GET", "/android-app")
     assert Image.open(io.BytesIO(saved.content)).size == (120, 240)
     request("DELETE", "/android-app")
     config = request("GET", "/config").json()
@@ -110,3 +110,62 @@ def test_validation_and_missing_copy(api):
     )
     request("PUT", "/config", json={"targets": {"app": {"type": "image"}}})
     assert request("POST", "/copy", json={"source": "app", "targets": ["login"]}).status_code == 404
+
+
+def test_separate_crops_save_together_and_original_is_private(api):
+    request, app = api
+
+    def jpeg(width, height):
+        buffer = io.BytesIO()
+        Image.new("RGB", (width, height), "#335577").save(buffer, "JPEG")
+        return buffer.getvalue()
+
+    response = request(
+        "POST",
+        "/apply-crops?targets=app&targets=login&targets=android-app",
+        files={
+            "source": ("source.jpg", jpeg(640, 480), "image/jpeg"),
+            "web": ("web.jpg", jpeg(320, 180), "image/jpeg"),
+            "android": ("phone.jpg", jpeg(90, 160), "image/jpeg"),
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["sourceVersion"] > 0
+    assert set(response.json()["targets"]) == {"app", "login", "android-app"}
+    for target, dimensions in [
+        ("app", (320, 180)),
+        ("login", (320, 180)),
+        ("android-app", (90, 160)),
+        ("source", (640, 480)),
+    ]:
+        assert Image.open(io.BytesIO(request("GET", "/" + target).content)).size == dimensions
+    app.dependency_overrides.clear()
+    assert request("GET", "/source").status_code == 401
+
+
+def test_invalid_second_crop_preserves_existing_photos(api):
+    request, _ = api
+    request("POST", "/apply?targets=app&targets=android-app", files={"file": ("old.png", photo())})
+    before = request("GET", "/config").json()
+    result = request(
+        "POST",
+        "/apply-crops?targets=app&targets=android-app",
+        files={
+            "source": ("source.png", photo()),
+            "web": ("web.png", photo()),
+            "android": ("broken.jpg", b"invalid image"),
+        },
+    )
+    assert result.status_code == 400
+    assert request("GET", "/config").json() == before
+
+
+def test_removed_phone_login_is_ignored_in_legacy_config(api):
+    request, _ = api
+    settings_store.set_key(
+        "backgrounds", {"targets": {"android-login": {"type": "image", "version": 123}}}
+    )
+    assert "android-login" not in request("GET", "/config").json()["targets"]
+    assert (
+        request("POST", "/android-login", files={"file": ("image.png", photo())}).status_code == 422
+    )

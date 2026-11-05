@@ -1,5 +1,15 @@
 package dev.carbonpanel.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import dev.carbonpanel.data.ChooserBackground
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -45,6 +55,22 @@ fun AppSettingsScreen(
     onRename: (String, String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var chooserVersion by remember { mutableStateOf(ChooserBackground.version(context)) }
+    var chooserBusy by remember { mutableStateOf(false) }
+    var chooserError by remember { mutableStateOf<String?>(null) }
+    val choosePhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            chooserBusy = true; chooserError = null
+            try {
+                withContext(Dispatchers.IO) { ChooserBackground.save(context, uri) }
+                chooserVersion = ChooserBackground.version(context)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { chooserError = e.message ?: "Could not save photo" }
+            finally { chooserBusy = false }
+        }
+    }
     val theme by viewModel.themeMode.collectAsStateWithLifecycle()
     val accent by viewModel.accent.collectAsStateWithLifecycle()
     val backdrop by viewModel.backdropEnabled.collectAsStateWithLifecycle()
@@ -100,6 +126,34 @@ fun AppSettingsScreen(
                             modifier = Modifier.weight(1f))
                         Switch(checked = backdrop, onCheckedChange = viewModel::setBackdropEnabled)
                     }
+                }
+            }
+            item { SectionLabel("Server chooser background") }
+            item {
+                PanelCard(Modifier.fillMaxWidth()) {
+                    MonoText("Saved only on this phone. This photo is never uploaded or taken from a server.")
+                    if (chooserVersion > 0) AsyncImage(
+                        model = ImageRequest.Builder(context).data(ChooserBackground.file(context))
+                            .memoryCacheKey("local-chooser-$chooserVersion").build(),
+                        contentDescription = "Server chooser background preview",
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                    Row {
+                        TextButton(enabled = !chooserBusy, onClick = {
+                            choosePhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }) { Text(if (chooserBusy) "Saving…" else "Choose local photo") }
+                        if (chooserVersion > 0) TextButton(enabled = !chooserBusy, onClick = {
+                            scope.launch {
+                                chooserBusy = true; chooserError = null
+                                try { withContext(Dispatchers.IO) { ChooserBackground.remove(context) }; chooserVersion = 0 }
+                                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                                catch (e: Exception) { chooserError = e.message ?: "Could not remove photo" }
+                                finally { chooserBusy = false }
+                            }
+                        }) { Text("Remove") }
+                    }
+                    chooserError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
             item { SectionLabel("Refresh interval") }

@@ -8,7 +8,7 @@ from typing import Literal
 
 from PIL import Image, ImageOps
 
-Target = Literal["app", "login", "android-app", "android-login"]
+Target = Literal["app", "login", "android-app", "source"]
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB — validated before decoding
 MAX_OUTPUT_BYTES = 2 * 1024 * 1024  # 2 MB — compressed output ceiling

@@ -465,7 +465,7 @@ export const bookmarksApi = {
 
 export const dashboardApi = {
   getLayout: () => api.get<{ layout: Record<string, object> } | null>('/dashboard/layout'),
-  saveLayout: (layout: Record<string, object>) => api.put('/dashboard/layout', { layout }),
+  saveLayout: (layout: Record<string, unknown>) => api.put('/dashboard/layout', { layout }),
 }
 
 export const userPrefsApi = {

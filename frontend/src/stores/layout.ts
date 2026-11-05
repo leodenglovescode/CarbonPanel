@@ -11,6 +11,7 @@ export type WidgetId =
 
 const STORAGE_KEY = 'cp_dashboard_layout'
 const HIDDEN_STORAGE_KEY = 'cp_dashboard_hidden'
+const AUTOMATIC_STORAGE_KEY = 'cp_dashboard_auto'
 
 export const DEFAULT_LAYOUT: Record<WidgetId, WidgetPos> = {
   bookmarks:    { col: 0, row: 0,  w: 12, h: 5  },
@@ -54,12 +55,17 @@ export const useLayoutStore = defineStore('layout', () => {
     })()),
   )
   const hidden = ref<Set<WidgetId>>(loadHidden())
+  const automatic = ref(localStorage.getItem(AUTOMATIC_STORAGE_KEY) !== 'false')
 
   async function loadRemote() {
     try {
       const { data } = await dashboardApi.getLayout()
       if (data?.layout) {
         const raw = data.layout as Record<string, unknown>
+        if (typeof raw.autoPlacement === 'boolean') {
+          automatic.value = raw.autoPlacement
+          localStorage.setItem(AUTOMATIC_STORAGE_KEY, String(automatic.value))
+        }
         layout.value = mergeWithDefaults(raw as Partial<Record<WidgetId, WidgetPos>>)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(layout.value))
 
@@ -87,11 +93,17 @@ export const useLayoutStore = defineStore('layout', () => {
 
   async function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout.value))
+    localStorage.setItem(AUTOMATIC_STORAGE_KEY, String(automatic.value))
     const hiddenIds = Array.from(hidden.value)
     localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(hiddenIds))
     try {
-      await dashboardApi.saveLayout({ ...layout.value, hiddenWidgets: hiddenIds } as Record<string, object>)
+      await dashboardApi.saveLayout({ ...layout.value, hiddenWidgets: hiddenIds, autoPlacement: automatic.value })
     } catch { /* local save succeeded */ }
+  }
+
+  function setAutomatic(enabled: boolean) {
+    automatic.value = enabled
+    void save()
   }
 
   function reset() {
@@ -100,5 +112,5 @@ export const useLayoutStore = defineStore('layout', () => {
     save()
   }
 
-  return { layout, hidden, loadRemote, update, save, reset, toggleHidden }
+  return { layout, hidden, automatic, setAutomatic, loadRemote, update, save, reset, toggleHidden }
 })

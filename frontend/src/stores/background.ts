@@ -5,10 +5,10 @@ export type { BgConfig } from '@/api/backgrounds'
 
 export const backgroundTargets: Array<{ key: BackgroundTarget; label: string }> = [
   { key: 'app', label: 'Web app' }, { key: 'login', label: 'Web login' },
-  { key: 'android-app', label: 'Android app' }, { key: 'android-login', label: 'Android login' },
+  { key: 'android-app', label: 'Android app' },
 ]
 export const defaultBackground: BgConfig = { type: 'color', gradientAngle: 135, gradientStart: '#0d0d0d', gradientEnd: '#1a1a3e', blur: 0, brightness: 100, overlay: 40, version: 0 }
-const emptySettings = (): BackgroundSettings => ({ targets: Object.fromEntries(backgroundTargets.map(t => [t.key, { ...defaultBackground }])) as BackgroundSettings['targets'], surfaceTransparency: 0, configured: false })
+const emptySettings = (): BackgroundSettings => ({ targets: Object.fromEntries(backgroundTargets.map(t => [t.key, { ...defaultBackground }])) as BackgroundSettings['targets'], surfaceTransparency: 0, configured: false, sourceVersion: 0 })
 
 export const useBackgroundStore = defineStore('background', () => {
   const settings = ref<BackgroundSettings>(emptySettings())
@@ -70,6 +70,10 @@ export const useBackgroundStore = defineStore('background', () => {
     await pending
     accept((await backgroundApi.apply(file, targets)).data)
   }
+  async function applyCrops(source: Blob, web: Blob, android: Blob | null, targets: BackgroundTarget[]) {
+    await pending
+    accept((await backgroundApi.applyCrops(source, web, android, targets)).data)
+  }
   async function copy(source: BackgroundTarget, targets: BackgroundTarget[]) {
     await pending
     accept((await backgroundApi.copy(source, targets)).data)
@@ -105,5 +109,5 @@ export const useBackgroundStore = defineStore('background', () => {
   }
   return { settings, ready, saving, error, appBg, loginBg, appBgImage, loginBgImage, appBgImageVersion, loginBgImageVersion,
     appBgLayerVisible, loginBgLayerVisible, appBgLayerStyle, loginBgLayerStyle, hasCustomBg, imageUrl, gradientPreview, applyAppBg,
-    setBackground, setTransparency, loadShared, applyImage, copy, remove, reset, loadFromDb, migrateLegacyImages }
+    setBackground, setTransparency, loadShared, applyImage, applyCrops, copy, remove, reset, loadFromDb, migrateLegacyImages }
 })

@@ -73,3 +73,25 @@ fun Backdrop(
 private fun rememberAuthedImageLoader(context: Context): ImageLoader = remember {
     ImageLoader.Builder(context).okHttpClient { ApiClient.imageClient(context) }.build()
 }
+
+/** Server chooser appearance is deliberately independent of every server. */
+@Composable
+fun LocalChooserBackdrop(enabled: Boolean, version: Long, content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    Box(Modifier.fillMaxSize()) {
+        if (enabled && version > 0) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(dev.carbonpanel.data.ChooserBackground.file(context))
+                    .memoryCacheKey("local-chooser-$version")
+                    .diskCacheKey("local-chooser-$version")
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = .40f)))
+        }
+        content()
+    }
+}
