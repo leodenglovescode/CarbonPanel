@@ -4,7 +4,12 @@
       <span class="card-title">CPU</span>
       <div class="header-right">
         <span class="badge badge-gray">{{ cpu.per_core.length }} cores</span>
-        <span class="badge badge-gray">{{ cpu.frequency_mhz.toFixed(0) }} MHz</span>
+        <span class="badge badge-gray" :title="cpu.frequency_source || 'CPU frequency is not exposed by the kernel'">
+          <template v-if="Number.isFinite(cpu.frequency_mhz) && cpu.frequency_mhz > 0">
+            {{ cpu.frequency_mhz.toFixed(0) }} MHz{{ cpu.frequency_kind === 'nominal' ? ' (nominal)' : '' }}
+          </template>
+          <template v-else>Frequency not reported</template>
+        </span>
         <span :class="['badge', pctBadge(cpu.aggregate)]">{{ cpu.aggregate.toFixed(1) }}%</span>
       </div>
     </template>

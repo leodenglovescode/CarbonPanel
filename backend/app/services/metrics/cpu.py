@@ -3,24 +3,7 @@ import asyncio
 import psutil
 
 from app.schemas.metrics import CpuMetrics, CpuTemp
-
-_cpu_name_cache: str = ""
-
-
-def _get_cpu_name() -> str:
-    global _cpu_name_cache
-    if _cpu_name_cache:
-        return _cpu_name_cache
-    try:
-        with open("/proc/cpuinfo") as f:
-            for line in f:
-                if line.startswith("model name"):
-                    _cpu_name_cache = line.split(":", 1)[1].strip()
-                    return _cpu_name_cache
-    except Exception:
-        pass
-    _cpu_name_cache = "Unknown CPU"
-    return _cpu_name_cache
+from app.services.metrics.cpu_hardware import cpu_frequency, cpu_name
 
 
 def _collect_temps() -> list[CpuTemp]:
@@ -46,20 +29,22 @@ def _collect_temps() -> list[CpuTemp]:
 async def collect() -> CpuMetrics:
     loop = asyncio.get_event_loop()
 
-    per_core, aggregate, freq, load, temps, cpu_name = await asyncio.gather(
+    per_core, aggregate, freq, load, temps, name = await asyncio.gather(
         loop.run_in_executor(None, lambda: psutil.cpu_percent(percpu=True)),
         loop.run_in_executor(None, lambda: psutil.cpu_percent(percpu=False)),
-        loop.run_in_executor(None, psutil.cpu_freq),
+        loop.run_in_executor(None, cpu_frequency),
         loop.run_in_executor(None, psutil.getloadavg),
         loop.run_in_executor(None, _collect_temps),
-        loop.run_in_executor(None, _get_cpu_name),
+        loop.run_in_executor(None, cpu_name),
     )
 
     return CpuMetrics(
         aggregate=aggregate,
         per_core=per_core,
         load_avg=list(load),
-        frequency_mhz=freq.current if freq else 0.0,
+        frequency_mhz=freq.mhz,
+        frequency_source=freq.source,
+        frequency_kind=freq.kind,
         temps=temps,
-        cpu_name=cpu_name,
+        cpu_name=name,
     )

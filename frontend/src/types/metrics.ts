@@ -11,6 +11,8 @@ export interface CpuMetrics {
   per_core: number[]
   load_avg: number[]
   frequency_mhz: number
+  frequency_source?: string | null
+  frequency_kind?: 'current' | 'nominal' | 'unavailable'
   temps: CpuTemp[]
   cpu_name: string
 }

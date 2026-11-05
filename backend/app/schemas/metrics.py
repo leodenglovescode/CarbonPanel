@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -14,6 +16,8 @@ class CpuMetrics(BaseModel):
     per_core: list[float]
     load_avg: list[float]
     frequency_mhz: float
+    frequency_source: str | None = None
+    frequency_kind: Literal["current", "nominal", "unavailable"] = "unavailable"
     temps: list[CpuTemp] = []
     cpu_name: str = ""
 

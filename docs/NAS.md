@@ -23,6 +23,34 @@ refresh button, and is searchable with Cmd/Ctrl+K. All NAS monitoring is read-on
   No fan settings are written and no sensor-detection probes are run. Missing
   channels mean the running kernel/driver does not expose them, not a stopped fan.
 
+## ARM CPU identity and frequency
+
+CPU identity uses `/proc/cpuinfo`, SoC family/ID sysfs attributes, root device-tree
+compatible strings and ARM implementer/part IDs. Realtek RTD, Qualcomm SoCs
+(including Snapdragon platforms), Rockchip and other common ARM SoC identifiers
+are recognized when the kernel exposes them. A core ID such as Cortex-A53 does
+not establish the containing SoC model, so it is never used to guess a Realtek
+or Qualcomm product name. The collector does not read device serial numbers.
+
+For clocks, the collector tries psutil, per-CPU and policy CPUFreq paths, then
+explicit MHz/clock fields in `/proc/cpuinfo`. CPUFreq kHz readings are converted
+to MHz; multiple reported cores are averaged, and policy-only readings are
+weighted by their affected CPU counts. `cpuinfo_cur_freq` is preferred when
+readable; `scaling_cur_freq` can reflect the kernel's requested operating point.
+Missing files and unsupported/permission-denied readings do not stop collection.
+
+A CPU node's device-tree `clock-frequency` is a last-resort configured clock and
+is explicitly labelled **nominal**, since it does not prove the live frequency.
+Maximum-frequency limits and BogoMIPS are never substituted for a current clock.
+When the kernel exposes no usable clock, the dashboard says **Frequency not
+reported**. For compatibility with existing clients the API retains numeric
+`frequency_mhz` (zero for unavailable) and adds `frequency_kind` and
+`frequency_source` metadata. Existing Android clients can ignore these new fields.
+
+References: [Linux CPUFreq](https://www.kernel.org/doc/html/v4.14/admin-guide/pm/cpufreq.html),
+[SoC sysfs ABI](https://www.kernel.org/doc/html/next/admin-guide/abi-testing-files.html),
+[ARM Cortex-A53 identification](https://community.arm.com/oss-platforms/w/docs/528/cpufreq-dvfs).
+
 ## SysV
 
 The installer checks for a running systemd instance, rather than just an installed
