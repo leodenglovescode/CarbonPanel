@@ -67,11 +67,46 @@ def test_lvm_helper_rejects_other_commands(tmp_path, args):
     assert result.stdout == ''
 
 
-def test_sysv_browser_updates_explain_cli(monkeypatch):
+def test_sysv_browser_updates_require_installed_helper(monkeypatch):
     monkeypatch.setenv('CARBONPANEL_INIT_SYSTEM', 'sysv')
     monkeypatch.setattr(update_runtime.subprocess, 'run', lambda *a, **kw: pytest.fail('systemctl invoked'))
+    monkeypatch.setattr(update_runtime, '_sysv_status', lambda: {})
+    monkeypatch.setattr(update_runtime, '_sysv_helper_available', lambda: False)
     assert not update_runtime._service_is_active('carbonpanel-update.service')
-    with pytest.raises(RuntimeError, match='sudo carbonpanelctl check'):
+    with pytest.raises(RuntimeError, match='Run carbonpanelctl update over SSH once'):
         update_runtime.trigger_update_check()
-    with pytest.raises(RuntimeError, match='sudo carbonpanelctl update'):
+    with pytest.raises(RuntimeError, match='Run carbonpanelctl update over SSH once'):
         update_runtime.trigger_update_install()
+
+
+def test_installer_provisions_sysv_updater_and_root_configuration(tmp_path):
+    repository = INSTALLER.parent.parent
+    prefix = tmp_path / 'system'
+    module_dir = prefix / 'libexec'
+    config_dir = prefix / 'etc'
+    script = function('write_sysv_updater')
+    script = script.replace('/usr/local/libexec', str(module_dir))
+    script = script.replace('/etc/carbonpanel', str(config_dir))
+    script = script.replace('install -d -o root -g root', 'install -d')
+    script = script.replace('install -o root -g root', 'install')
+    script = script.replace('os.chown(temporary, 0, 0)', 'pass # ownership stub for unprivileged test')
+    setup = '''set -eu
+CURRENT_LINK="$1"
+INSTALL_ROOT="$2/custom install"
+REPO_URL=https://example.com/panel
+APP_PORT=9898
+BACKEND_PORT=9899
+'''
+    result = subprocess.run(['bash', '-c', setup + script + '\nwrite_sysv_updater\n',
+                             'test', str(repository), str(tmp_path)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    import json
+    config = config_dir / 'updater.json'
+    assert json.loads(config.read_text()) == dict(
+        install_root=str(tmp_path / 'custom install'), repo_url='https://example.com/panel',
+        app_port='9898', backend_port='9899',
+    )
+    assert config.stat().st_mode & 0o777 == 0o600
+    helper = module_dir / 'carbonpanel-updater'
+    assert helper.stat().st_mode & 0o777 == 0o755
+    assert helper.read_text() == (repository / 'scripts/sysv-updater.py').read_text()

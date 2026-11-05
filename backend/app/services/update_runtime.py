@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
@@ -17,6 +18,79 @@ DEFAULT_REPO_URL = "https://github.com/leodenglovescode/CarbonPanel"
 
 CHECK_SERVICE = "carbonpanel-update-check.service"
 UPDATE_SERVICE = "carbonpanel-update.service"
+SYSV_HELPER = Path('/usr/local/libexec/carbonpanel-updater')
+SYSV_CONFIG = Path('/etc/carbonpanel/updater.json')
+
+
+def uses_sysv() -> bool:
+    return os.getenv("CARBONPANEL_INIT_SYSTEM") == "sysv"
+
+
+def _sysv_helper_available() -> bool:
+    return SYSV_HELPER.is_file() and SYSV_CONFIG.is_file()
+
+
+async def _sysv_helper_output_async(action: str) -> str:
+    command = [str(SYSV_HELPER), action]
+    if os.geteuid() != 0:
+        command = ['/usr/bin/sudo', '-n', *command]
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=5 if action in {'status', 'logs'} else 20,
+            )
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            if proc.returncode is None:
+                proc.kill()
+            await proc.communicate()
+            raise
+        if proc.returncode:
+            raise RuntimeError(stderr.decode(errors='replace').strip() or
+                               f'SysV updater {action} failed')
+        return stdout.decode(errors='replace')
+    except (OSError, asyncio.TimeoutError) as exc:
+        raise RuntimeError(f'Unable to contact the SysV updater: {exc}') from exc
+
+
+def _sysv_helper_output(action: str) -> str:
+    # All public runtime functions are called in the API's executor thread.
+    return asyncio.run(_sysv_helper_output_async(action))
+
+
+def _sysv_status() -> dict[str, Any]:
+    try:
+        result = json.loads(_sysv_helper_output('status'))
+        if not isinstance(result, dict):
+            raise ValueError('Invalid SysV updater status')
+        return result
+    except (RuntimeError, ValueError) as exc:
+        return {'error': str(exc)}
+
+
+def sysv_update_logs() -> list[str]:
+    return [line for line in _sysv_helper_output('logs').splitlines() if line.strip()]
+
+
+def _start_sysv_operation(action: str) -> str:
+    if not _sysv_helper_available():
+        raise RuntimeError(
+            'SysV updater helper is not installed. Run carbonpanelctl update over SSH once.'
+        )
+    try:
+        result = json.loads(_sysv_helper_output(action))
+    except (RuntimeError, ValueError) as exc:
+        # A slow acknowledgement can time out after the detached job started.
+        result = _sysv_status()
+        if not result.get('running') or result.get('kind') != action:
+            raise RuntimeError(str(exc)) from exc
+    operation_id = result.get('operation_id') if isinstance(result, dict) else None
+    if not isinstance(operation_id, str) or not operation_id:
+        raise RuntimeError('SysV updater returned no operation ID')
+    return operation_id
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -38,8 +112,10 @@ def _service_is_active(service_name: str) -> bool:
     for the entire command, so checking only for ``active`` reports false for
     exactly the period the Web UI needs to follow.
     """
-    if os.getenv("CARBONPANEL_INIT_SYSTEM") == "sysv":
-        return False
+    if uses_sysv():
+        state = _sysv_status()
+        action = 'check' if service_name == CHECK_SERVICE else 'update'
+        return bool(state.get('running') and state.get('kind') in {action, 'external'})
     try:
         result = subprocess.run(
             ["/usr/bin/systemctl", "is-active", service_name],
@@ -169,8 +245,8 @@ def is_update_in_progress() -> bool:
 
 def _service_unit_exists(service_name: str) -> bool:
     """Return True only if the systemd unit file is installed on this host."""
-    if os.getenv("CARBONPANEL_INIT_SYSTEM") == "sysv":
-        return False
+    if uses_sysv():
+        return _sysv_helper_available()
     try:
         result = subprocess.run(
             ["/usr/bin/systemctl", "list-unit-files", "--no-pager", service_name],
@@ -220,8 +296,21 @@ def get_system_version_status() -> dict[str, Any]:
     current = _read_json(CURRENT_METADATA_PATH)
     update = _read_json(UPDATE_STATUS_PATH)
 
-    check_in_progress = is_check_in_progress()
-    update_in_progress = is_update_in_progress()
+    sysv_status = _sysv_status() if uses_sysv() and _sysv_helper_available() else {}
+    if uses_sysv():
+        # A status query can finalize an interrupted job (including after reboot).
+        update = _read_json(UPDATE_STATUS_PATH)
+        running = sysv_status.get('running', False)
+        kind = sysv_status.get('kind')
+        check_in_progress = bool(running and kind in {'check', 'external'}) or (
+            _queued_operation_is_recent('check_state', 'check_started_at')
+        )
+        update_in_progress = bool(running and kind in {'update', 'external'}) or (
+            _queued_operation_is_recent('operation_state', 'operation_started_at')
+        )
+    else:
+        check_in_progress = is_check_in_progress()
+        update_in_progress = is_update_in_progress()
     configured = bool(current) or bool(update) or INSTALL_ROOT.exists()
     status_value = str(
         update.get("status") or ("installing" if update_in_progress else "unknown")
@@ -236,7 +325,9 @@ def get_system_version_status() -> dict[str, Any]:
 
     return {
         "configured": configured,
-        "browser_updates_available": os.getenv("CARBONPANEL_INIT_SYSTEM") != "sysv",
+        "browser_updates_available": not uses_sysv() or (
+            _sysv_helper_available() and not sysv_status.get('error')
+        ),
         "repo_url": str(
             update.get("repo_url") or current.get("repo_url") or DEFAULT_REPO_URL
         ),
@@ -252,7 +343,7 @@ def get_system_version_status() -> dict[str, Any]:
         "update_in_progress": update_in_progress,
         "check_in_progress": check_in_progress,
         "status": display_status,
-        "error": update.get("error"),
+        "error": sysv_status.get("error") or update.get("error"),
         "release_url": update.get("release_url"),
         "notes_url": update.get("notes_url"),
         "check_id": update.get("check_id"),
@@ -274,6 +365,8 @@ def get_system_version_status() -> dict[str, Any]:
 
 
 def trigger_update_check() -> str:
+    if uses_sysv():
+        return _start_sysv_operation('check')
     if not _service_unit_exists(CHECK_SERVICE):
         raise RuntimeError(
             "Update-check service requires systemd. On SysV use sudo carbonpanelctl check."
@@ -291,6 +384,8 @@ def trigger_update_check() -> str:
 
 
 def trigger_update_install() -> str:
+    if uses_sysv():
+        return _start_sysv_operation('update')
     if not _service_unit_exists(UPDATE_SERVICE):
         raise RuntimeError(
             "Update service requires systemd. On SysV use sudo carbonpanelctl update."

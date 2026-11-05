@@ -70,10 +70,25 @@ sudo carbonpanelctl rollback
 ```
 
 Install, update, rollback, repair and uninstall select the running init system.
-Browser-triggered updates and scheduled systemd update checks require systemd;
-Settings shows manual update instructions on SysV. Service management pages and
-systemd journal views still require systemd. No broad service-control sudo rule is
-added for SysV. Storage and hardware monitoring do not require systemd.
+Browser update checks, installation, progress and updater logs work on both systemd
+and SysV. On SysV, a root-owned helper starts a detached supervisor which survives
+backend restarts. It holds the same update lock used by command-line updates,
+returns a correlated operation ID and captures output under
+`/run/carbonpanel-updater/updater.log`. Logs survive backend restarts but are cleared
+by a host reboot. The helper accepts only `check`, `update`, `status` and `logs`;
+its paths and installer settings come from root-owned `/etc/carbonpanel/updater.json`.
+Caller environment variables are not passed into privileged update commands.
+
+Existing SysV installations need one CLI update to provision this integration.
+Afterward, use **Settings → Version → Check for Updates / Install Update**.
+Configure **Settings → Proxy** for hosts which need outbound proxy access: web
+updates read that saved configuration, rather than an SSH shell's environment.
+Local health checks bypass the outbound proxy.
+
+Scheduled daily checks still use the systemd timer. Service management pages and
+systemd journal views still require systemd; the Settings updater log view uses
+the SysV helper when appropriate. No broad service-control sudo rule is added for
+SysV. Storage and hardware monitoring do not require systemd.
 
 ## Debian 13 with a vendor Linux 4.9 kernel
 

@@ -15,6 +15,8 @@ from app.services.update_runtime import (
     is_check_in_progress,
     is_update_in_progress,
     trigger_update_install,
+    uses_sysv,
+    sysv_update_logs,
 )
 
 router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -81,7 +83,7 @@ async def check_updates(_: User = Depends(get_current_user)):
 async def install_update(_: User = Depends(get_current_user)):
     """Queue one serialized, observable update operation.
 
-    The systemd unit state plus the queued operation record are authoritative.
+    The updater service/supervisor plus the queued operation record are authoritative.
     A short in-process debounce only closes the sub-second gap between two
     requests handled by the same backend worker.
     """
@@ -135,6 +137,11 @@ async def get_service_logs(
     response.headers["Cache-Control"] = "no-store"
 
     def _fetch() -> list[str]:
+        if uses_sysv():
+            try:
+                return sysv_update_logs()
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
         cmd = [
             "journalctl",
             "-u", CHECK_SERVICE,

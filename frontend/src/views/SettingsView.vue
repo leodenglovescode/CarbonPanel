@@ -623,12 +623,13 @@
             </span>
           </div>
           <p v-if="versionInfo?.browser_updates_available === false" class="section-desc">
-            This server uses SysV init. Check and install updates over SSH with
-            <code>sudo carbonpanelctl check</code> and <code>sudo carbonpanelctl update</code>.
+            The browser updater needs setup. Run <code>carbonpanelctl update</code> as root
+            over SSH once to install the updater integration.
           </p>
           <p v-else class="section-desc">
-            CarbonPanel checks the installed GitHub branch for new commits every day. You can also
-            check manually and start an interactive update from here.
+            Check the installed GitHub branch for new commits and install updates here.
+            Updates continue running while the panel restarts. The proxy saved in Settings is
+            used for downloads.
           </p>
 
           <div class="version-grid">

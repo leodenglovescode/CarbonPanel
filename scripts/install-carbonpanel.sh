@@ -513,6 +513,8 @@ PY
 
   [[ -n "$proxy_url" ]] || return 0
   export https_proxy="$proxy_url" http_proxy="$proxy_url" all_proxy="$proxy_url"
+  export no_proxy="localhost,127.0.0.1,::1${no_proxy:+,$no_proxy}"
+  export NO_PROXY="$no_proxy"
   note "Using the configured proxy for GitHub access: ${DIM}${proxy_url}${NC}"
 }
 
@@ -1056,7 +1058,7 @@ HELPER
 # fixed at 150 lines in api/system.py. Docker arguments are checked by the
 # root-owned helper, so no sudoers argument wildcards are needed.
 sudoers_rules() {
-  printf '%s\n' "${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n 150 --output=short-iso, ${DOCKER_HELPER}, /usr/local/libexec/carbonpanel-lvm pvs, /usr/local/libexec/carbonpanel-lvm vgs, /usr/local/libexec/carbonpanel-lvm lvs"
+  printf '%s\n' "${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ${UPDATE_CHECK_SERVICE}, /usr/bin/systemctl start --no-block ${UPDATE_SERVICE}, /usr/bin/journalctl -u ${UPDATE_CHECK_SERVICE} -u ${UPDATE_SERVICE} --no-pager -n 150 --output=short-iso, ${DOCKER_HELPER}, /usr/local/libexec/carbonpanel-lvm pvs, /usr/local/libexec/carbonpanel-lvm vgs, /usr/local/libexec/carbonpanel-lvm lvs, /usr/local/libexec/carbonpanel-updater check, /usr/local/libexec/carbonpanel-updater update, /usr/local/libexec/carbonpanel-updater status, /usr/local/libexec/carbonpanel-updater logs"
 }
 
 write_sudoers() {
@@ -1099,11 +1101,30 @@ restore_release_sudoers() {
   mv -f "$candidate" "$SUDOERS_FILE"
 }
 
+write_sysv_updater() {
+  install -d -o root -g root -m 755 /usr/local/libexec /etc/carbonpanel
+  install -o root -g root -m 755 "$CURRENT_LINK/scripts/sysv-updater.py" /usr/local/libexec/carbonpanel-updater
+  python3 - "$INSTALL_ROOT" "$REPO_URL" "$APP_PORT" "$BACKEND_PORT" <<'PYCONFIG'
+import json
+import os
+import sys
+from pathlib import Path
+
+path = Path('/etc/carbonpanel/updater.json')
+data = dict(zip(('install_root', 'repo_url', 'app_port', 'backend_port'), sys.argv[1:]))
+temporary = path.with_suffix('.tmp')
+temporary.write_text(json.dumps(data) + '\n')
+os.chown(temporary, 0, 0)
+os.chmod(temporary, 0o600)
+temporary.replace(path)
+PYCONFIG
+}
+
 write_update_services() {
   write_lvm_helper
   if ! uses_systemd; then
+    write_sysv_updater
     write_sudoers
-    warn "SysV: use sudo carbonpanelctl check/update; browser updates require systemd."
     return
   fi
   cat > "/etc/systemd/system/$UPDATE_CHECK_SERVICE" <<EOF
@@ -1475,12 +1496,11 @@ install_or_update() {
   local source_type ref release_url release_id release_dir commit installed_at
 
   if [[ "$install_mode" == "update" ]]; then
-    begin_update_progress
-    trap update_operation_exit_guard EXIT
     if ! acquire_update_lock; then
-      finish_update_progress failed "Another update or version check is running" update_failed
       die "Another update or version check is already running."
     fi
+    begin_update_progress
+    trap update_operation_exit_guard EXIT
   fi
 
   # Resolve the target first. Everything below is either expensive (apt,
@@ -1821,6 +1841,9 @@ fix_carbonpanel() {
 
   # ── Sudoers (systemctl + journalctl + docker) ─────────────────────────────
   log "Checking sudoers rules..."
+  if ! uses_systemd; then
+    write_sysv_updater
+  fi
   write_lvm_helper
   write_docker_helper
   local expected_sudoers
@@ -1904,7 +1927,8 @@ uninstall_carbonpanel() {
   nginx -t >/dev/null 2>&1 && service_command reload nginx >/dev/null 2>&1 || true
 
   log "Revoking the sudo backstage pass..."
-  rm -f "$SUDOERS_FILE" "$DOCKER_HELPER" /usr/local/libexec/carbonpanel-lvm
+  rm -f "$SUDOERS_FILE" "$DOCKER_HELPER" /usr/local/libexec/carbonpanel-lvm \
+    /usr/local/libexec/carbonpanel-updater /etc/carbonpanel/updater.json
 
   log "Nuking ${INSTALL_ROOT} from orbit — it's the only way to be sure..."
   rm -rf "$INSTALL_ROOT"
