@@ -14,15 +14,17 @@ dev:
 		echo "Port $(BACKEND_PORT) is already in use. Stop the existing backend process before running 'make dev'."; \
 		exit 1; \
 	fi
-	@trap 'kill 0' EXIT INT TERM; \
-	(cd backend && ../$(UVICORN) app.main:app --host 0.0.0.0 --port $(BACKEND_PORT) --reload) & \
+	@echo "--- Applying database migrations ---"
+	@cd backend && ../$(ALEMBIC) upgrade head
+	@backend_pid=; frontend_pid=; \
+	trap 'trap - EXIT; for pid in $$backend_pid $$frontend_pid; do kill -- -$$pid 2>/dev/null || true; done; wait 2>/dev/null || true' EXIT; \
+	trap 'exit 130' INT; trap 'exit 143' TERM; \
+	setsid bash -c 'cd backend && exec ../$(UVICORN) app.main:app --host 0.0.0.0 --port $(BACKEND_PORT) --reload' & \
 	backend_pid=$$!; \
-	(cd frontend && npm run dev) & \
+	setsid bash -c 'cd frontend && exec npm run dev' & \
 	frontend_pid=$$!; \
 	wait -n $$backend_pid $$frontend_pid; \
 	status=$$?; \
-	kill $$backend_pid $$frontend_pid 2>/dev/null || true; \
-	wait $$backend_pid $$frontend_pid 2>/dev/null || true; \
 	exit $$status
 
 # Backend only

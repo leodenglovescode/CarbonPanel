@@ -653,6 +653,81 @@
           </template>
         </div>
 
+        <!-- Passkeys Section -->
+        <div id="section-passkeys" class="section">
+          <div class="section-header">
+            <span class="section-title">Passkeys</span>
+            <span class="badge badge-gray">{{ passkeys.length }}</span>
+          </div>
+          <p class="section-desc">
+            Passkeys are a passwordless sign-in method protected by your device PIN,
+            fingerprint, face, or security key. Password + authenticator code remains
+            available as your fallback sign-in method.
+          </p>
+
+          <p v-if="!passkeySupport.available" class="passkey-compat">
+            {{ passkeySupport.reason }} Open CarbonPanel through a stable HTTPS hostname
+            whose certificate is trusted by this device to enroll or use a passkey.
+          </p>
+
+          <div v-if="passkeysLoading" class="section-loading">Loading…</div>
+          <div v-else-if="!passkeys.length" class="section-empty">No passkeys registered.</div>
+          <div v-else class="device-list">
+            <div v-for="passkey in passkeys" :key="passkey.id" class="device-row">
+              <div class="device-info">
+                <span class="device-name">{{ passkey.device_name }}</span>
+                <span class="device-meta">
+                  {{ passkey.rp_id }} · added {{ fmtDate(passkey.created_at) }}
+                  <template v-if="passkey.last_used_at"> · used {{ fmtDate(passkey.last_used_at) }}</template>
+                </span>
+              </div>
+              <button
+                class="revoke-btn"
+                :disabled="passkeyBusy || !passkeyPassword || (auth.user?.totp_enabled && passkeyTotp.length !== 6)"
+                title="Enter your password and current 2FA code below before removing a passkey"
+                @click="deletePasskey(passkey)"
+              >Remove</button>
+            </div>
+          </div>
+
+          <div class="passkey-form">
+            <BaseInput
+              v-if="passkeySupport.available"
+              v-model="passkeyName"
+              label="Passkey Name"
+              id="passkey-name"
+              placeholder="MacBook Touch ID, YubiKey, etc."
+              maxlength="80"
+            />
+            <BaseInput
+              v-model="passkeyPassword"
+              label="Current Password"
+              id="passkey-password"
+              type="password"
+              autocomplete="current-password"
+            />
+            <BaseInput
+              v-if="auth.user?.totp_enabled"
+              v-model="passkeyTotp"
+              label="Current TOTP Code"
+              id="passkey-totp"
+              placeholder="000000"
+              inputmode="numeric"
+              maxlength="6"
+            />
+            <BaseButton
+              v-if="passkeySupport.available"
+              variant="ghost"
+              :disabled="passkeyBusy || !passkeyName.trim() || !passkeyPassword || (auth.user?.totp_enabled && passkeyTotp.length !== 6)"
+              @click="registerPasskey"
+            >
+              {{ passkeyBusy ? 'Waiting for passkey…' : 'Add passkey' }}
+            </BaseButton>
+          </div>
+          <p v-if="passkeyError" class="error-msg">{{ passkeyError }}</p>
+          <p v-if="passkeySuccess" class="success-msg">{{ passkeySuccess }}</p>
+        </div>
+
         <!-- Account info + change credentials -->
         <div id="section-account" class="section">
           <div class="section-header">
@@ -1147,7 +1222,8 @@ import { useDisplayPrefsStore } from '@/stores/displayPrefs'
 import { useLocaleStore } from '@/stores/locale'
 import { useDialogStore } from '@/stores/dialog'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, type SystemVersionResponse, type WebhookResponse, type WebhookCreate, type NotificationKind, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart } from '@/api'
+import { settingsApi, systemApi, webhooksApi, proxyApi, devicesApi, pairingApi, passkeysApi, type SystemVersionResponse, type WebhookResponse, type WebhookCreate, type NotificationKind, type ProxyConfig, type DeviceInfo, type PairingEndpoint, type PairingStart, type PasskeyCredential } from '@/api'
+import { createPasskey, passkeyAvailability } from '@/utils/passkeys'
 import QRCode from 'qrcode'
 
 const auth = useAuthStore()
@@ -1172,6 +1248,7 @@ const navSections = computed(() => [
   { id: 'section-alerts',     label: 'Alerts' },
   { id: 'section-version',    label: 'Version' },
   { id: 'section-2fa',        label: '2FA' },
+  { id: 'section-passkeys',   label: 'Passkeys' },
   { id: 'section-account',    label: 'Account' },
   { id: 'section-language',   label: t('settings.language') },
   { id: 'section-webhooks',   label: t('settings.webhooks') },
@@ -1704,6 +1781,89 @@ async function handleDisable() {
   }
 }
 
+// Passkeys
+const passkeySupport = passkeyAvailability()
+const passkeys = ref<PasskeyCredential[]>([])
+const passkeysLoading = ref(false)
+const passkeyBusy = ref(false)
+const passkeyName = ref('This device')
+const passkeyPassword = ref('')
+const passkeyTotp = ref('')
+const passkeyError = ref('')
+const passkeySuccess = ref('')
+
+async function loadPasskeys() {
+  passkeysLoading.value = true
+  try {
+    const { data } = await passkeysApi.list()
+    passkeys.value = data
+  } catch (e: any) {
+    passkeyError.value = e.response?.data?.detail || 'Could not load passkeys.'
+  } finally {
+    passkeysLoading.value = false
+  }
+}
+
+async function registerPasskey() {
+  if (!passkeySupport.available || passkeyBusy.value) return
+  passkeyError.value = ''
+  passkeySuccess.value = ''
+  passkeyBusy.value = true
+  try {
+    const name = passkeyName.value.trim()
+    const { data } = await passkeysApi.registerBegin(
+      name,
+      passkeyPassword.value,
+      passkeyTotp.value || undefined,
+    )
+    const credential = await createPasskey(data.public_key)
+    await passkeysApi.registerComplete(data.challenge_id, credential, name)
+    passkeySuccess.value = 'Passkey added. You can now use it from the login screen.'
+    passkeyName.value = 'This device'
+    passkeyPassword.value = ''
+    passkeyTotp.value = ''
+    await loadPasskeys()
+  } catch (e: any) {
+    passkeyError.value = e.response?.data?.detail || (
+      e.name === 'NotAllowedError'
+        ? 'Passkey registration was cancelled or timed out.'
+        : e.message || 'Could not register passkey.'
+    )
+  } finally {
+    passkeyBusy.value = false
+  }
+}
+
+async function deletePasskey(passkey: PasskeyCredential) {
+  if (!passkeyPassword.value || passkeyBusy.value) return
+  const confirmed = await dialog.confirm({
+    title: 'Remove passkey',
+    message: `Remove “${passkey.device_name}”? It will no longer sign in to ${passkey.rp_id}.`,
+    confirmLabel: 'Remove',
+    variant: 'danger',
+  })
+  if (!confirmed) return
+
+  passkeyError.value = ''
+  passkeySuccess.value = ''
+  passkeyBusy.value = true
+  try {
+    await passkeysApi.delete(
+      passkey.id,
+      passkeyPassword.value,
+      passkeyTotp.value || undefined,
+    )
+    passkeyPassword.value = ''
+    passkeyTotp.value = ''
+    passkeySuccess.value = 'Passkey removed.'
+    await loadPasskeys()
+  } catch (e: any) {
+    passkeyError.value = e.response?.data?.detail || 'Could not remove passkey.'
+  } finally {
+    passkeyBusy.value = false
+  }
+}
+
 // Change credentials
 const showChangeCreds = ref(false)
 const credsLoading = ref(false)
@@ -2202,6 +2362,7 @@ onMounted(async () => {
   void loadProxy()
   void loadDevices()
   void loadEndpoints()
+  void loadPasskeys()
 
   await Promise.all([loadVersionInfo(), fetchServiceLogs()])
   // An install kicked off from this page (or another tab/session) can still
@@ -2599,6 +2760,16 @@ onMounted(async () => {
 }
 
 .confirm-form, .setup-start { display: flex; flex-direction: column; gap: 10px; }
+.passkey-form { display: flex; flex-direction: column; gap: 10px; }
+.passkey-compat {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--warning);
+  background: var(--warning-dim);
+  border: 1px solid rgba(255, 184, 0, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
 
 .error-msg {
   font-size: 11px;
@@ -2950,6 +3121,7 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .revoke-btn:hover { background: var(--danger-dim); border-color: rgba(255,68,68,0.5); }
+.revoke-btn:disabled { opacity: 0.45; cursor: default; }
 
 /* Paired devices / QR pairing */
 .pair-endpoints { margin-top: 4px; }

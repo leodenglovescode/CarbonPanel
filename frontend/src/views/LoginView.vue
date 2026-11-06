@@ -29,6 +29,12 @@
         <BaseButton variant="primary" :disabled="loading" style="width:100%; justify-content:center">
           {{ loading ? 'Signing in…' : 'Sign in' }}
         </BaseButton>
+        <template v-if="passkeys.available">
+          <div class="login-divider"><span>or</span></div>
+          <button type="button" class="passkey-btn" :disabled="passkeyLoading" @click="handlePasskeyLogin">
+            {{ passkeyLoading ? 'Waiting for passkey…' : 'Sign in with a passkey' }}
+          </button>
+        </template>
       </form>
 
       <!-- Step 2: TOTP -->
@@ -64,7 +70,8 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useBackgroundStore } from '@/stores/background'
-import { authApi } from '@/api'
+import { authApi, passkeysApi } from '@/api'
+import { getPasskey, passkeyAvailability } from '@/utils/passkeys'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
@@ -83,6 +90,8 @@ const totpCode = ref('')
 const sessionToken = ref('')
 const error = ref('')
 const loading = ref(false)
+const passkeyLoading = ref(false)
+const passkeys = passkeyAvailability()
 
 // Normalize pasted codes and auto-submit only a complete numeric token.
 watch(totpCode, (value) => {
@@ -126,6 +135,27 @@ async function handleTotp() {
     totpCode.value = ''
   } finally {
     loading.value = false
+  }
+}
+
+async function handlePasskeyLogin() {
+  if (passkeyLoading.value) return
+  error.value = ''
+  passkeyLoading.value = true
+  try {
+    const { data } = await passkeysApi.loginBegin()
+    const credential = await getPasskey(data.public_key)
+    await passkeysApi.loginComplete(data.challenge_id, credential)
+    await auth.loadUser()
+    router.push('/')
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || (
+      e.name === 'NotAllowedError'
+        ? 'Passkey sign-in was cancelled or no matching passkey was found.'
+        : e.message || 'Passkey sign-in failed'
+    )
+  } finally {
+    passkeyLoading.value = false
   }
 }
 </script>
@@ -187,6 +217,38 @@ async function handleTotp() {
 .totp-hint { font-size: 11px; color: var(--fg-muted); }
 
 .error-msg { font-size: 11px; color: var(--danger); padding: 6px 10px; background: var(--danger-dim); border-radius: var(--radius-sm); border: 1px solid rgba(255,68,68,0.2); }
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-dim);
+  font-size: 10px;
+}
+.login-divider::before, .login-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--border);
+}
+.passkey-btn {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.passkey-btn:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.passkey-btn:disabled { opacity: 0.5; cursor: default; }
 
 .totp-actions { display: flex; gap: 10px; align-items: center; }
 .back-btn {

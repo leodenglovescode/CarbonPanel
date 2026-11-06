@@ -108,6 +108,7 @@ const settingsSections = computed<PaletteItem[]>(() => [
   { key: 'set-alerts', label: 'Alerts', category: 'Settings', go: () => goSettings('section-alerts') },
   { key: 'set-version', label: 'Version', category: 'Settings', go: () => goSettings('section-version') },
   { key: 'set-2fa', label: '2FA', category: 'Settings', go: () => goSettings('section-2fa') },
+  { key: 'set-passkeys', label: 'Passkeys', category: 'Settings', go: () => goSettings('section-passkeys') },
   { key: 'set-account', label: 'Account', category: 'Settings', go: () => goSettings('section-account') },
   { key: 'set-language', label: t('settings.language'), category: 'Settings', go: () => goSettings('section-language') },
   { key: 'set-webhooks', label: t('settings.webhooks'), category: 'Settings', go: () => goSettings('section-webhooks') },

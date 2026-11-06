@@ -10,7 +10,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 
 A lightweight self-hosted server monitoring panel, No bs, No paywall.<br/>
-Live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, and JWT + TOTP authentication.
+Live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, JWT sessions, TOTP 2FA, and passkey authentication.
 
 <img width="1279" height="634" alt="Screenshot Of CarbonPanel" src="https://github.com/user-attachments/assets/b37ce570-fb52-4935-8827-30ce5b3d1d16" />
 
@@ -41,6 +41,12 @@ nginx serves the panel over HTTPS with a self-signed certificate generated at in
 trusted — that's expected for a self-signed cert; click through it (Chrome: "Advanced" →
 "Proceed"). It's still real TLS encryption, just not backed by a public CA, which is a lot
 better than the plaintext HTTP this used to default to.
+
+Passkeys have stricter browser requirements than ordinary HTTPS. They are available only
+when CarbonPanel is opened through a stable domain hostname and the certificate is trusted
+by that device; clicking through the warning for an untrusted certificate is not enough.
+Bare IP addresses are not valid WebAuthn relying-party IDs. TOTP remains available on every
+deployment and is the fallback sign-in method when passkeys are unavailable.
 
 ---
 
@@ -93,7 +99,7 @@ Local development reads `backend/.env`; managed installs read
 - **System services** — browse, start/stop/restart, enable/disable, star and reorder
 - **Sites** — manage tracked services with log streaming and config file editing
 - **Customizable UI** — dark/light/auto theme, custom colors, fonts, gradients, background images
-- **JWT auth** with optional **TOTP 2FA**
+- **Secure authentication** — revocable JWT sessions, optional TOTP 2FA, and passwordless passkeys on trusted HTTPS hostnames
 - **HTTPS by default** — self-signed cert generated at install time, no plaintext credentials on the wire
 - **Guided onboarding** — first login walks through setting a password and 2FA setup
 - **Native Android client** — HTTPS-only bearer auth; installer self-signed certificates are pinned from the pairing QR
@@ -112,6 +118,9 @@ make dev     # run backend + frontend together
 |---|---|
 | `http://localhost:5173` | Frontend (Vite HMR) |
 | `http://localhost:8010/api/v1` | Backend API |
+
+`make dev` applies pending database migrations before starting both services and stops
+their child processes when either service exits or you press Ctrl+C.
 
 Other commands: `make backend`, `make frontend`, `make lint`
 

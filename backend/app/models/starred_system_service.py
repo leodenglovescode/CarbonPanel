@@ -11,6 +11,7 @@ class StarredSystemService(Base):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
+        index=True,
     )
     service_name: Mapped[str] = mapped_column(String, primary_key=True)
     position: Mapped[int] = mapped_column(

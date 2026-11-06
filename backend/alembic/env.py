@@ -17,12 +17,14 @@ from app.database import Base  # noqa: E402
 from app.config import settings  # noqa: E402
 import app.models.user  # noqa: E402, F401
 import app.models.site  # noqa: E402, F401
+import app.models.starred_system_service  # noqa: E402, F401
 import app.models.app_label  # noqa: E402, F401
 import app.models.webhook  # noqa: E402, F401
 import app.models.device  # noqa: E402, F401
 import app.models.bookmark  # noqa: E402, F401
 import app.models.dashboard_layout  # noqa: E402, F401
 import app.models.user_preferences  # noqa: E402, F401
+import app.models.webauthn  # noqa: E402, F401
 
 # Override alembic.ini's sqlalchemy.url with the value from settings so that
 # DATABASE_URL in the environment is always used (e.g. production vs local dev).

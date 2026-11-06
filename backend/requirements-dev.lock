@@ -19,6 +19,8 @@ anyio==4.14.2
     #   watchfiles
 bcrypt==5.0.0
     # via carbonpanel (pyproject.toml)
+cbor2==5.9.0
+    # via webauthn
 certifi==2026.7.22
     # via
     #   httpcore
@@ -28,7 +30,10 @@ cffi==2.1.1
 click==8.4.2
     # via uvicorn
 cryptography==50.0.0
-    # via carbonpanel (pyproject.toml)
+    # via
+    #   carbonpanel (pyproject.toml)
+    #   pyopenssl
+    #   webauthn
 fastapi==0.141.1
     # via carbonpanel (pyproject.toml)
 greenlet==3.5.4
@@ -65,6 +70,12 @@ pluggy==1.6.0
     # via pytest
 psutil==7.2.2
     # via carbonpanel (pyproject.toml)
+pyasn1==0.6.4
+    # via
+    #   pyasn1-modules
+    #   webauthn
+pyasn1-modules==0.4.2
+    # via webauthn
 pycparser==3.0
     # via cffi
 pydantic==2.13.4
@@ -81,6 +92,8 @@ pygments==2.21.0
     #   pytest
 pyjwt==2.13.0
     # via carbonpanel (pyproject.toml)
+pyopenssl==26.4.0
+    # via webauthn
 pyotp==2.10.0
     # via carbonpanel (pyproject.toml)
 pysocks==1.7.1
@@ -116,6 +129,7 @@ typing-extensions==4.16.0
     #   fastapi
     #   pydantic
     #   pydantic-core
+    #   pyopenssl
     #   pytest-asyncio
     #   sqlalchemy
     #   starlette
@@ -131,5 +145,7 @@ uvloop==0.22.1
     # via uvicorn
 watchfiles==1.2.0
     # via uvicorn
+webauthn==2.8.0
+    # via carbonpanel (pyproject.toml)
 websockets==17.0.1
     # via uvicorn

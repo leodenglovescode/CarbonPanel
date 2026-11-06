@@ -97,6 +97,20 @@ export interface TOTPSetupResponse {
   qr_png_b64: string
 }
 
+export interface PasskeyCredential {
+  id: string
+  device_name: string
+  rp_id: string
+  backed_up: boolean
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface PasskeyOptionsResponse {
+  challenge_id: string
+  public_key: Record<string, any>
+}
+
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<LoginResponse>('/auth/login', { username, password }),
@@ -105,6 +119,38 @@ export const authApi = {
   me: () => api.get<UserInfo>('/auth/me'),
   logout: () => api.post('/auth/logout'),
   completeOnboarding: () => api.post('/auth/onboarding/complete'),
+}
+
+export const passkeysApi = {
+  registerBegin: (
+    device_name: string,
+    current_password: string,
+    current_totp_code?: string,
+  ) => api.post<PasskeyOptionsResponse>('/auth/passkey/register/begin', {
+    device_name,
+    current_password,
+    current_totp_code,
+  }),
+  registerComplete: (
+    challenge_id: string,
+    credential: Record<string, any>,
+    device_name: string,
+  ) => api.post<PasskeyCredential>('/auth/passkey/register/complete', {
+    challenge_id,
+    credential,
+    device_name,
+  }),
+  list: () => api.get<PasskeyCredential[]>('/auth/passkey/credentials'),
+  delete: (id: string, current_password: string, current_totp_code?: string) =>
+    api.delete(`/auth/passkey/credentials/${id}`, {
+      data: { current_password, current_totp_code },
+    }),
+  loginBegin: () => api.post<PasskeyOptionsResponse>('/auth/passkey/login/begin'),
+  loginComplete: (challenge_id: string, credential: Record<string, any>) =>
+    api.post<{ success: boolean }>('/auth/passkey/login/complete', {
+      challenge_id,
+      credential,
+    }),
 }
 
 export const settingsApi = {
