@@ -10,7 +10,8 @@
   >
     <div class="sidebar-top">
       <div class="logo">
-        <span class="bracket">[</span>Carbon<span class="accent">Panel</span><span class="bracket">]</span>
+        <img src="/carbonpanel-mark.svg" width="24" height="24" alt="" />
+        <span>Carbon<span class="accent">Panel</span></span>
       </div>
       <button ref="closeButtonEl" class="mobile-close-btn" aria-label="Close menu" @click="$emit('close')">✕</button>
     </div>
@@ -179,7 +180,7 @@ async function handleLogout() {
   flex-shrink: 0;
 }
 
-.logo { font-size: 13px; font-weight: 700; letter-spacing: -0.02em; }
+.logo { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: -0.02em; }
 .bracket { color: var(--fg-dim); }
 .accent { color: var(--accent); }
 

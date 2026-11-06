@@ -1,0 +1,53 @@
+{
+  "ts": 1793958060.0,
+  "cpu": {
+    "aggregate": 18.4,
+    "per_core": [
+      12,
+      24,
+      18,
+      9,
+      31,
+      14,
+      22,
+      17
+    ],
+    "load_avg": [
+      1.24,
+      1.08,
+      0.96
+    ],
+    "frequency_mhz": 3800,
+    "cpu_name": "AMD Ryzen 7 5700G",
+    "temps": [
+      {
+        "sensor": "k10temp",
+        "label": "CPU package",
+        "temp_c": 46.0
+      }
+    ]
+  },
+  "memory": {
+    "total_mb": 16384,
+    "used_mb": 6914.0,
+    "free_mb": 9470.0,
+    "percent": 42.2
+  },
+  "network": [
+    {
+      "interface": "eth0",
+      "rx_mb_s": 12.8,
+      "tx_mb_s": 3.4,
+      "rx_total_mb": 845312,
+      "tx_total_mb": 213504
+    }
+  ],
+  "system": {
+    "hostname": "atlas",
+    "uptime_seconds": 2953200,
+    "boot_time_ts": 1791004860.0,
+    "timezone": "UTC",
+    "utc_offset_seconds": 0,
+    "docker_installed": true
+  }
+}

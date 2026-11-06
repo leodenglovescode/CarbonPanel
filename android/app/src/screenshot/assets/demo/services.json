@@ -1,0 +1,62 @@
+[
+  {
+    "service_name": "nginx.service",
+    "description": "Web server and reverse proxy",
+    "load_state": "loaded",
+    "active_state": "active",
+    "sub_state": "running",
+    "uptime": "12 days",
+    "pid": 1200,
+    "unit_file_state": "enabled",
+    "autostart_enabled": true,
+    "starred": true
+  },
+  {
+    "service_name": "docker.service",
+    "description": "Container runtime",
+    "load_state": "loaded",
+    "active_state": "active",
+    "sub_state": "running",
+    "uptime": "12 days",
+    "pid": 1201,
+    "unit_file_state": "enabled",
+    "autostart_enabled": true,
+    "starred": true
+  },
+  {
+    "service_name": "carbonpanel-backend.service",
+    "description": "CarbonPanel monitoring API",
+    "load_state": "loaded",
+    "active_state": "active",
+    "sub_state": "running",
+    "uptime": "12 days",
+    "pid": 1202,
+    "unit_file_state": "enabled",
+    "autostart_enabled": true,
+    "starred": false
+  },
+  {
+    "service_name": "ssh.service",
+    "description": "OpenSSH server",
+    "load_state": "loaded",
+    "active_state": "active",
+    "sub_state": "running",
+    "uptime": "12 days",
+    "pid": 1203,
+    "unit_file_state": "enabled",
+    "autostart_enabled": true,
+    "starred": false
+  },
+  {
+    "service_name": "smartd.service",
+    "description": "Disk health monitoring",
+    "load_state": "loaded",
+    "active_state": "active",
+    "sub_state": "running",
+    "uptime": "12 days",
+    "pid": 1204,
+    "unit_file_state": "enabled",
+    "autostart_enabled": true,
+    "starred": false
+  }
+]

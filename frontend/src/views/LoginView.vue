@@ -3,7 +3,8 @@
     <div v-if="bg.loginBgLayerVisible" class="login-bg-layer" :style="bg.loginBgLayerStyle" />
     <div class="login-box">
       <div class="login-logo">
-        <span class="bracket">[</span>Carbon<span class="accent">Panel</span><span class="bracket">]</span>
+        <img src="/carbonpanel-mark.svg" width="40" height="40" alt="" />
+        <span>Carbon<span class="accent">Panel</span></span>
       </div>
       <p class="login-sub">Server monitoring</p>
 
@@ -193,6 +194,9 @@ async function handlePasskeyLogin() {
 }
 
 .login-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;

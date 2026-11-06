@@ -10,6 +10,8 @@ plugins {
 // below only apply to local builds.
 val carbonVersionName = (findProperty("carbonVersionName") as String?) ?: "1.0.0"
 val carbonVersionCode = (findProperty("carbonVersionCode") as String?)?.toInt() ?: 1
+// F-Droid builds unsigned and applies its selected signing/verification policy.
+val carbonUnsigned = providers.gradleProperty("carbonUnsigned").orNull == "true"
 
 android {
     namespace = "dev.carbonpanel"
@@ -25,12 +27,13 @@ android {
         targetSdk = 36
         versionCode = carbonVersionCode
         versionName = carbonVersionName
+        manifestPlaceholders["carbonApplicationClass"] = "dev.carbonpanel.CarbonApp"
     }
 
     // Release signing comes from the environment so CI can inject a keystore
     // without it ever being committed. Everything is optional: with nothing
     // set, the release build falls back to the debug key below.
-    val keystorePath: String? = System.getenv("KEYSTORE_FILE")
+    val keystorePath: String? = if (carbonUnsigned) null else System.getenv("KEYSTORE_FILE")
 
     signingConfigs {
         create("release") {
@@ -51,7 +54,9 @@ android {
             // cannot be installed at all and would make the CI artifact
             // useless. Set the KEYSTORE_* secrets to sign properly; note that
             // switching signing key later requires users to uninstall first.
-            signingConfig = if (!keystorePath.isNullOrBlank()) {
+            signingConfig = if (carbonUnsigned) {
+                null
+            } else if (!keystorePath.isNullOrBlank()) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
@@ -66,6 +71,15 @@ android {
         debug {
             applicationIdSuffix = ".debug"
         }
+        // Local store-artwork fixture build; its server/data/dependencies never
+        // enter debug or release APKs, and cannot access a real paired account.
+        create("screenshot") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".screenshots"
+            versionNameSuffix = "-screenshots"
+            matchingFallbacks += listOf("debug")
+            manifestPlaceholders["carbonApplicationClass"] = "dev.carbonpanel.screenshots.ScreenshotApp"
+        }
     }
 
     compileOptions {
@@ -75,6 +89,12 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    // The encrypted Google Play dependency block is unsuitable for F-Droid.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     lint {
@@ -95,6 +115,8 @@ android {
 }
 
 dependencies {
+    "screenshotImplementation"("com.squareup.okhttp3:mockwebserver:4.12.0")
+    "screenshotImplementation"("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation("junit:junit:4.13.2")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

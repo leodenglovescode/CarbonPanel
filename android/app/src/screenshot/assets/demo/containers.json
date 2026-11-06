@@ -1,0 +1,50 @@
+[
+  {
+    "id": "paperless",
+    "name": "paperless",
+    "image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+    "status": "Up 12 days",
+    "state": "running",
+    "ports": "8000 \u2192 8000",
+    "cpu_percent": 2.4,
+    "mem_usage_mb": 412,
+    "mem_limit_mb": 16384,
+    "mem_percent": 2.5
+  },
+  {
+    "id": "nextcloud",
+    "name": "nextcloud",
+    "image": "nextcloud:stable",
+    "status": "Up 12 days",
+    "state": "running",
+    "ports": "8080 \u2192 80",
+    "cpu_percent": 1.8,
+    "mem_usage_mb": 286,
+    "mem_limit_mb": 16384,
+    "mem_percent": 1.7
+  },
+  {
+    "id": "postgres",
+    "name": "postgres",
+    "image": "postgres:17-alpine",
+    "status": "Up 12 days",
+    "state": "running",
+    "ports": "5432",
+    "cpu_percent": 0.6,
+    "mem_usage_mb": 128,
+    "mem_limit_mb": 16384,
+    "mem_percent": 0.8
+  },
+  {
+    "id": "redis",
+    "name": "redis",
+    "image": "redis:7-alpine",
+    "status": "Up 12 days",
+    "state": "running",
+    "ports": "6379",
+    "cpu_percent": 0.2,
+    "mem_usage_mb": 24,
+    "mem_limit_mb": 16384,
+    "mem_percent": 0.1
+  }
+]

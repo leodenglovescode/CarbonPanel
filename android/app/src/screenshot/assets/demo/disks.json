@@ -1,0 +1,37 @@
+[
+  {
+    "device": "/dev/md0",
+    "physical_device": "/dev/md0",
+    "mountpoint": "/srv/storage",
+    "fstype": "xfs",
+    "opts": "rw",
+    "total_gb": 7450,
+    "used_gb": 3427,
+    "free_gb": 4023,
+    "usage_percent": 46,
+    "read_mb_s": 24.8,
+    "write_mb_s": 8.2,
+    "bus_type": "SATA",
+    "smart": null
+  },
+  {
+    "device": "/dev/nvme0n1p2",
+    "physical_device": "/dev/nvme0n1",
+    "mountpoint": "/",
+    "fstype": "ext4",
+    "opts": "rw",
+    "total_gb": 476.9,
+    "used_gb": 128.4,
+    "free_gb": 348.5,
+    "usage_percent": 26.9,
+    "read_mb_s": 2.3,
+    "write_mb_s": 0.8,
+    "bus_type": "NVMe",
+    "smart": {
+      "model": "System SSD",
+      "health": "PASSED",
+      "temperature_c": 38,
+      "power_on_hours": 3120
+    }
+  }
+]

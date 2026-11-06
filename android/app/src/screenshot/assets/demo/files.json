@@ -1,0 +1,73 @@
+{
+  "path": "/",
+  "parent": null,
+  "entries": [
+    {
+      "name": "Documents",
+      "path": "/Documents",
+      "directory": true,
+      "kind": "directory",
+      "size": null,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "Media",
+      "path": "/Media",
+      "directory": true,
+      "kind": "directory",
+      "size": null,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "Projects",
+      "path": "/Projects",
+      "directory": true,
+      "kind": "directory",
+      "size": null,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "Getting started.md",
+      "path": "/Getting started.md",
+      "directory": false,
+      "kind": "markdown",
+      "size": 2846,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "backup-plan.py",
+      "path": "/backup-plan.py",
+      "directory": false,
+      "kind": "text",
+      "size": 4832,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "storage-report.csv",
+      "path": "/storage-report.csv",
+      "directory": false,
+      "kind": "text",
+      "size": 24576,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "network-map.png",
+      "path": "/network-map.png",
+      "directory": false,
+      "kind": "image",
+      "size": 368640,
+      "modified": 1793871660.0
+    },
+    {
+      "name": "server-tour.mp4",
+      "path": "/server-tour.mp4",
+      "directory": false,
+      "kind": "video",
+      "size": 25165824,
+      "modified": 1793871660.0
+    }
+  ],
+  "total": 8,
+  "offset": 0,
+  "has_more": false
+}

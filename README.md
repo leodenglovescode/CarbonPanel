@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/branding/carbonpanel-logo.svg" width="160" alt="CarbonPanel logo" /></p>
+
 # CarbonPanel
 
 ![Project Status](https://img.shields.io/badge/status-active-00C853?style=for-the-badge)
@@ -104,6 +106,28 @@ Local development reads `backend/.env`; managed installs read
 - **Guided onboarding** — first login walks through setting a password and 2FA setup
 - **Native Android client** — HTTPS-only bearer auth; installer self-signed certificates are pinned from the pairing QR
 - **In-panel updates** — version check via GitHub API, one-click update from the Settings page
+
+---
+
+## Android distribution and F-Droid preparation
+
+GitHub remains the source repository and Android release location. Successful
+Android releases also attach `carbonpanel-version.json`, which lets F-Droid's
+update checks discover the published version and matching Git tag. Pushing a
+commit to `master` does not publish an APK; the existing release-tag workflow applies.
+
+F-Droid inclusion is being prepared and has **not been submitted or accepted**.
+See the [submission draft](docs/fdroid-submission-draft.md) and
+[build/update configuration](fdroid/README.md). The draft needs an approved first
+release and verification of the selected upstream-signature reproducible build
+before submission.
+
+![Android feature gallery — fictional demo data](assets/store/screenshots/contact-sheet.png)
+
+[Full-size promotional images and screenshot reproduction](assets/store/README.md).
+
+The launcher, web panel, and listing share the new
+[Carbon C logo](assets/branding/README.md).
 
 ---
 

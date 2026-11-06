@@ -1,0 +1,6 @@
+{
+  "id": "demo",
+  "username": "demo",
+  "totp_enabled": true,
+  "onboarding_completed": true
+}

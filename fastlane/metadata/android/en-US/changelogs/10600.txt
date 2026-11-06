@@ -1,0 +1,1 @@
+Updated app icon and branding. Added F-Droid listing information and screenshots, unsigned-build support, and a release version feed for automatic update checks.

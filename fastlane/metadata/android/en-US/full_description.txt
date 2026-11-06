@@ -1,0 +1,17 @@
+CarbonPanel is an Android client for the self-hosted CarbonPanel server panel. Connect it to your Linux server or NAS to view system readings, manage containers and services, and browse files.
+
+Features:
+• View CPU, memory, disk usage, network activity, and running processes.
+• Check software RAID status, CPU temperatures, and SMART disk readings when the server exposes them.
+• View Docker container resource usage and start, stop, or restart containers.
+• View system service status and start, stop, or restart services.
+• Browse and download files. Preview Markdown, text, source code, images, and supported videos. File access follows the CarbonPanel service account's permissions; the browser has no editing or deletion controls.
+• Save multiple servers and view server readings in home-screen widgets.
+• Pair using a QR code from the CarbonPanel web panel. Connections require HTTPS; pairing supports certificate pinning for self-signed certificates.
+• Customize colors, backgrounds, and surface transparency.
+
+Requires Android 8.0 or newer and a running CarbonPanel server reachable over HTTPS. Hardware readings and management actions depend on the server's operating system, drivers, and permissions. Media playback depends on formats supported by your device.
+
+CarbonPanel is free and open source. No ads, Google account, or Google Play Services are required.
+
+Screenshots show fictional demo data.
