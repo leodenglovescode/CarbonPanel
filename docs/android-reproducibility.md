@@ -35,15 +35,28 @@ copied; private release-signing material was not accessed for verification.
 
 ## F-Droid submission
 
-Draft MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044
+MR: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044
 
 The one-file recipe pins the full source commit and public signing certificate,
 with `Binaries` pointing to the matching GitHub release. It does not permit a
-fallback to F-Droid signing when verification fails. F-Droid must still reproduce
-the release on its own infrastructure; local/CI checks do not prove that result.
+fallback to F-Droid signing when verification fails. The fdroiddata recipe CI build has now also reproduced the release successfully:
+https://gitlab.com/leodenglovescode/fdroiddata/-/jobs/17797836424
+Its log reports successful upstream APK verification. Final repository acceptance
+and publication are still controlled by F-Droid maintainers.
 
-GitLab rejected the fork pipeline before any jobs started because the account
-is not verified. The MR requests F-Droid runners per the upstream template.
+The account-verification restriction was cleared by the maintainer. The initial
+CI run then exposed metadata formatting and APK-discovery issues, corrected in
+recipe commit `49867f07054b416553ebd2211c4af4a17fec18ac`. The recipe explicitly
+selects the app module's APK and uses CI's YAML formatting. The corrected build
+and reproducibility check passed, and all nine pipeline jobs are green:
+https://gitlab.com/leodenglovescode/fdroiddata/-/pipelines/3035477195
+
+The APK report flags network and camera permissions as minor review items: they
+are needed for server connections and QR pairing. Remaining permission/signing/
+ABI entries are informational. CI tooling also emits environment warnings
+(outdated API lookup data, config-file mode, Python dependency syntax), which did
+not fail checks and are not app build failures.
+
 The MR also discloses the Android development start date (2026-08-08) and asks
 that inclusion wait until the three-month point (2026-11-08); no age exception
 is claimed.

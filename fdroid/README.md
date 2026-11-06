@@ -1,7 +1,7 @@
 # F-Droid submission preparation
 
 Submission preparation. A public metadata fork exists at
-https://gitlab.com/leodenglovescode/fdroiddata. A [draft merge request](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044) is open, and
+https://gitlab.com/leodenglovescode/fdroiddata. A [merge request](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044) is open, and
 [v1.6.0](https://github.com/leodenglovescode/CarbonPanel/releases/tag/v1.6.0) is published. CarbonPanel source remains on GitHub.
 
 ## Updates after inclusion
@@ -10,7 +10,7 @@ The existing Android release workflow creates `carbonpanel-version.json` from
 the exact release tag and publishes it alongside the APK **only after a successful
 build, signature verification, and a clean unsigned rebuild/signature-copy check**. Backend-only tags remain skipped.
 
-The draft `metadata/dev.carbonpanel.yml` uses F-Droid's `UpdateCheckMode: HTTP`
+The recipe `metadata/dev.carbonpanel.yml` uses F-Droid's `UpdateCheckMode: HTTP`
 to read this asset at GitHub's `releases/latest/download` URL. `AutoUpdateMode:
 Version v%v` selects that version's Git tag. Its reusable prebuild writes
 `$$VERSION$$` and `$$VERCODE$$` into Gradle properties, so future build entries
@@ -82,7 +82,9 @@ References:
 
 The published CI-signed v1.6.0 APK also reproduced byte for byte from a separate
 recipe rebuild, and its public certificate matches v1.5.0. The version JSON and
-final binary scan passed. F-Droid infrastructure verification is still pending.
+final binary scan passed. All nine corrected fdroiddata recipe CI jobs passed, including the build,
+upstream-signature verification, and APK inspection;
+maintainer review and final repository publication remain pending.
 See [verification evidence](../docs/android-reproducibility.md).
 
 ## Reproducibility verification
@@ -99,3 +101,14 @@ rebuild and before releasing any APK or version JSON. The source tag supplies
 both version properties. F-Droid must independently reproduce that release before
 publishing it with the pinned GitHub signature. See
 https://f-droid.org/docs/Reproducible_Builds/.
+
+## Matching CI recipe validation
+
+The Gradle project lives in `android/`, while its APK is produced by the `app`
+module. Keep the explicit recipe `output` path
+`app/build/outputs/apk/release/app-release-unsigned.apk`; automatic discovery from
+the parent project does not find it.
+
+Run `fdroid rewritemeta` using the same YAML library as CI. The 2026-11-06 CI image
+uses `ruamel.yaml 0.18.10`; version 0.17.21 formats long scalar fields differently.
+Check formatter idempotence before pushing, not just YAML parsing and lint.

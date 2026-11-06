@@ -116,10 +116,11 @@ Android releases also attach `carbonpanel-version.json`, which lets F-Droid's
 update checks discover the published version and matching Git tag. Pushing a
 commit to `master` does not publish an APK; the existing release-tag workflow applies.
 
-F-Droid inclusion has been [submitted as a draft](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044) and has **not been accepted**.
-See the [submission draft](docs/fdroid-submission-draft.md) and
+F-Droid inclusion has been [submitted for review](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044) and has **not been accepted**.
+See the [submission details](docs/fdroid-submission-draft.md) and
 [build/update configuration](fdroid/README.md). The [v1.6.0 signed APK reproduced independently](docs/android-reproducibility.md);
-F-Droid's own build and review remain pending.
+The F-Droid recipe CI build and reproduction also passed; maintainer review and
+repository publication remain pending.
 
 ![Android feature gallery — fictional demo data](assets/store/screenshots/contact-sheet.png)
 

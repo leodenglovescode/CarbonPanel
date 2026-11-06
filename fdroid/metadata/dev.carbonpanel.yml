@@ -11,7 +11,8 @@ AutoName: CarbonPanel
 
 RepoType: git
 Repo: https://github.com/leodenglovescode/CarbonPanel.git
-Binaries: https://github.com/leodenglovescode/CarbonPanel/releases/download/v%v/carbonpanel-v%v.apk
+Binaries: 
+  https://github.com/leodenglovescode/CarbonPanel/releases/download/v%v/carbonpanel-v%v.apk
 
 Builds:
   - versionName: 1.6.0
@@ -20,6 +21,7 @@ Builds:
     subdir: android
     gradle:
       - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
     prebuild: printf '\ncarbonVersionName=%s\ncarbonVersionCode=%s\n' '$$VERSION$$'
       '$$VERCODE$$' >> gradle.properties
     gradleprops:
@@ -29,6 +31,7 @@ AllowedAPKSigningKeys: f06b0403ff6784ff9ec32e6d0f96468ed044795847b8f29a537a6e26c
 
 AutoUpdateMode: Version v%v
 UpdateCheckMode: HTTP
-UpdateCheckData: https://github.com/leodenglovescode/CarbonPanel/releases/latest/download/carbonpanel-version.json|"versionCode":\s*(\d+)|.|"versionName":\s*"([0-9]+\.[0-9]+\.[0-9]+)"
+UpdateCheckData: 
+  https://github.com/leodenglovescode/CarbonPanel/releases/latest/download/carbonpanel-version.json|"versionCode":\s*(\d+)|.|"versionName":\s*"([0-9]+\.[0-9]+\.[0-9]+)"
 CurrentVersion: 1.6.0
 CurrentVersionCode: 10600

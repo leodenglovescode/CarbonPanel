@@ -1,9 +1,9 @@
 # CarbonPanel F-Droid submission
 
-Draft merge request: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044
+Merge request: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044
 
 Submitted from the plain `carbonpanel` branch of the public metadata fork.
-The earlier draft was superseded when the submission branch was renamed.
+The maintainer marked it ready for review. All nine corrected recipe CI jobs passed.
 For verification evidence see [Android reproducibility](android-reproducibility.md).
 
 The text below records the submitted body.
@@ -57,10 +57,10 @@ Both local builds and the GitHub workflow passed public signature copying; the
 separate recipe rebuild used OpenJDK 21 while CI used Temurin 17. No private
 release-signing files were accessed for verification.
 
-### Development age — please keep in draft until November 8
+### Development age
 
 Android development started on 2026-08-08. Three calendar months elapse on
-2026-11-08. This draft does not claim an exception to Quality Control point 6;
+2026-11-08. This request does not claim an exception to Quality Control point 6;
 please do not merge before that requirement is satisfied.
 
 ## Checklist
@@ -77,7 +77,7 @@ please do not merge before that requirement is satisfied.
 
 ### Merge request setup
 
-- [x] One app only; title follows `New app: CarbonPanel` (draft prefix while pending review).
+- [x] One app only; title follows `New app: CarbonPanel` (ready for review).
 - [x] Public fork, dedicated unprotected branch; no commits to fork master.
 - [x] Searched fdroiddata and RFP for CarbonPanel; no existing requests found.
 - [x] Followed the contributor Git workflow; no unrelated changes included.
@@ -101,23 +101,29 @@ please do not merge before that requirement is satisfied.
   with a test key, without task/build cache reuse or private release-key access.
 - [x] Published CI-signed APK reproduced independently from the exact source
   with recipe cleanup; signature verifies and complete APK bytes match.
-- [ ] F-Droid infrastructure build and upstream-signature verification.
-- [ ] All fork/MR pipeline checks and warnings reviewed.
+- [x] F-Droid recipe CI build and upstream-signature verification.
+- [x] All nine fork/MR pipeline jobs passed; build and APK inspection completed.
 
 The dependency audit found no known proprietary SDK/tracker matches. Resolved
 release module POMs declared Apache 2.0 or BSD-3-Clause. Google Play Services,
 Firebase, ML Kit, Play Billing and Play Core were absent. This is screening
 evidence, not a substitute for F-Droid's review.
 
-The fork pipeline failed before any jobs started:
-https://gitlab.com/leodenglovescode/fdroiddata/-/pipelines/3035304837
-GitLab GraphQL reports: "The pipeline failed due to the user not being verified."
-Per the submission template, please trigger CI on F-Droid runners. This is not a
-recipe test failure; the infrastructure checks above remain unchecked.
+The maintainer completed GitLab account verification. The corrected recipe's
+merge-request pipeline passed all nine jobs, including formatting, lint, source
+and APK checks, update checks, and the build with upstream-signature verification:
+https://gitlab.com/leodenglovescode/fdroiddata/-/pipelines/3035477195
+
+The recipe now explicitly selects the app module's unsigned APK. Formatting was
+validated using CI's ruamel.yaml 0.18.10. No change to the published app source
+or release APK was required.
+
+The APK report's minor permission findings are expected: `INTERNET` is needed
+to connect to the user's server, and `CAMERA` is used for QR pairing. Network-state,
+wake-lock/boot/foreground-service and the app's own receiver permission are
+reported as informational and support network/background widget operation.
 
 Successful upstream release build, including its reproducibility gate:
 https://github.com/leodenglovescode/CarbonPanel/actions/runs/42177389382
 Release APK and version feed:
 https://github.com/leodenglovescode/CarbonPanel/releases/tag/v1.6.0
-
-/label ~"New App"

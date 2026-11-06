@@ -134,9 +134,9 @@ F-Droid's recipe supplies them from its selected build entry. Google Play's
 encrypted dependency metadata is disabled.
 
 GitHub release CI publishes `carbonpanel-version.json` alongside each successful
-Android APK. The draft F-Droid metadata checks that file and tracks its matching
+Android APK. The F-Droid metadata checks that file and tracks its matching
 Git tag. See [the local preparation guide](../fdroid/README.md); this configuration
-has been submitted as a draft to F-Droid and has not been accepted.
+has been submitted for review to F-Droid and has not been accepted.
 See [verification evidence](../docs/android-reproducibility.md).
 
 Branding uses the maintainer-supplied hexagonal C/server design. SVG and Android
