@@ -16,7 +16,7 @@ Binaries: https://github.com/leodenglovescode/CarbonPanel/releases/download/v%v/
 Builds:
   - versionName: 1.6.0
     versionCode: 10600
-    commit: v1.6.0
+    commit: 552ba971d1988dde3dded060db09bc2c7a2afe95
     subdir: android
     gradle:
       - yes

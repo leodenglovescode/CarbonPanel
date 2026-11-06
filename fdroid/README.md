@@ -1,8 +1,8 @@
 # F-Droid submission preparation
 
 Submission preparation. A public metadata fork exists at
-https://gitlab.com/leodenglovescode/fdroiddata. No merge request or new release
-has been published. CarbonPanel source remains on GitHub.
+https://gitlab.com/leodenglovescode/fdroiddata. A [draft merge request](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044) is open, and
+[v1.6.0](https://github.com/leodenglovescode/CarbonPanel/releases/tag/v1.6.0) is published. CarbonPanel source remains on GitHub.
 
 ## Updates after inclusion
 
@@ -32,7 +32,7 @@ cd android
 produces an unsigned APK. GitHub builds keep their existing signing configuration.
 Encrypted Google Play dependency metadata is disabled for all builds.
 
-## Submission approval checklist
+## Submission process
 
 1. Review `docs/fdroid-submission-draft.md`, listing copy, and icon.
 2. Review the six real-emulator screenshots in `fastlane/metadata/android/en-US/images/phoneScreenshots/`
@@ -80,9 +80,10 @@ References:
   fixture Application, or MockWebServer classes. Six plain captures and six
   promotional cards are prepared; see `assets/store/README.md`.
 
-The actual next tag, public JSON URL, final signed APK, and F-Droid infrastructure
-build remain to be verified after approval and release. Local independent builds passed signature copying with a test key. Verification
-against the published CI-signed APK and F-Droid infrastructure is still required.
+The published CI-signed v1.6.0 APK also reproduced byte for byte from a separate
+recipe rebuild, and its public certificate matches v1.5.0. The version JSON and
+final binary scan passed. F-Droid infrastructure verification is still pending.
+See [verification evidence](../docs/android-reproducibility.md).
 
 ## Reproducibility verification
 

@@ -1,133 +1,123 @@
-# Draft: CarbonPanel F-Droid merge request
+# CarbonPanel F-Droid submission
 
-**Merge request body prepared locally. A public fdroiddata fork has been created; no merge request has been opened.**
-The proposed version `1.6.0` / `10600` is a placeholder for review, not an existing
-release or a newly created tag.
+Draft merge request: https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044
 
-## Proposed title
+Submitted from the plain `carbonpanel` branch of the public metadata fork.
+The earlier draft was superseded when the submission branch was renamed.
+For verification evidence see [Android reproducibility](android-reproducibility.md).
 
-New app: CarbonPanel
+The text below records the submitted body.
 
-## Proposed merge request body
+## Abstract for new app inclusion
 
-Adds CarbonPanel (`dev.carbonpanel`), a native Android companion for the
-open-source CarbonPanel server monitoring panel.
+### Functions and usage
 
-Users pair the app with their own server through a QR code and connect over
-HTTPS. Features include CPU, memory, disk, network, and process monitoring;
-software RAID and SMART disk readings where exposed by the server; multiple saved servers;
-home-screen widgets; and a read-only file browser with previews and downloads.
-A running CarbonPanel server is required. There is no required proprietary
-hosted service or Google account.
+CarbonPanel (`dev.carbonpanel`) is a native Android client for the MIT-licensed,
+self-hosted CarbonPanel Linux server/NAS panel. Pair through a QR code from the
+web panel and connect over HTTPS, including pinned self-signed certificates.
 
-- Source: https://github.com/leodenglovescode/CarbonPanel
-- Issue tracker: https://github.com/leodenglovescode/CarbonPanel/issues
-- License: MIT
-- Minimum Android version: 8.0 / API 26
-- Listing text and icon: `fastlane/metadata/android/en-US/` in the source repository
-- Build recipe: `metadata/dev.carbonpanel.yml` in this submission
+The app shows CPU, memory, disks, network activity, processes, software RAID and
+available SMART/temperature readings. It also provides Docker and system service
+controls, saved servers, home-screen widgets, and a read-only file browser with
+previews and downloads. A reachable CarbonPanel server is required; there is no
+required proprietary hosted service or Google account.
 
-### Purpose and screenshots
+Screenshots are real emulator captures with fictional data:
 
-The app provides a native Android interface for the CarbonPanel self-hosted
-server panel. Its workflow combines QR pairing and certificate pinning with
-system monitoring, container/service controls, and permission-limited read-only
-file access. A user runs CarbonPanel on their own Linux server or NAS; the app
-does not require a proprietary hosted service. This describes its scope, not a
-claim that competing apps lack these features.
+| Monitoring | Servers | Storage |
+| --- | --- | --- |
+| ![Monitoring](https://raw.githubusercontent.com/leodenglovescode/CarbonPanel/552ba971d1988dde3dded060db09bc2c7a2afe95/fastlane/metadata/android/en-US/images/phoneScreenshots/1.png) | ![Servers](https://raw.githubusercontent.com/leodenglovescode/CarbonPanel/552ba971d1988dde3dded060db09bc2c7a2afe95/fastlane/metadata/android/en-US/images/phoneScreenshots/2.png) | ![Storage](https://raw.githubusercontent.com/leodenglovescode/CarbonPanel/552ba971d1988dde3dded060db09bc2c7a2afe95/fastlane/metadata/android/en-US/images/phoneScreenshots/3.png) |
 
-Screenshots use fictional data and were captured from the actual Android UI.
-The upstream Fastlane directory contains six plain captures; the README shows
-framed feature images. Add links pinned to the final release commit before posting.
+### Purpose and scope
 
-### Inclusion policy timing
+This companion provides phone access to the maintainer's self-hosted CarbonPanel
+installation. It combines QR pairing and certificate pinning with monitoring,
+container/service actions, and file access limited by the panel service account.
+The native interface includes widgets and multiple saved servers. This describes
+the integration it provides; it does not claim competing apps lack these features.
 
-The first Android source commit is dated 2026-08-08. Three calendar months elapse
-on 2026-11-08. As of 2026-11-06, the age requirement is not yet met; no exception
-is claimed. If opened before that date, keep this request in draft and ask that
-inclusion wait until the requirement is met.
+### Version and signing
 
-### Build and future updates
+- Version: 1.6.0 / 10600; source commit `552ba971d1988dde3dded060db09bc2c7a2afe95`.
+- Source and listing assets remain on GitHub. This MR adds only the build recipe.
+- Upstream-signed reproducible builds are selected: `Binaries` references the
+  GitHub release APK and `AllowedAPKSigningKeys` pins the certificate already
+  used for v1.5.0. Please do not substitute F-Droid signing if reproduction fails.
+- The release workflow requires a clean unsigned rebuild, public signature copying,
+  successful signature verification, and a byte-for-byte comparison before publication.
+- The HTTP version feed is attached only to successful Android releases. Backend-only
+  tags do not publish APKs. Automatic build generation supplies the new version's
+  name/code through Gradle properties.
 
-The build uses the `android/` subdirectory. `carbonUnsigned=true` produces an
-unsigned APK without reading upstream release-signing environment variables.
-Google Play's encrypted dependency metadata is disabled.
+Published and independently reproduced APK SHA-256:
+`61858870a1daf03fed1fe841d9b479ff0e5bab8c0f3273528f45b69467e90969`.
+Certificate SHA-256:
+`f06b0403ff6784ff9ec32e6d0f96468ed044795847b8f29a537a6e26c08b20fd`.
+Both local builds and the GitHub workflow passed public signature copying; the
+separate recipe rebuild used OpenJDK 21 while CI used Temurin 17. No private
+release-signing files were accessed for verification.
 
-The maintainer selected upstream-signature reproducible builds. `Binaries`
-references the GitHub release APK; `AllowedAPKSigningKeys` pins the public
-certificate fingerprint already used by v1.5.0. Independent local builds passed
-signature-copy verification with a test key. The release workflow also checks
-a clean unsigned rebuild before publication. F-Droid must still reproduce the
-actual GitHub-signed release on its infrastructure.
+### Development age — please keep in draft until November 8
 
-The prebuild supplies the selected build's version name/code as Gradle
-properties. Future updates are detected through the version JSON attached to
-successful GitHub Android releases, using `UpdateCheckMode: HTTP` and
-`AutoUpdateMode: Version v%v`. Generated build entries therefore select the
-matching GitHub tag and use the new version's properties.
+Android development started on 2026-08-08. Three calendar months elapse on
+2026-11-08. This draft does not claim an exception to Quality Control point 6;
+please do not merge before that requirement is satisfied.
 
-### Preliminary checks
+## Checklist
 
-The initial source/dependency audit found no known non-free SDK or tracker
-matches. All 147 resolved module POMs declared Apache 2.0 or BSD-3-Clause.
-Google Play Services, Firebase, ML Kit, Play Billing, and Play Core were absent.
-These are preliminary checks, not a guarantee of acceptance or an independent
-copyright audit.
+### Policy
 
-Please review the proposed metadata and build recipe for inclusion.
+- [ ] Full inclusion-policy review by F-Droid; age requirement reaches three months on 2026-11-08.
+- [x] Submitted with the upstream maintainer's approval through their account.
+- [x] Upstream includes en-US Fastlane summary, description, icon, screenshots and changelog.
 
-## Internal preparation notes — exclude from the submitted body
+### Documentation
 
-Before approval and posting:
+- [x] Read CONTRIBUTING, the build templates, Build Metadata Reference, and Quick Start Guide.
 
-- Choose and publish the first release carrying these changes. Replace the
-  provisional version/tag in the metadata if needed. The v1.5.0 release has no
-  version JSON and includes encrypted dependency metadata; it is not the
-  release targeted by this draft.
-- Review the prepared real-emulator screenshots with fictional data and add the
-  approved release changelog. Plain captures are in the Fastlane listing; framed
-  promotional images are in `assets/store/screenshots/`.
-- Verify the selected upstream-signature policy against the actual CI release.
-  Keep `Binaries` and the pinned `AllowedAPKSigningKeys`; do not substitute
-  standard F-Droid signing if reproduction fails.
-- Verify the final signed APK and real GitHub JSON asset, run the recipe on
-  the actual published tag, and complete the current fdroiddata MR template.
-- Verify the chosen reproducible-build signing policy before opening the merge request. A public metadata fork has already been created
-  under `leodenglovescode/fdroiddata` with the maintainer's authorization.
+### Merge request setup
 
-## Files prepared locally
+- [x] One app only; title follows `New app: CarbonPanel` (draft prefix while pending review).
+- [x] Public fork, dedicated unprotected branch; no commits to fork master.
+- [x] Searched fdroiddata and RFP for CarbonPanel; no existing requests found.
+- [x] Followed the contributor Git workflow; no unrelated changes included.
 
-- `fdroid/metadata/dev.carbonpanel.yml`: draft build and update recipe.
-- `fastlane/metadata/android/en-US/`: public listing text and 512px icon.
-- `assets/branding/`: scalable logo assets, rendition of the maintainer's image.
-- `.github/workflows/android-release.yml`: existing release workflow extended
-  to publish `carbonpanel-version.json` beside successfully built APKs.
-- `scripts/android_release_metadata.py`: validates release tags and derives
-  the same version data for the APK and public feed.
+### Metadata
 
-CarbonPanel remains on GitHub. Only the metadata recipe will be submitted to
-F-Droid's GitLab repository after approval. No GitLab credentials are needed
-in the GitHub workflow for this update mechanism.
+- [x] File is `metadata/dev.carbonpanel.yml`, valid YAML with LF endings.
+- [x] Listing copy/artwork/changelog are upstream, not duplicated in this MR.
+- [x] Tagged release, automatic updates, issue tracker, and public AuthorName handle.
+- [x] Build commit is the full hash, only the latest release is listed; no disabled versions.
+- [x] No external source repositories or srclibs are required.
+- [x] Upstream-signature reproduction is required by Binaries and pinned signing certificate.
+- [x] Single APK retained: bundled AndroidX native helpers occupy about 60 KB
+  compressed in a 2.8 MB APK, so ABI splitting would save little space.
 
-References:
-- https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/
-- https://gitlab.com/fdroid/fdroiddata/-/blob/master/CONTRIBUTING.md
-- https://f-droid.org/docs/Build_Metadata_Reference/
+### Validation and pipeline
 
-## Current upstream template requirements
+- [x] Local Android build and 26 unit tests passed; metadata parsing and lint passed.
+- [x] GitHub release workflow passed its signed/unsigned clean rebuild comparison.
+- [x] Independent clean source copies at different paths passed signature-copy verification
+  with a test key, without task/build cache reuse or private release-key access.
+- [x] Published CI-signed APK reproduced independently from the exact source
+  with recipe cleanup; signature verifies and complete APK bytes match.
+- [ ] F-Droid infrastructure build and upstream-signature verification.
+- [ ] All fork/MR pipeline checks and warnings reviewed.
 
-Checked against `fdroiddata/.gitlab/merge_request_templates/Default.md` on
-2026-11-06. Before opening the request:
+The dependency audit found no known proprietary SDK/tracker matches. Resolved
+release module POMs declared Apache 2.0 or BSD-3-Clause. Google Play Services,
+Firebase, ML Kit, Play Billing and Play Core were absent. This is screening
+evidence, not a substitute for F-Droid's review.
 
-- Use title `New app: CarbonPanel` and the `New App` label.
-- Include the functions, purpose, and screenshot links above.
-- Use the full release commit hash in `Builds.commit`, not the tag name.
-- Keep descriptions, screenshots, icon, and changelog upstream in Fastlane;
-  the metadata MR should contain only `metadata/dev.carbonpanel.yml`.
-- Include `AuthorName: leodenglovescode` as the public maintainer handle.
-- Keep signing-policy and age-policy checklist items accurate; do not claim
-  reproducibility or three months of development before verified.
-- Check the fork pipeline. If GitLab requests phone or payment verification,
-  leave that to F-Droid maintainers to trigger; do not provide payment details.
-- No external source submodules are used. ABI splits are not configured because
-  this app uses a single managed-code APK rather than per-ABI native payloads.
+The fork pipeline failed before any jobs started:
+https://gitlab.com/leodenglovescode/fdroiddata/-/pipelines/3035304837
+GitLab GraphQL reports: "The pipeline failed due to the user not being verified."
+Per the submission template, please trigger CI on F-Droid runners. This is not a
+recipe test failure; the infrastructure checks above remain unchecked.
+
+Successful upstream release build, including its reproducibility gate:
+https://github.com/leodenglovescode/CarbonPanel/actions/runs/42177389382
+Release APK and version feed:
+https://github.com/leodenglovescode/CarbonPanel/releases/tag/v1.6.0
+
+/label ~"New App"
