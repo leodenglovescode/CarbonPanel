@@ -68,7 +68,8 @@ die() {
 run_silent() {
   local _tmp _rc=0
   _tmp=$(mktemp)
-  "$@" >"$_tmp" 2>&1 || _rc=$?
+  # Package hooks and services may daemonize; they must not retain our lock.
+  ( unset CARBONPANEL_LOCK_HELD; "$@" ) 9>&- >"$_tmp" 2>&1 || _rc=$?
   if [[ $_rc -ne 0 ]]; then
     printf '\n' >&2
     cat "$_tmp" >&2
@@ -92,17 +93,23 @@ uses_systemd() {
 }
 
 service_command() {
-  if uses_systemd; then
-    systemctl "$@"
-    return
-  fi
-  local action="$1" name="${2:-}"
-  name="${name%.service}"
-  case "$action" in
-    daemon-reload) return 0 ;;
-    start|stop|restart|reload) service "$name" "$action" ;;
-    *) die "Unsupported SysV service operation: $action" ;;
-  esac
+  # SysV daemons inherit open descriptors from their init script. Keep the
+  # updater lock in the installer, including across its bootstrap exec.
+  (
+    exec 9>&-
+    unset CARBONPANEL_LOCK_HELD
+    if uses_systemd; then
+      systemctl "$@"
+      return
+    fi
+    local action="$1" name="${2:-}"
+    name="${name%.service}"
+    case "$action" in
+      daemon-reload) return 0 ;;
+      start|stop|restart|reload) service "$name" "$action" ;;
+      *) die "Unsupported SysV service operation: $action" ;;
+    esac
+  )
 }
 
 json_query() {
@@ -577,7 +584,7 @@ install_os_prerequisites() {
   export DEBIAN_FRONTEND=noninteractive
   # Broken third-party repos (Docker, NVIDIA, Chrome, etc.) cause apt-get update
   # to return exit code 100. Treat that as a warning — the cached lists are enough.
-  apt-get update -y >/dev/null 2>&1 || warn "Some apt sources threw a tantrum — rolling with cached package lists, should be fine"
+  apt-get update -y 9>&- >/dev/null 2>&1 || warn "Some apt sources threw a tantrum — rolling with cached package lists, should be fine"
   # Core utilities — safe to install unconditionally on any apt system.
   run_silent apt-get install -y \
     ca-certificates \
@@ -599,19 +606,19 @@ install_os_prerequisites() {
   # nginx — skip if already present (nginx.org repo, BunkerWeb, OpenResty, etc. all conflict
   # with Ubuntu's nginx package but provide a compatible binary).
   if ! command_exists nginx; then
-    apt-get install -y nginx >/dev/null 2>&1 || true
+    apt-get install -y nginx 9>&- >/dev/null 2>&1 || true
   fi
 
   # nodejs — skip if already present (NodeSource, nvm, volta, fnm all conflict
   # with Ubuntu's nodejs package but provide a compatible binary).
   if ! command_exists node && ! command_exists nodejs; then
-    apt-get install -y nodejs >/dev/null 2>&1 || true
+    apt-get install -y nodejs 9>&- >/dev/null 2>&1 || true
   fi
 
   # npm is bundled with NodeSource nodejs. Only fall back to the apt package
   # on systems where nodejs was installed without npm (older Ubuntu apt nodejs).
   if ! command_exists npm; then
-    apt-get install -y npm >/dev/null 2>&1 || true
+    apt-get install -y npm 9>&- >/dev/null 2>&1 || true
   fi
 
   command_exists python3 || die "python3 is required."
@@ -802,7 +809,8 @@ build_step() {
 
   local _tmp _rc=0
   _tmp=$(mktemp)
-  "$@" >"$_tmp" 2>&1 || _rc=$?
+  # Package hooks and services may daemonize; they must not retain our lock.
+  ( unset CARBONPANEL_LOCK_HELD; "$@" ) 9>&- >"$_tmp" 2>&1 || _rc=$?
   if [[ $_rc -ne 0 ]]; then
     printf '\n' >&2
     cat "$_tmp" >&2
