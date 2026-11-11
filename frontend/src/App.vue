@@ -4,13 +4,13 @@
   </Teleport>
   <router-view v-if="!isPublicRoute" v-slot="{ Component }">
     <AuthLayout>
-      <Transition name="route-fade" mode="out-in">
-        <component :is="Component" :key="route.fullPath" />
+      <Transition name="route-fade">
+        <component :is="Component" :key="['files', 'settings'].includes(String(route.name)) ? route.path : route.fullPath" />
       </Transition>
     </AuthLayout>
   </router-view>
   <router-view v-else v-slot="{ Component }">
-    <Transition name="route-fade" mode="out-in">
+    <Transition name="route-fade">
       <component :is="Component" :key="route.fullPath" />
     </Transition>
   </router-view>

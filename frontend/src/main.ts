@@ -11,9 +11,10 @@ import '@fontsource/jetbrains-mono/600.css'
 import '@fontsource/jetbrains-mono/700.css'
 import './assets/main.css'
 
-// Installed panels use TLS. Keep loopback HTTP available for local development.
+// Installed panels use TLS. Vite development servers also support HTTP when
+// accessed from another development device; production builds keep the redirect.
 const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-if (window.location.protocol === 'http:' && !loopback) {
+if (window.location.protocol === 'http:' && !loopback && !import.meta.env.DEV) {
   window.location.replace(`https://${window.location.host}${window.location.pathname}${window.location.search}${window.location.hash}`)
 } else {
   // Apply saved theme before first render to avoid flash

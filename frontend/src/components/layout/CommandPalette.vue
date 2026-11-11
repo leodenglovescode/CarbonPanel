@@ -83,7 +83,6 @@ const pages = computed<PaletteItem[]>(() => [
   { key: 'page-/sites', label: t('nav.sites'), category: 'Pages', go: () => router.push('/sites') },
   { key: 'page-/system-services', label: t('nav.systemServices'), category: 'Pages', go: () => router.push('/system-services') },
   { key: 'page-nas', label: 'RAID, LVM & Fans', category: 'Pages', go: () => router.push('/disks#nas-monitor') },
-  { key: 'page-auto-placement', label: 'Automatic dashboard placement', category: 'Settings', go: () => router.push('/#dashboard-layout') },
   { key: 'page-/files', label: 'Files', category: 'Pages', go: () => router.push('/files') },
   { key: 'page-/disks', label: t('nav.disks'), category: 'Pages', go: () => router.push('/disks') },
   { key: 'page-/apps', label: t('nav.apps'), category: 'Pages', go: () => router.push('/apps') },
@@ -100,13 +99,14 @@ function goSettings(id: string) {
 
 // ponytail: mirrors SettingsView.vue's navSections — keep in sync if sections change there
 const settingsSections = computed<PaletteItem[]>(() => [
+  { key: 'set-dashboard', label: 'Dashboard layout / Automatic placement', category: 'Settings', go: () => goSettings('section-dashboard') },
   { key: 'set-appearance', label: 'Appearance', category: 'Settings', go: () => goSettings('section-appearance') },
-  { key: 'set-style', label: 'Stylistic', category: 'Settings', go: () => goSettings('section-style') },
+  { key: 'set-style', label: 'Colors, typography & motion', category: 'Settings', go: () => goSettings('section-style') },
   { key: 'set-backgrounds', label: 'Backgrounds', category: 'Settings', go: () => goSettings('section-backgrounds') },
   { key: 'set-display', label: 'Display', category: 'Settings', go: () => goSettings('section-display') },
-  { key: 'set-frequency', label: 'Frequency', category: 'Settings', go: () => goSettings('section-frequency') },
+  { key: 'set-frequency', label: 'Refresh rate', category: 'Settings', go: () => goSettings('section-frequency') },
   { key: 'set-alerts', label: 'Alerts', category: 'Settings', go: () => goSettings('section-alerts') },
-  { key: 'set-version', label: 'Version', category: 'Settings', go: () => goSettings('section-version') },
+  { key: 'set-version', label: 'Updates & service logs', category: 'Settings', go: () => goSettings('section-version') },
   { key: 'set-2fa', label: '2FA', category: 'Settings', go: () => goSettings('section-2fa') },
   { key: 'set-passkeys', label: 'Passkeys', category: 'Settings', go: () => goSettings('section-passkeys') },
   { key: 'set-account', label: 'Account', category: 'Settings', go: () => goSettings('section-account') },

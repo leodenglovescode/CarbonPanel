@@ -13,6 +13,7 @@ import dev.carbonpanel.widget.WidgetBridge
 import dev.carbonpanel.pairing.PairState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -222,6 +223,7 @@ private fun MainScaffold(
     onAppSettings: () -> Unit,
 ) {
     val dockerInstalled by viewModel.dockerInstalled.collectAsStateWithLifecycle()
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val lifecycleOwner = LocalLifecycleOwner.current
     var dest by rememberSaveable { mutableStateOf(Dest.Dashboard) }
 
@@ -271,7 +273,8 @@ private fun MainScaffold(
                 navigationIcon = {
                     if (canGoBack) {
                         IconButton(onClick = {
-                            if (openSiteId != null) openSiteId = null else dest = Dest.More
+                            if (dest == Dest.Files) backDispatcher?.onBackPressed()
+                            else if (openSiteId != null) openSiteId = null else dest = Dest.More
                         }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,

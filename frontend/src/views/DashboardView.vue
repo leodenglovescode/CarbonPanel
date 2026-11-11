@@ -7,11 +7,6 @@
       Live metrics disconnected. Reconnecting… Displaying the last received values.
     </p>
 
-    <div id="dashboard-layout" class="layout-controls">
-      <label><input type="checkbox" role="switch" :checked="layoutStore.automatic" @change="setAutomatic(($event.target as HTMLInputElement).checked)" /> Automatic placement</label>
-      <span>{{ layoutStore.automatic ? 'Related metrics stay together. Cards adapt to the available space.' : 'Using your saved manual layout.' }}</span>
-    </div>
-
     <!-- Edit toolbar -->
     <Transition name="toolbar">
       <div v-if="editMode" class="edit-toolbar">
@@ -443,11 +438,6 @@ function onAddWidget(e: Event) {
   select.value = ''
 }
 
-function setAutomatic(enabled: boolean) {
-  if (enabled && editMode.value) void exitEdit()
-  layoutStore.setAutomatic(enabled)
-}
-
 // Groups preserve reading order, while CSS chooses one, two, or three columns.
 // Automatic placement never writes coordinates into the saved manual layout.
 const AUTO_GROUPS = [
@@ -499,10 +489,6 @@ const sortedWidgets = computed(() =>
 .grid-item { min-width: 0; overflow: hidden; }
 
 /* Automatic groups use natural card heights and the actual content width. */
-.layout-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
-.layout-controls label { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fg); cursor: pointer; }
-.layout-controls input { accent-color: var(--accent); }
-.layout-controls span { font-size: 10px; color: var(--fg-dim); line-height: 1.6; }
 .auto-layout { display: flex; flex-direction: column; gap: 12px; }
 .auto-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .auto-group.items-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

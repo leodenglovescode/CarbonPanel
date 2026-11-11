@@ -62,6 +62,12 @@ class ScreenshotApp : Application() {
                     .setBody("{\"detail\":\"Read-only screenshot fixture: actions are disabled\"}")
             }
             val path = request.requestUrl?.encodedPath.orEmpty()
+            if (path == "/api/v1/files") return fileListing(request)
+            if (path == "/api/v1/files/content") return MockResponse()
+                .setHeader("Content-Type", "text/plain")
+                .setHeader("Content-Disposition", "attachment; filename=demo.txt")
+                .setBody("CarbonPanel demo file.\n".repeat(30000))
+                .throttleBody(32 * 1024, 1000, java.util.concurrent.TimeUnit.MILLISECONDS)
             val filename = when (path) {
                 "/api/v1/metrics/current" -> "metrics-$index.json"
                 "/api/v1/metrics/history" -> "history.json"
@@ -83,5 +89,37 @@ class ScreenshotApp : Application() {
                 if (filename.endsWith(".html")) "text/html; charset=utf-8" else "application/json")
                 .setBody(content)
         }
+    }
+
+    private fun fileListing(request: RecordedRequest): MockResponse {
+        val url = request.requestUrl!!
+        val path = url.queryParameter("path") ?: "/"
+        val source = org.json.JSONObject(assets.open("demo/files.json").bufferedReader().use { it.readText() })
+        val original = source.getJSONArray("entries")
+        var files = (0 until original.length()).map { original.getJSONObject(it) }
+        if (path != "/") {
+            files = files.filter { !it.getBoolean("directory") }.filter {
+                when (path) {
+                    "/Documents" -> it.optString("kind") in listOf("markdown", "text")
+                    "/Media" -> it.optString("kind") in listOf("image", "video", "audio")
+                    "/Projects" -> it.optString("name").endsWith(".py")
+                    else -> false
+                }
+            }.map { org.json.JSONObject(it.toString()).put("path", "$path/${it.getString("name")}") }
+        }
+        val search = url.queryParameter("search").orEmpty()
+        files = files.filter { it.getString("name").contains(search, ignoreCase = true) &&
+            (url.queryParameter("show_hidden") != "false" || !it.getString("name").startsWith(".")) }
+        files = when (url.queryParameter("sort")) {
+            "size" -> files.sortedByDescending { it.optLong("size", 0) }
+            "modified" -> files.sortedByDescending { it.optDouble("modified", 0.0) }
+            "kind" -> files.sortedBy { it.optString("kind") }
+            else -> files.sortedBy { it.getString("name").lowercase() }
+        }.sortedBy { !it.getBoolean("directory") }
+        val offset = url.queryParameter("offset")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        source.put("path", path).put("parent", if (path == "/") org.json.JSONObject.NULL else "/")
+            .put("entries", org.json.JSONArray(files.drop(offset).take(200)))
+            .put("total", files.size).put("offset", offset).put("has_more", offset + 200 < files.size)
+        return MockResponse().setHeader("Content-Type", "application/json").setBody(source.toString())
     }
 }

@@ -256,12 +256,12 @@ function getAppliedStyleSettings(t: Theme, styleSettings: StyleSettings): Resolv
 function getMotionSettings(animationLevel: AnimationLevel) {
   if (animationLevel === 'all') {
     return {
-      transition: '260ms cubic-bezier(0.22, 1, 0.36, 1)',
-      transitionSlow: '520ms cubic-bezier(0.22, 1, 0.36, 1)',
-      barTransition: '720ms cubic-bezier(0.22, 1, 0.36, 1)',
+      transition: '120ms cubic-bezier(0.22, 1, 0.36, 1)',
+      transitionSlow: '160ms cubic-bezier(0.22, 1, 0.36, 1)',
+      barTransition: '220ms cubic-bezier(0.22, 1, 0.36, 1)',
       motionTranslateY: '-2px',
       motionPressScale: '0.985',
-      routeEnterY: '10px',
+      routeEnterY: '2px',
       routeLeaveScale: '0.992',
     }
   }
@@ -279,12 +279,12 @@ function getMotionSettings(animationLevel: AnimationLevel) {
   }
 
   return {
-    transition: '180ms cubic-bezier(0.4, 0, 0.2, 1)',
-    transitionSlow: '350ms cubic-bezier(0.4, 0, 0.2, 1)',
-    barTransition: '500ms cubic-bezier(0.4, 0, 0.2, 1)',
+    transition: '80ms cubic-bezier(0.4, 0, 0.2, 1)',
+    transitionSlow: '120ms cubic-bezier(0.4, 0, 0.2, 1)',
+    barTransition: '160ms cubic-bezier(0.4, 0, 0.2, 1)',
     motionTranslateY: '-1px',
     motionPressScale: '0.992',
-    routeEnterY: '6px',
+    routeEnterY: '1px',
     routeLeaveScale: '0.996',
   }
 }

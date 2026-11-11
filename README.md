@@ -11,189 +11,140 @@
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 
-A lightweight self-hosted server monitoring panel, No bs, No paywall.<br/>
-Live CPU, RAM, GPU, disk, network, and process metrics over WebSocket, with service management, disk management, app/port scanning, JWT sessions, TOTP 2FA, and passkey authentication.
+A lightweight, self-hosted server monitoring panel. No bs, no paywall.
 
-<img width="1279" height="634" alt="Screenshot Of CarbonPanel" src="https://github.com/user-attachments/assets/b37ce570-fb52-4935-8827-30ce5b3d1d16" />
+Monitor CPU, memory, GPU, disks, network traffic, and processes from a web
+browser or the native Android app. Manage services and sites, browse files,
+and install panel updates from the web interface.
 
-
-
----
+<img width="1279" height="634" alt="CarbonPanel dashboard" src="https://github.com/user-attachments/assets/b37ce570-fb52-4935-8827-30ce5b3d1d16" />
 
 ## Install
 
-Installs as a native systemd or SysV service with nginx. Requires root, Ubuntu/Debian,
-Python 3.11+, and a working Node.js 18+ build toolchain.
+The native installer sets up CarbonPanel with nginx and a systemd or SysV
+service. Requires root, Debian/Ubuntu, Python 3.11+, and Node.js 18+.
 
 ```bash
 curl -fsSL https://carbonpanel.leodeng.dev/install.sh | sudo bash
 ```
 
-Initial credentials are saved to `/opt/carbonpanel/shared/first-install.txt` after install.
-First login walks you through an onboarding wizard to set a real password and optionally
-enable 2FA.
+When already logged in as root, omit `sudo`.
 
-> CarbonPanel manages the host it runs on — systemd services, real process/disk access,
-> nginx sites — so the production path is the native installer. The
-> retained `docker/` nginx snippets are legacy integration helpers only; they require an
-> external TLS-terminating proxy and are not a standalone deployment.
+Initial credentials are saved to `/opt/carbonpanel/shared/first-install.txt`.
+On first login, set a new password and optionally enable two-factor authentication.
 
-nginx serves the panel over HTTPS with a self-signed certificate generated at install time
-(covering the server's hostname and detected IPs). Your browser will warn that it isn't
-trusted — that's expected for a self-signed cert; click through it (Chrome: "Advanced" →
-"Proceed"). It's still real TLS encryption, just not backed by a public CA, which is a lot
-better than the plaintext HTTP this used to default to.
+The installer enables HTTPS with a self-signed certificate. For a publicly
+trusted connection, configure a certificate for the server's domain. Passkeys
+require a stable domain hostname and a certificate trusted by the device;
+accepting a self-signed certificate warning is not sufficient. TOTP is also
+available when passkeys cannot be used.
 
-Passkeys have stricter browser requirements than ordinary HTTPS. They are available only
-when CarbonPanel is opened through a stable domain hostname and the certificate is trusted
-by that device; clicking through the warning for an untrusted certificate is not enough.
-Bare IP addresses are not valid WebAuthn relying-party IDs. TOTP remains available on every
-deployment and is the fallback sign-in method when passkeys are unavailable.
+CarbonPanel manages the host it runs on, including services, processes, disks,
+and nginx sites. The native installer is the supported deployment method.
+The retained `docker/` nginx snippets are legacy integration helpers, not a
+standalone deployment.
 
----
+## Features
+
+- **Live monitoring** — CPU, memory, GPU, disk, network, and process metrics over WebSocket.
+- **NAS monitoring** — read-only Linux software RAID, LVM, and fan/PWM status where exposed by the kernel.
+- **Service management** — browse, start, stop, restart, enable, and disable supported services.
+- **Sites and apps** — manage tracked services, inspect logs and configuration, and identify listening ports.
+- **Disk tools** — partition information, filesystem checks, and unmounting removable storage.
+- **Read-only file browser** — list/grid views, path navigation, search, sorting, previews, and downloads on web and Android. No file editing or deletion.
+- **Customizable dashboard** — automatic card placement or a saved manual layout, themes, backgrounds, colors, fonts, and surface transparency.
+- **Account security** — revocable sessions, optional TOTP two-factor authentication, passkeys on trusted HTTPS hostnames, and HTTPS-only Android connections.
+- **In-panel updates** — check for releases, follow installation progress, and recover with automatic rollback on failed deployment or health checks.
+
+Settings are grouped into General, Appearance, Notifications, Account & security,
+and Server, with search across all groups. Automatic placement is under
+**Settings → General → Dashboard layout**.
+
+The file browser uses the CarbonPanel service account's filesystem permissions.
+Images, audio, and video preview where supported by the client; Markdown and code
+files have formatted previews. Text previews are limited to 1 MiB, while larger
+files can still be downloaded. See the [file browser details](docs/file-browser-ux.md)
+and [NAS compatibility guide](docs/NAS.md) for capabilities and limitations.
+
+## Android app
+
+Download the APK from [GitHub Releases](https://github.com/leodenglovescode/CarbonPanel/releases/latest).
+
+To connect, open **Settings → Account & security → Paired Devices** in the web
+panel and scan the pairing QR code with the Android app. Pairing supports
+HTTPS endpoints and binds the installer's self-signed certificate to the device.
+
+The native app supports multiple servers, monitoring widgets, file previews,
+and downloads through Android's save picker. Server backgrounds are shared
+with the panel; the server chooser background is configured locally in the app.
+
+![Android app screenshots using demo data](assets/store/screenshots/contact-sheet.png)
+
+[F-Droid submission](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044)
+· [Android setup and development](android/README.md)
 
 ## Updating
 
-Use the **Settings → Install Update** button in the panel, or SSH in and run:
+Use **Settings → Server → Updates & service logs → Install Update**, or run:
 
 ```bash
 sudo carbonpanelctl update
 ```
 
-The Web UI follows the specific update job it starts and displays server-reported
-progress for each real phase (system packages, backend/frontend dependencies,
-build, migration, deployment, and health check). Immediately before the backend
-restarts, it shows a 60-second countdown and reloads automatically when the
-restart window ends. Historical service logs are diagnostic only and never
-advance the progress bar.
+The panel displays installation progress and reconnects after the service restarts.
+Failed deployment or health checks trigger an automatic rollback. To roll back
+manually:
 
-Update checks and installs are serialized so a timer cannot overwrite an
-interactive result. Each manual check is matched to its own result instead of
-reusing stale status. Updates auto-rollback on failed deployment or health check.
-To roll back manually: `sudo carbonpanelctl rollback`.
-
----
+```bash
+sudo carbonpanelctl rollback
+```
 
 ## Configuration
 
-Local development reads `backend/.env`; managed installs read
-`/opt/carbonpanel/shared/backend.env`.
+Local development reads `backend/.env`; managed installations read
+`/opt/carbonpanel/shared/backend.env`. The installer generates production secrets
+and initial credentials.
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | `dev-secret-...` | JWT signing key — **change this in production** |
+| `SECRET_KEY` | Development placeholder | JWT signing key; use a unique random secret in production |
 | `ADMIN_USERNAME` | `admin` | Initial admin username |
-| `ADMIN_PASSWORD` | `changeme` | Initial admin password; updates never reset an existing account |
-| `APP_PORT` | `8787` | Port nginx listens on (HTTPS) |
-| `COOKIE_SECURE` | `true` (install script) / `false` (local default) | Marks the session cookie HTTPS-only |
-| `TLS_CERT_FILE` | unset (local) | PEM certificate whose SHA-256 fingerprint is embedded in Android pairing QR codes |
+| `ADMIN_PASSWORD` | `changeme` (development) | Initial password; the installer generates a random password, and updates preserve existing accounts |
+| `APP_PORT` | `8787` | Installer setting for the nginx HTTPS port |
+| `COOKIE_SECURE` | `true` (installer), `false` (development) | Require HTTPS for session cookies |
+| `TLS_CERT_FILE` | Unset in development | PEM certificate used to bind Android pairing to the server's TLS certificate |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./carbonpanel.db` | Database connection string |
-| `METRICS_INTERVAL_SECONDS` | `2.0` | How often metrics are collected |
-| `PROCESS_LIMIT` | `25` | Max processes shown in the dashboard |
+| `METRICS_INTERVAL_SECONDS` | `2.0` | Metrics collection interval |
+| `PROCESS_LIMIT` | `25` | Maximum processes displayed |
 
----
-
-## Features
-
-- Live **CPU, RAM, GPU, disk, network, and process** metrics over WebSocket
-- **Disk management** — partition info, filesystem check, unmount (USB/removable only)
-- **App/port scanner** — lists all listening ports with process info, custom labels, kill
-- **System services** — browse, start/stop/restart, enable/disable, star and reorder
-- **Sites** — manage tracked services with log streaming and config file editing
-- **Customizable UI** — dark/light/auto theme, custom colors, fonts, gradients, background images
-- **Secure authentication** — revocable JWT sessions, optional TOTP 2FA, and passwordless passkeys on trusted HTTPS hostnames
-- **HTTPS by default** — self-signed cert generated at install time, no plaintext credentials on the wire
-- **Guided onboarding** — first login walks through setting a password and 2FA setup
-- **Native Android client** — HTTPS-only bearer auth; installer self-signed certificates are pinned from the pairing QR
-- **In-panel updates** — version check via GitHub API, one-click update from the Settings page
-
----
-
-## Android distribution and F-Droid preparation
-
-GitHub remains the source repository and Android release location. Successful
-Android releases also attach `carbonpanel-version.json`, which lets F-Droid's
-update checks discover the published version and matching Git tag. Pushing a
-commit to `master` does not publish an APK; the existing release-tag workflow applies.
-
-F-Droid inclusion has been [submitted for review](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/56044) and has **not been accepted**.
-See the [submission details](docs/fdroid-submission-draft.md) and
-[build/update configuration](fdroid/README.md). The [v1.6.0 signed APK reproduced independently](docs/android-reproducibility.md);
-The F-Droid recipe CI build and reproduction also passed; maintainer review and
-repository publication remain pending.
-
-![Android feature gallery — fictional demo data](assets/store/screenshots/contact-sheet.png)
-
-[Full-size promotional images and screenshot reproduction](assets/store/README.md).
-
-The launcher, web panel, and listing share the new
-[Carbon C logo](assets/branding/README.md).
-
----
-
-## Local Development
+## Local development
 
 ```bash
-make setup   # generate secrets, install locked deps, migrate DB, seed admin
-make dev     # run backend + frontend together
+make setup   # install dependencies, generate secrets, migrate DB, seed admin
+make dev     # start backend and frontend with automatic reload
 ```
 
 | URL | Service |
 |---|---|
-| `http://localhost:5173` | Frontend (Vite HMR) |
+| `http://localhost:5174` | Frontend (Vite) |
 | `http://localhost:8010/api/v1` | Backend API |
 
-`make dev` applies pending database migrations before starting both services and stops
-their child processes when either service exits or you press Ctrl+C.
+`make dev` applies pending database migrations and stops both services when either
+exits or Ctrl+C is pressed. HTTP is available for development; installed panels
+use HTTPS.
 
-Other commands: `make backend`, `make frontend`, `make lint`
+Other commands: `make backend`, `make frontend`, `make lint`.
 
----
+## Technical documentation
 
-## Tech Stack
+- [Android client](android/README.md)
+- [Android build reproducibility](docs/android-reproducibility.md)
+- [F-Droid build and update configuration](fdroid/README.md)
+- [Brand assets](assets/branding/README.md)
+- [Store screenshots](assets/store/README.md)
 
-**Backend** — Python 3.11+, FastAPI, SQLAlchemy + Alembic, SQLite (aiosqlite), psutil
+**Backend:** Python, FastAPI, SQLAlchemy, Alembic, SQLite, psutil.
+**Frontend:** Vue 3, TypeScript, Vite, Pinia, Chart.js.
+**Android:** Kotlin, Jetpack Compose, Retrofit, Glance.
 
-**Frontend** — Vue 3, TypeScript, Vite, Pinia, Chart.js
-
----
-
-Idea and logic by @leodenglovescode, code assisted by AI
-
-### NAS monitoring and older init systems
-
-See [NAS compatibility and setup](docs/NAS.md) for Linux MD RAID, LVM, fan/PWM
-monitoring, SysV service commands, and vendor-kernel limitations.
-
-### Backgrounds and file previews
-
-Settings → Backgrounds stores three independent destinations on the server:
-web app, web login, and Android app. **Choose photo** opens one crop editor with
-all three screens selected. Use one crop everywhere, or adjust separate web
-and portrait phone crops, then save them together. The original photo is kept
-on the server so **Adjust last uploaded photo** can recrop it without another
-upload. Individual screen styles remain available under the advanced settings.
-The Android server chooser uses a separate photo selected in the phone's
-**App settings**. It stays in the phone's private storage, is never uploaded,
-and is independent of every server. Pairing has no login background.
-The **Surface transparency** slider under Appearance changes surface fills
-while keeping text and icons opaque.
-
-**Automatic placement** on the web dashboard groups CPU, memory, and GPU,
-then system/cooling and storage/traffic cards, adapting to the actual content
-width and browser zoom. Turn it off to restore your saved manual positions.
-Editing switches to manual mode; neither mode overwrites the other’s positions.
-
-**Files** in the web sidebar and Android's More menu provides read-only browsing,
-previews, and downloads. It runs with the CarbonPanel service account's existing
-filesystem permissions, without sudo or filesystem write operations. Regular
-image, video, and audio formats preview where the client supports their codec;
-Markdown renders with raw HTML and external images disabled, and code files
-receive syntax highlighting. Text previews are capped at 1 MiB; larger files
-can still be downloaded. Device, proc, and sys files are excluded. Directories
-are paginated and limited to 10,000 entries per listing.
-
-Installed panels require HTTPS for API and WebSocket traffic. The TLS nginx
-listener redirects plain HTTP, and only the loopback proxy is trusted to report
-the original protocol. The internal loopback readiness probe and local HTTP
-development configuration remain available. Android continues to require HTTPS.
+Idea and logic by @leodenglovescode, code assisted by AI.

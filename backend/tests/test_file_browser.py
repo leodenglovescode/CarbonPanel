@@ -188,3 +188,45 @@ def test_download_closed_if_client_disconnects_before_first_chunk():
 
     asyncio.run(run())
     assert source.closed
+
+
+def test_search_hidden_filter_and_sort_precede_pagination(tmp_path):
+    for name in ("report-a.txt", "report-b.txt", "report-c.txt", "other.txt", ".report.txt"):
+        (tmp_path / name).write_text(name)
+    (tmp_path / "report-folder").mkdir()
+    result = request(
+        "GET",
+        "/files",
+        params={
+            "path": str(tmp_path),
+            "search": "REPORT",
+            "show_hidden": False,
+            "offset": 1,
+            "limit": 2,
+        },
+    )
+    assert result.status_code == 200
+    data = result.json()
+    assert data["total"] == 4
+    assert [entry["name"] for entry in data["entries"]] == ["report-a.txt", "report-b.txt"]
+    assert data["has_more"]
+    assert (
+        request("GET", "/files", params={"path": str(tmp_path), "sort": "invalid"}).status_code
+        == 422
+    )
+
+
+def test_size_and_modified_order_keep_directories_first(tmp_path):
+    (tmp_path / "folder").mkdir()
+    (tmp_path / "small.txt").write_text("x")
+    (tmp_path / "large.txt").write_text("x" * 20)
+    os.utime(tmp_path / "small.txt", (200, 200))
+    os.utime(tmp_path / "large.txt", (100, 100))
+    for sort, expected in (
+        ("size", ["folder", "large.txt", "small.txt"]),
+        ("modified", ["folder", "small.txt", "large.txt"]),
+    ):
+        data = request(
+            "GET", "/files", params={"path": str(tmp_path), "sort": sort, "descending": True}
+        ).json()
+        assert [entry["name"] for entry in data["entries"]] == expected

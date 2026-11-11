@@ -26,9 +26,9 @@
   --radius: 6px;
   --radius-sm: 4px;
   --gap: 12px;
-  --transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  --bar-transition: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: 80ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --bar-transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-card: 0 2px 12px rgba(0,0,0,0.4);
   --shadow-card-hover: 0 4px 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,255,136,0.06);
   /* theme-direction-dependent transparent values */
@@ -46,7 +46,7 @@
   --bg-scrim-rgb: 0, 0, 0;
   --motion-translate-y: -1px;
   --motion-press-scale: 0.992;
-  --route-enter-y: 6px;
+  --route-enter-y: 1px;
   --route-leave-scale: 0.996;
   --ui-scale: 1;
   --ui-viewport-height: 100dvh;
@@ -139,24 +139,19 @@ summary {
     filter var(--transition);
 }
 
-.route-fade-enter-active,
-.route-fade-leave-active {
-  transition:
-    opacity var(--transition-slow),
-    transform var(--transition-slow),
-    filter var(--transition-slow);
+/* Mount the destination immediately: never wait for the old page to fade out. */
+.route-fade-enter-active {
+  transition: opacity var(--transition), transform var(--transition);
 }
 
 .route-fade-enter-from {
-  opacity: 0;
+  opacity: 0.94;
   transform: translateY(var(--route-enter-y));
-  filter: blur(6px);
 }
 
-.route-fade-leave-to {
-  opacity: 0;
-  transform: scale(var(--route-leave-scale));
-  filter: blur(4px);
+.route-fade-leave-active {
+  display: none;
+  transition: none;
 }
 
 [data-motion="all"] button:hover:not(:disabled),
@@ -164,6 +159,8 @@ summary {
 [data-motion="all"] summary:hover {
   transform: translateY(var(--motion-translate-y));
 }
+
+button:active:not(:disabled) { transition-duration: 0ms; }
 
 [data-motion="all"] button:active:not(:disabled),
 [data-motion="all"] a:active,

@@ -1,6 +1,7 @@
 import asyncio
 import os
 from urllib.parse import quote
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
@@ -27,10 +28,18 @@ class FileStreamResponse(StreamingResponse):
 
 @router.get("")
 async def list_files(
-    path: str = "/", offset: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=500)
+    path: str = "/",
+    offset: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    search: str = Query("", max_length=200),
+    sort: Literal["name", "modified", "size", "kind"] = "name",
+    descending: bool = False,
+    show_hidden: bool = True,
 ):
     try:
-        return await asyncio.to_thread(browser.list_directory, path, offset, limit)
+        return await asyncio.to_thread(
+            browser.list_directory, path, offset, limit, search, sort, descending, show_hidden
+        )
     except browser.BrowserError as exc:
         raise HTTPException(exc.status, exc.detail)
 

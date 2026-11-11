@@ -7,1199 +7,1223 @@
           <h1>Settings</h1>
         </div>
 
-        <nav class="settings-nav">
-          <button v-for="s in navSections" :key="s.id" class="nav-pill" @click="scrollTo(s.id)">
-            {{ s.label }}
-          </button>
-        </nav>
-
-        <!-- Theme Section -->
-        <div id="section-appearance" class="section">
-          <div class="section-header">
-            <span class="section-title">Appearance</span>
-            <span :class="['badge', theme.theme === 'dark' ? 'badge-gray' : 'badge-green']">
-              {{ theme.theme }}
-            </span>
-          </div>
-          <p class="section-desc">Switch between dark and light mode.</p>
-          <div class="theme-toggle-row">
-            <button
-              type="button"
-              :class="['theme-btn', { active: theme.theme === 'dark' }]"
-              @click="theme.setTheme('dark')"
-            >◑ Dark</button>
-            <button
-              type="button"
-              :class="['theme-btn', { active: theme.theme === 'light' }]"
-              @click="theme.setTheme('light')"
-            >○ Light</button>
-            <button
-              type="button"
-              :class="['theme-btn', { active: theme.theme === 'auto' }]"
-              @click="theme.setTheme('auto')"
-            >⟳ Auto</button>
-          </div>
-          <label class="style-field" style="margin-top: 20px">
-            <span class="style-lbl">Surface transparency — {{ bg.settings.surfaceTransparency }}%</span>
-            <input type="range" class="interval-slider" min="0" max="90" step="1" :disabled="!bg.ready" :value="bg.settings.surfaceTransparency" @input="bg.setTransparency(+($event.target as HTMLInputElement).value)" />
-            <span class="style-hint">Let the background show through cards, the sidebar, navigation, and controls. Text and icons stay opaque. Shared with Android.</span>
-          </label>
-          <p v-if="bg.error" class="upload-error" role="alert">{{ bg.error }}</p>
-        </div>
-
-        <!-- Stylistic Settings Section -->
-        <div id="section-style" class="section">
-          <div class="section-header stylistic-header">
-            <span class="section-title">Stylistic Settings</span>
-            <span :class="['badge', theme.hasStyleOverrides ? 'badge-green' : 'badge-gray']">
-              {{ theme.hasStyleOverrides ? 'Customized' : 'Defaults' }}
-            </span>
-          </div>
-          <p class="section-desc">
-            Adjust visual styling only. Theme mode stays unchanged, and resetting here restores
-            colors and typography without affecting any non-stylistic settings.
-          </p>
-
-          <div class="style-grid">
-            <label v-for="field in colorFields" :key="field.key" class="style-field">
-              <span class="style-lbl">{{ field.label }}</span>
-              <div class="color-control">
-                <input
-                  type="color"
-                  class="color-picker"
-                  :value="theme.resolvedStyleSettings[field.key]"
-                  @input="updateColorSetting(field.key, ($event.target as HTMLInputElement).value)"
-                />
-                <code class="color-value">{{ theme.resolvedStyleSettings[field.key] }}</code>
-              </div>
-            </label>
-          </div>
-
-          <div class="style-toggles">
-            <div class="toggle-setting-row">
-              <div>
-                <span class="style-lbl">High contrast mode</span>
-                <p class="style-toggle-desc">
-                  Brighter text and darker backgrounds for night viewing.
-                </p>
-              </div>
-              <button
-                type="button"
-                :class="['theme-btn', 'contrast-btn', { active: isHighContrast }]"
-                @click="updateHighContrast(!isHighContrast)"
-              >
-                {{ isHighContrast ? 'On' : 'Off' }}
-              </button>
+        <label class="settings-search">
+          <span class="sr-only">Search settings</span>
+          <input v-model="settingsSearch" type="search" placeholder="Search settings — layout, password, updates…" aria-label="Search settings" />
+          <button v-if="settingsSearch" type="button" aria-label="Clear settings search" @click="settingsSearch = ''">Clear</button>
+        </label>
+        <div class="settings-workspace">
+          <nav class="settings-nav" aria-label="Settings categories">
+            <button v-for="group in settingsGroups" :key="group.id" class="category-button" :aria-pressed="!settingsSearch.trim() && activeGroup === group.id" @click="selectGroup(group.id)">
+              <strong>{{ group.label }}</strong><span>{{ group.description }}</span>
+            </button>
+          </nav>
+          <div class="settings-sections">
+            <header class="settings-category-header">
+              <h2>{{ settingsSearch.trim() ? 'Search results' : currentGroup.label }}</h2>
+              <p>{{ settingsSearch.trim() ? `${visibleSections.length} matching sections` : currentGroup.description }}</p>
+              <nav v-if="visibleSections.length" class="section-shortcuts" aria-label="Sections in this category">
+                <button v-for="section in visibleSections" :key="section.id" @click="scrollTo(section.id)">{{ section.label }}</button>
+              </nav>
+            </header>
+            <div v-if="!visibleSections.length" class="settings-empty" role="status"><h3>No matching settings</h3><p>Try a different word, such as background, password, or update.</p><button @click="settingsSearch = ''">Clear search</button></div>
+            <div id="section-dashboard" v-show="sectionVisible('section-dashboard')" class="section">
+              <div class="section-header"><span class="section-title">Dashboard layout</span></div>
+              <label class="dashboard-placement">
+                <input type="checkbox" role="switch" :checked="layoutStore.automatic" @change="layoutStore.setAutomatic(($event.target as HTMLInputElement).checked)" />
+                <span><strong>Automatic placement</strong><small>Keep related metrics together and fit cards to the available screen width. Turn off to use your saved manual layout.</small></span>
+              </label>
             </div>
 
-            <div class="toggle-setting-row">
-              <div>
-                <span class="style-lbl">Animation level</span>
-                <p class="style-toggle-desc">
-                  Control how much motion is used for buttons, hovers, and page switches.
-                </p>
+            <!-- Theme Section -->
+            <div id="section-appearance" v-show="sectionVisible('section-appearance')" class="section">
+              <div class="section-header">
+                <span class="section-title">Appearance</span>
+                <span :class="['badge', theme.theme === 'dark' ? 'badge-gray' : 'badge-green']">
+                  {{ theme.theme }}
+                </span>
               </div>
-              <div class="theme-toggle-row animation-toggle-row">
+              <p class="section-desc">Switch between dark and light mode.</p>
+              <div class="theme-toggle-row">
                 <button
                   type="button"
-                  :class="['theme-btn', { active: selectedAnimationLevel === 'all' }]"
-                  @click="updateAnimationLevel('all')"
-                >
-                  All Animations
-                </button>
+                  :class="['theme-btn', { active: theme.theme === 'dark' }]"
+                  @click="theme.setTheme('dark')"
+                >◑ Dark</button>
                 <button
                   type="button"
-                  :class="['theme-btn', { active: selectedAnimationLevel === 'reduced' }]"
-                  @click="updateAnimationLevel('reduced')"
-                >
-                  Reduced Animations
-                </button>
+                  :class="['theme-btn', { active: theme.theme === 'light' }]"
+                  @click="theme.setTheme('light')"
+                >○ Light</button>
                 <button
                   type="button"
-                  :class="['theme-btn', { active: selectedAnimationLevel === 'none' }]"
-                  @click="updateAnimationLevel('none')"
+                  :class="['theme-btn', { active: theme.theme === 'auto' }]"
+                  @click="theme.setTheme('auto')"
+                >⟳ Auto</button>
+              </div>
+              <label class="style-field" style="margin-top: 20px">
+                <span class="style-lbl">Surface transparency — {{ bg.settings.surfaceTransparency }}%</span>
+                <input type="range" class="interval-slider" min="0" max="90" step="1" :disabled="!bg.ready" :value="bg.settings.surfaceTransparency" @input="bg.setTransparency(+($event.target as HTMLInputElement).value)" />
+                <span class="style-hint">Let the background show through cards, the sidebar, navigation, and controls. Text and icons stay opaque. Shared with Android.</span>
+              </label>
+              <p v-if="bg.error" class="upload-error" role="alert">{{ bg.error }}</p>
+            </div>
+
+            <!-- Stylistic Settings Section -->
+            <div id="section-style" v-show="sectionVisible('section-style')" class="section">
+              <div class="section-header stylistic-header">
+                <span class="section-title">Stylistic Settings</span>
+                <span :class="['badge', theme.hasStyleOverrides ? 'badge-green' : 'badge-gray']">
+                  {{ theme.hasStyleOverrides ? 'Customized' : 'Defaults' }}
+                </span>
+              </div>
+              <p class="section-desc">
+                Adjust visual styling only. Theme mode stays unchanged, and resetting here restores
+                colors and typography without affecting any non-stylistic settings.
+              </p>
+
+              <div class="style-grid">
+                <label v-for="field in colorFields" :key="field.key" class="style-field">
+                  <span class="style-lbl">{{ field.label }}</span>
+                  <div class="color-control">
+                    <input
+                      type="color"
+                      class="color-picker"
+                      :value="theme.resolvedStyleSettings[field.key]"
+                      @input="updateColorSetting(field.key, ($event.target as HTMLInputElement).value)"
+                    />
+                    <code class="color-value">{{ theme.resolvedStyleSettings[field.key] }}</code>
+                  </div>
+                </label>
+              </div>
+
+              <div class="style-toggles">
+                <div class="toggle-setting-row">
+                  <div>
+                    <span class="style-lbl">High contrast mode</span>
+                    <p class="style-toggle-desc">
+                      Brighter text and darker backgrounds for night viewing.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    :class="['theme-btn', 'contrast-btn', { active: isHighContrast }]"
+                    @click="updateHighContrast(!isHighContrast)"
+                  >
+                    {{ isHighContrast ? 'On' : 'Off' }}
+                  </button>
+                </div>
+
+                <div class="toggle-setting-row">
+                  <div>
+                    <span class="style-lbl">Animation level</span>
+                    <p class="style-toggle-desc">
+                      Control how much motion is used for buttons, hovers, and page switches.
+                    </p>
+                  </div>
+                  <div class="theme-toggle-row animation-toggle-row">
+                    <button
+                      type="button"
+                      :class="['theme-btn', { active: selectedAnimationLevel === 'all' }]"
+                      @click="updateAnimationLevel('all')"
+                    >
+                      All Animations
+                    </button>
+                    <button
+                      type="button"
+                      :class="['theme-btn', { active: selectedAnimationLevel === 'reduced' }]"
+                      @click="updateAnimationLevel('reduced')"
+                    >
+                      Reduced Animations
+                    </button>
+                    <button
+                      type="button"
+                      :class="['theme-btn', { active: selectedAnimationLevel === 'none' }]"
+                      @click="updateAnimationLevel('none')"
+                    >
+                      No Animations
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="typography-grid">
+                <label class="style-field style-field-wide">
+                  <span class="style-lbl">Font</span>
+                  <select
+                    class="style-select"
+                    :value="theme.resolvedStyleSettings.font"
+                    @change="updateFont(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="option in fontOptions" :key="option.label" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="style-field style-field-wide">
+                  <span class="style-lbl">Base font size</span>
+                  <div class="font-size-control">
+                    <input
+                      type="range"
+                      class="interval-slider"
+                      :value="theme.resolvedStyleSettings.fontSize"
+                      min="10"
+                      max="18"
+                      step="1"
+                      @input="updateFontSize(parseInt(($event.target as HTMLInputElement).value))"
+                    />
+                    <span class="font-size-value">{{ theme.resolvedStyleSettings.fontSize }}px</span>
+                  </div>
+                </label>
+              </div>
+
+              <div class="style-reset-row">
+                <BaseButton
+                  variant="ghost"
+                  :disabled="!theme.hasStyleOverrides"
+                  @click="resetStyleSettings"
                 >
-                  No Animations
-                </button>
+                  Return stylistic settings to defaults
+                </BaseButton>
               </div>
             </div>
-          </div>
 
-          <div class="typography-grid">
-            <label class="style-field style-field-wide">
-              <span class="style-lbl">Font</span>
-              <select
-                class="style-select"
-                :value="theme.resolvedStyleSettings.font"
-                @change="updateFont(($event.target as HTMLSelectElement).value)"
-              >
-                <option v-for="option in fontOptions" :key="option.label" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
+            <!-- Background Section -->
+            <div id="section-backgrounds" v-show="sectionVisible('section-backgrounds')" class="section">
+              <div class="section-header">
+                <span class="section-title">Backgrounds</span>
+                <span :class="['badge', bg.hasCustomBg ? 'badge-green' : 'badge-gray']">
+                  {{ bg.hasCustomBg ? 'customized' : 'defaults' }}
+                </span>
+              </div>
+              <BackgroundSettings />
+            </div>
 
-            <label class="style-field style-field-wide">
-              <span class="style-lbl">Base font size</span>
-              <div class="font-size-control">
+            <!-- Display Preferences Section -->
+            <div id="section-display" v-show="sectionVisible('section-display')" class="section">
+              <div class="section-header">
+                <span class="section-title">Display Preferences</span>
+                <span class="badge badge-gray">Units</span>
+              </div>
+              <p class="section-desc">Choose how memory and network speed are displayed across the dashboard.</p>
+
+              <div class="display-pref-row">
+                <div>
+                  <span class="style-lbl">RAM unit</span>
+                  <p class="style-toggle-desc">Show memory values in gigabytes or megabytes.</p>
+                </div>
+                <div class="theme-toggle-row">
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.ramUnit === 'gb' }]"
+                    @click="displayPrefs.setRamUnit('gb')"
+                  >GB</button>
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.ramUnit === 'mb' }]"
+                    @click="displayPrefs.setRamUnit('mb')"
+                  >MB</button>
+                </div>
+              </div>
+
+              <div class="display-pref-row">
+                <div>
+                  <span class="style-lbl">Network speed unit</span>
+                  <p class="style-toggle-desc">MB/s = megabytes per second. Mbps = megabits per second (8× larger value).</p>
+                </div>
+                <div class="theme-toggle-row">
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.networkUnit === 'mb_s' }]"
+                    @click="displayPrefs.setNetworkUnit('mb_s')"
+                  >MB/s</button>
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.networkUnit === 'mbps' }]"
+                    @click="displayPrefs.setNetworkUnit('mbps')"
+                  >Mbps</button>
+                </div>
+              </div>
+
+              <div class="display-pref-row">
+                <div>
+                  <span class="style-lbl">Storage unit</span>
+                  <p class="style-toggle-desc">GB always shows gigabytes. TB auto switches to terabytes when a disk reaches 1 TB. Always TB forces terabytes everywhere.</p>
+                </div>
+                <div class="theme-toggle-row">
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.storageUnit === 'gb' }]"
+                    @click="displayPrefs.setStorageUnit('gb')"
+                  >GB</button>
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.storageUnit === 'auto_tb' }]"
+                    @click="displayPrefs.setStorageUnit('auto_tb')"
+                  >TB auto</button>
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: displayPrefs.storageUnit === 'tb' }]"
+                    @click="displayPrefs.setStorageUnit('tb')"
+                  >Always TB</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Update Frequency Section -->
+            <div id="section-frequency" v-show="sectionVisible('section-frequency')" class="section">
+              <div class="section-header">
+                <span class="section-title">Update Frequency</span>
+                <span class="badge badge-green">{{ intervalLabel }}</span>
+              </div>
+              <p class="section-desc">How often the dashboard polls new metrics. Lower = more live, higher = less CPU overhead.</p>
+
+              <div class="interval-control">
+                <span class="interval-bound">0.4s</span>
                 <input
                   type="range"
                   class="interval-slider"
-                  :value="theme.resolvedStyleSettings.fontSize"
-                  min="10"
-                  max="18"
-                  step="1"
-                  @input="updateFontSize(parseInt(($event.target as HTMLInputElement).value))"
+                  :value="metrics.updateInterval"
+                  min="0.4"
+                  max="30"
+                  step="0.2"
+                  @input="onSliderInput"
                 />
-                <span class="font-size-value">{{ theme.resolvedStyleSettings.fontSize }}px</span>
+                <span class="interval-bound">30s</span>
               </div>
-            </label>
-          </div>
 
-          <div class="style-reset-row">
-            <BaseButton
-              variant="ghost"
-              :disabled="!theme.hasStyleOverrides"
-              @click="resetStyleSettings"
-            >
-              Return stylistic settings to defaults
-            </BaseButton>
-          </div>
-        </div>
-
-        <!-- Background Section -->
-        <div id="section-backgrounds" class="section">
-          <div class="section-header">
-            <span class="section-title">Backgrounds</span>
-            <span :class="['badge', bg.hasCustomBg ? 'badge-green' : 'badge-gray']">
-              {{ bg.hasCustomBg ? 'customized' : 'defaults' }}
-            </span>
-          </div>
-          <BackgroundSettings />
-        </div>
-
-        <!-- Display Preferences Section -->
-        <div id="section-display" class="section">
-          <div class="section-header">
-            <span class="section-title">Display Preferences</span>
-            <span class="badge badge-gray">Units</span>
-          </div>
-          <p class="section-desc">Choose how memory and network speed are displayed across the dashboard.</p>
-
-          <div class="display-pref-row">
-            <div>
-              <span class="style-lbl">RAM unit</span>
-              <p class="style-toggle-desc">Show memory values in gigabytes or megabytes.</p>
+              <div class="interval-presets">
+                <button
+                  v-for="p in presets"
+                  :key="p.value"
+                  type="button"
+                  :class="['preset-btn', { active: metrics.updateInterval === p.value }]"
+                  @click="applyPreset(p.value)"
+                >{{ p.label }}</button>
+              </div>
             </div>
-            <div class="theme-toggle-row">
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.ramUnit === 'gb' }]"
-                @click="displayPrefs.setRamUnit('gb')"
-              >GB</button>
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.ramUnit === 'mb' }]"
-                @click="displayPrefs.setRamUnit('mb')"
-              >MB</button>
-            </div>
-          </div>
 
-          <div class="display-pref-row">
-            <div>
-              <span class="style-lbl">Network speed unit</span>
-              <p class="style-toggle-desc">MB/s = megabytes per second. Mbps = megabits per second (8× larger value).</p>
-            </div>
-            <div class="theme-toggle-row">
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.networkUnit === 'mb_s' }]"
-                @click="displayPrefs.setNetworkUnit('mb_s')"
-              >MB/s</button>
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.networkUnit === 'mbps' }]"
-                @click="displayPrefs.setNetworkUnit('mbps')"
-              >Mbps</button>
-            </div>
-          </div>
+            <!-- Alerts Section -->
+            <div id="section-alerts" v-show="sectionVisible('section-alerts')" class="section">
+              <div class="section-header">
+                <span class="section-title">Alert Thresholds</span>
+                <span class="badge badge-gray">Always-on monitoring</span>
+              </div>
+              <p class="section-desc">Configure thresholds, sustained timeframes, and severity for CPU, RAM, disks, GPUs, GPU temperature, and per-interface network throughput. A metric must stay beyond its threshold for the full timeframe before the server sends notifications.</p>
 
-          <div class="display-pref-row">
-            <div>
-              <span class="style-lbl">Storage unit</span>
-              <p class="style-toggle-desc">GB always shows gigabytes. TB auto switches to terabytes when a disk reaches 1 TB. Always TB forces terabytes everywhere.</p>
-            </div>
-            <div class="theme-toggle-row">
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.storageUnit === 'gb' }]"
-                @click="displayPrefs.setStorageUnit('gb')"
-              >GB</button>
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.storageUnit === 'auto_tb' }]"
-                @click="displayPrefs.setStorageUnit('auto_tb')"
-              >TB auto</button>
-              <button
-                type="button"
-                :class="['theme-btn', { active: displayPrefs.storageUnit === 'tb' }]"
-                @click="displayPrefs.setStorageUnit('tb')"
-              >Always TB</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Update Frequency Section -->
-        <div id="section-frequency" class="section">
-          <div class="section-header">
-            <span class="section-title">Update Frequency</span>
-            <span class="badge badge-green">{{ intervalLabel }}</span>
-          </div>
-          <p class="section-desc">How often the dashboard polls new metrics. Lower = more live, higher = less CPU overhead.</p>
-
-          <div class="interval-control">
-            <span class="interval-bound">0.4s</span>
-            <input
-              type="range"
-              class="interval-slider"
-              :value="metrics.updateInterval"
-              min="0.4"
-              max="30"
-              step="0.2"
-              @input="onSliderInput"
-            />
-            <span class="interval-bound">30s</span>
-          </div>
-
-          <div class="interval-presets">
-            <button
-              v-for="p in presets"
-              :key="p.value"
-              type="button"
-              :class="['preset-btn', { active: metrics.updateInterval === p.value }]"
-              @click="applyPreset(p.value)"
-            >{{ p.label }}</button>
-          </div>
-        </div>
-
-        <!-- Alerts Section -->
-        <div id="section-alerts" class="section">
-          <div class="section-header">
-            <span class="section-title">Alert Thresholds</span>
-            <span class="badge badge-gray">Always-on monitoring</span>
-          </div>
-          <p class="section-desc">Configure thresholds, sustained timeframes, and severity for CPU, RAM, disks, GPUs, GPU temperature, and per-interface network throughput. A metric must stay beyond its threshold for the full timeframe before the server sends notifications.</p>
-
-          <div class="disk-scope">
-            <span class="style-lbl">Disk alert source</span>
-            <div class="theme-toggle-row disk-scope-toggle">
-              <button
-                type="button"
-                :class="['theme-btn', { active: alerts.diskScope === 'physical' }]"
-                @click="alerts.setDiskScope('physical')"
-              >
-                Actual disks only
-              </button>
-              <button
-                type="button"
-                :class="['theme-btn', { active: alerts.diskScope === 'all' }]"
-                @click="alerts.setDiskScope('all')"
-              >
-                All mounts
-              </button>
-            </div>
-            <p class="disk-scope-note">
-              Default is actual storage devices only, so virtual mounts like /snap do not trigger
-              disk alerts unless you include all mounts.
-            </p>
-          </div>
-
-          <div class="alert-rules">
-            <div v-for="metric in alertMetrics" :key="metric.key" class="alert-rule">
-              <div class="alert-rule-header">
-                <div>
-                  <span class="alert-rule-label">{{ metric.label }}</span>
-                  <p class="alert-rule-desc">{{ metric.description }}</p>
+              <div class="disk-scope">
+                <span class="style-lbl">Disk alert source</span>
+                <div class="theme-toggle-row disk-scope-toggle">
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: alerts.diskScope === 'physical' }]"
+                    @click="alerts.setDiskScope('physical')"
+                  >
+                    Actual disks only
+                  </button>
+                  <button
+                    type="button"
+                    :class="['theme-btn', { active: alerts.diskScope === 'all' }]"
+                    @click="alerts.setDiskScope('all')"
+                  >
+                    All mounts
+                  </button>
                 </div>
-                <span
-                  :class="[
-                    'alert-severity-badge',
-                    `severity-${alerts.severities[metric.key]}`,
-                  ]"
-                >{{ alerts.severities[metric.key] }}</span>
+                <p class="disk-scope-note">
+                  Default is actual storage devices only, so virtual mounts like /snap do not trigger
+                  disk alerts unless you include all mounts.
+                </p>
               </div>
-              <div class="alert-rule-controls">
-                <label class="alert-threshold-field">
-                  <span class="style-lbl">Threshold</span>
-                  <span class="alert-threshold-input-wrap">
-                    <input
-                      type="number"
-                      class="alert-threshold-input"
-                      :value="alerts.thresholds[metric.key]"
-                      min="0"
-                      :max="metric.max"
-                      :step="metric.step"
-                      @input="alerts.setThreshold(
-                        metric.key,
-                        Number.parseFloat(($event.target as HTMLInputElement).value),
-                      )"
-                    />
-                    <span class="alert-threshold-unit">{{ metric.unit }}</span>
-                  </span>
-                  <span class="alert-off-note">
-                    {{ alerts.thresholds[metric.key] === 0 ? 'Disabled' : 'Set to 0 to disable' }}
-                  </span>
-                </label>
-                <label class="alert-duration-field">
-                  <span class="style-lbl">Sustain for</span>
-                  <span class="alert-threshold-input-wrap">
-                    <input
-                      type="number"
-                      class="alert-threshold-input"
-                      :value="alerts.durations[metric.key]"
-                      min="0"
-                      max="86400"
-                      step="1"
-                      @input="alerts.setDuration(
-                        metric.key,
-                        Number.parseFloat(($event.target as HTMLInputElement).value),
-                      )"
-                    />
-                    <span class="alert-threshold-unit">seconds</span>
-                  </span>
-                  <span class="alert-off-note">
-                    {{ alerts.durations[metric.key] === 0 ? 'Immediate' : 'Continuous breach' }}
-                  </span>
-                </label>
-                <div class="alert-severity-control">
-                  <span class="style-lbl">Severity</span>
-                  <div class="theme-toggle-row">
-                    <button
-                      v-for="severity in severityOptions"
-                      :key="severity.value"
-                      type="button"
+
+              <div class="alert-rules">
+                <div v-for="metric in alertMetrics" :key="metric.key" class="alert-rule">
+                  <div class="alert-rule-header">
+                    <div>
+                      <span class="alert-rule-label">{{ metric.label }}</span>
+                      <p class="alert-rule-desc">{{ metric.description }}</p>
+                    </div>
+                    <span
                       :class="[
-                        'theme-btn',
-                        'severity-btn',
-                        `severity-${severity.value}`,
-                        { active: alerts.severities[metric.key] === severity.value },
+                        'alert-severity-badge',
+                        `severity-${alerts.severities[metric.key]}`,
                       ]"
-                      @click="alerts.setSeverity(metric.key, severity.value)"
-                    >{{ severity.label }}</button>
+                    >{{ alerts.severities[metric.key] }}</span>
+                  </div>
+                  <div class="alert-rule-controls">
+                    <label class="alert-threshold-field">
+                      <span class="style-lbl">Threshold</span>
+                      <span class="alert-threshold-input-wrap">
+                        <input
+                          type="number"
+                          class="alert-threshold-input"
+                          :value="alerts.thresholds[metric.key]"
+                          min="0"
+                          :max="metric.max"
+                          :step="metric.step"
+                          @input="alerts.setThreshold(
+                            metric.key,
+                            Number.parseFloat(($event.target as HTMLInputElement).value),
+                          )"
+                        />
+                        <span class="alert-threshold-unit">{{ metric.unit }}</span>
+                      </span>
+                      <span class="alert-off-note">
+                        {{ alerts.thresholds[metric.key] === 0 ? 'Disabled' : 'Set to 0 to disable' }}
+                      </span>
+                    </label>
+                    <label class="alert-duration-field">
+                      <span class="style-lbl">Sustain for</span>
+                      <span class="alert-threshold-input-wrap">
+                        <input
+                          type="number"
+                          class="alert-threshold-input"
+                          :value="alerts.durations[metric.key]"
+                          min="0"
+                          max="86400"
+                          step="1"
+                          @input="alerts.setDuration(
+                            metric.key,
+                            Number.parseFloat(($event.target as HTMLInputElement).value),
+                          )"
+                        />
+                        <span class="alert-threshold-unit">seconds</span>
+                      </span>
+                      <span class="alert-off-note">
+                        {{ alerts.durations[metric.key] === 0 ? 'Immediate' : 'Continuous breach' }}
+                      </span>
+                    </label>
+                    <div class="alert-severity-control">
+                      <span class="style-lbl">Severity</span>
+                      <div class="theme-toggle-row">
+                        <button
+                          v-for="severity in severityOptions"
+                          :key="severity.value"
+                          type="button"
+                          :class="[
+                            'theme-btn',
+                            'severity-btn',
+                            `severity-${severity.value}`,
+                            { active: alerts.severities[metric.key] === severity.value },
+                          ]"
+                          @click="alerts.setSeverity(metric.key, severity.value)"
+                        >{{ severity.label }}</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div id="section-version" class="section">
-          <div class="section-header">
-            <span class="section-title">Version & Updates</span>
-            <span
-              :class="[
-                'badge',
-                versionInfo?.update_available &&
-                  !versionInfo?.update_in_progress &&
-                  !versionInfo?.check_in_progress
-                  ? 'badge-green'
-                  : 'badge-gray',
-              ]"
-            >
-              {{
-                versionInfo?.browser_updates_available === false
-                  ? 'Manual updates'
-                  : restarting || versionInfo?.restart_pending
-                    ? 'Restarting'
-                    : versionInfo?.update_in_progress
-                      ? 'Installing'
-                      : versionInfo?.check_in_progress
-                        ? 'Checking'
-                        : versionInfo?.update_available
-                          ? 'Update available'
-                          : 'Up to date'
-              }}
-            </span>
-          </div>
-          <p v-if="versionInfo?.browser_updates_available === false" class="section-desc">
-            The browser updater needs setup. Run <code>carbonpanelctl update</code> as root
-            over SSH once to install the updater integration.
-          </p>
-          <p v-else class="section-desc">
-            Check the installed GitHub branch for new commits and install updates here.
-            Updates continue running while the panel restarts. The proxy saved in Settings is
-            used for downloads.
-          </p>
+            <div id="section-version" v-show="sectionVisible('section-version')" class="section">
+              <div class="section-header">
+                <span class="section-title">Version & Updates</span>
+                <span
+                  :class="[
+                    'badge',
+                    versionInfo?.update_available &&
+                      !versionInfo?.update_in_progress &&
+                      !versionInfo?.check_in_progress
+                      ? 'badge-green'
+                      : 'badge-gray',
+                  ]"
+                >
+                  {{
+                    versionInfo?.browser_updates_available === false
+                      ? 'Manual updates'
+                      : restarting || versionInfo?.restart_pending
+                        ? 'Restarting'
+                        : versionInfo?.update_in_progress
+                          ? 'Installing'
+                          : versionInfo?.check_in_progress
+                            ? 'Checking'
+                            : versionInfo?.update_available
+                              ? 'Update available'
+                              : 'Up to date'
+                  }}
+                </span>
+              </div>
+              <p v-if="versionInfo?.browser_updates_available === false" class="section-desc">
+                The browser updater needs setup. Run <code>carbonpanelctl update</code> as root
+                over SSH once to install the updater integration.
+              </p>
+              <p v-else class="section-desc">
+                Check the installed GitHub branch for new commits and install updates here.
+                Updates continue running while the panel restarts. The proxy saved in Settings is
+                used for downloads.
+              </p>
 
-          <div class="version-grid">
-            <div class="info-row">
-              <span class="info-lbl">Current</span>
-              <span class="info-val">
-                {{ versionInfo?.current_version ?? 'Unknown' }}
-                <span v-if="versionInfo?.current_commit" class="commit-id">
-                  {{ versionInfo.current_commit.slice(0, 8) }}
-                </span>
-              </span>
-            </div>
-            <div class="info-row">
-              <span class="info-lbl">Latest</span>
-              <span class="info-val">
-                {{ versionInfo?.latest_version ?? 'Not checked yet' }}
-                <span v-if="versionInfo?.latest_commit" class="commit-id">
-                  {{ versionInfo.latest_commit.slice(0, 8) }}
-                </span>
-              </span>
-            </div>
-            <div class="info-row">
-              <span class="info-lbl">Checked</span>
-              <span class="info-val text-muted">{{ versionInfo?.checked_at ?? 'Never' }}</span>
-            </div>
-            <div v-if="versionInfo?.error" class="info-row">
-              <span class="info-lbl">Status</span>
-              <span class="info-val text-muted">{{ versionInfo.error }}</span>
-            </div>
-          </div>
+              <div class="version-grid">
+                <div class="info-row">
+                  <span class="info-lbl">Current</span>
+                  <span class="info-val">
+                    {{ versionInfo?.current_version ?? 'Unknown' }}
+                    <span v-if="versionInfo?.current_commit" class="commit-id">
+                      {{ versionInfo.current_commit.slice(0, 8) }}
+                    </span>
+                  </span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Latest</span>
+                  <span class="info-val">
+                    {{ versionInfo?.latest_version ?? 'Not checked yet' }}
+                    <span v-if="versionInfo?.latest_commit" class="commit-id">
+                      {{ versionInfo.latest_commit.slice(0, 8) }}
+                    </span>
+                  </span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Checked</span>
+                  <span class="info-val text-muted">{{ versionInfo?.checked_at ?? 'Never' }}</span>
+                </div>
+                <div v-if="versionInfo?.error" class="info-row">
+                  <span class="info-lbl">Status</span>
+                  <span class="info-val text-muted">{{ versionInfo.error }}</span>
+                </div>
+              </div>
 
-          <div
-            v-if="restarting"
-            :class="['restart-countdown', { 'restart-countdown-timeout': restartTimedOut }]"
-          >
-            <div class="restart-countdown-num">
-              {{ restartTimedOut ? '!' : restartCountdown > 0 ? restartCountdown : '…' }}
+              <div
+                v-if="restarting"
+                :class="['restart-countdown', { 'restart-countdown-timeout': restartTimedOut }]"
+              >
+                <div class="restart-countdown-num">
+                  {{ restartTimedOut ? '!' : restartCountdown > 0 ? restartCountdown : '…' }}
+                </div>
+                <div class="restart-countdown-copy">
+                  <strong>
+                    {{ restartTimedOut ? 'Panel did not reconnect automatically' : 'Panel is restarting' }}
+                  </strong>
+                  <template v-if="restartTimedOut">
+                    <span>
+                      The automatic wait has stopped. Reload now if the service is back, or retry the
+                      connection checks without leaving this page.
+                    </span>
+                    <div class="restart-countdown-actions">
+                      <BaseButton variant="ghost" @click="retryRestartConnection">Try again</BaseButton>
+                      <BaseButton variant="primary" @click="reloadPanel">Reload now</BaseButton>
+                    </div>
+                  </template>
+                  <span v-else>
+                    Checking every 2 seconds
+                    {{ restartCountdown > 0 ? `· ${restartCountdown}s until manual controls appear.` : '· reconnecting…' }}
+                    This page will reload as soon as the updated backend answers.
+                  </span>
+                </div>
+              </div>
+
+              <template v-else>
+                <div class="version-actions">
+                  <BaseButton
+                    variant="ghost"
+                    :disabled="versionInfo?.browser_updates_available === false || versionActionLoading || !!versionInfo?.update_in_progress"
+                    @click="checkForUpdates"
+                  >
+                    {{ versionInfo?.check_in_progress ? 'Checking…' : 'Check for Updates' }}
+                  </BaseButton>
+
+                  <BaseButton
+                    variant="primary"
+                    :disabled="
+                      versionInfo?.browser_updates_available === false || versionActionLoading ||
+                        !versionInfo?.update_available ||
+                        !!versionInfo?.update_in_progress ||
+                        !!versionInfo?.check_in_progress
+                    "
+                    @click="installUpdate"
+                  >
+                    {{
+                      versionInfo?.update_in_progress
+                        ? 'Installing…'
+                        : versionActionLoading
+                          ? 'Working…'
+                          : 'Install Update'
+                    }}
+                  </BaseButton>
+
+                  <a
+                    v-if="versionInfo?.notes_url || versionInfo?.release_url"
+                    class="version-link"
+                    :href="versionInfo?.notes_url || versionInfo?.release_url || '#'"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View Release Notes
+                  </a>
+                </div>
+
+                <div v-if="installing" class="update-progress">
+                  <div class="update-progress-copy">
+                    <span class="update-progress-label">{{ updateStepLabel }}</span>
+                    <span class="update-progress-percent">{{ updateProgressPercent }}%</span>
+                  </div>
+                  <div
+                    class="update-progress-track"
+                    role="progressbar"
+                    :aria-valuenow="updateProgressPercent"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    <div class="update-progress-fill" :style="{ width: updateProgressPercent + '%' }" />
+                  </div>
+                </div>
+
+                <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
+                <p v-if="versionError" class="error-msg">{{ versionError }}</p>
+              </template>
+
+              <div class="log-box-wrap">
+                <div class="log-box-header">
+                  <span class="log-box-title">Service Logs</span>
+                  <span v-if="logsLoading" class="log-box-hint">refreshing…</span>
+                  <button class="log-refresh-btn" :disabled="logsLoading" @click="fetchServiceLogs">↺</button>
+                </div>
+                <div ref="logsBox" class="log-box">
+                  <template v-if="serviceLogs.length">
+                    <div v-for="(line, i) in serviceLogs" :key="i" class="log-line">{{ line }}</div>
+                  </template>
+                  <div v-else class="log-empty">no logs yet — run a check or update to see output here</div>
+                </div>
+              </div>
             </div>
-            <div class="restart-countdown-copy">
-              <strong>
-                {{ restartTimedOut ? 'Panel did not reconnect automatically' : 'Panel is restarting' }}
-              </strong>
-              <template v-if="restartTimedOut">
-                <span>
-                  The automatic wait has stopped. Reload now if the service is back, or retry the
-                  connection checks without leaving this page.
+
+            <!-- 2FA Section -->
+            <div id="section-2fa" v-show="sectionVisible('section-2fa')" class="section">
+              <div class="section-header">
+                <span class="section-title">Two-Factor Authentication</span>
+                <span :class="['badge', auth.user?.totp_enabled ? 'badge-green' : 'badge-gray']">
+                  {{ auth.user?.totp_enabled ? 'enabled' : 'disabled' }}
                 </span>
-                <div class="restart-countdown-actions">
-                  <BaseButton variant="ghost" @click="retryRestartConnection">Try again</BaseButton>
-                  <BaseButton variant="primary" @click="reloadPanel">Reload now</BaseButton>
+              </div>
+
+              <!-- Enable flow -->
+              <template v-if="!auth.user?.totp_enabled">
+                <p class="section-desc">Add an extra layer of security with a TOTP authenticator app (Google Authenticator, Authy, etc.)</p>
+
+                <div v-if="!setupData" class="setup-start">
+                  <BaseInput
+                    v-model="setupPassword"
+                    label="Current Password"
+                    id="setup-password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                  />
+                  <p v-if="setupError" class="error-msg">{{ setupError }}</p>
+                  <BaseButton
+                    variant="ghost"
+                    @click="startSetup"
+                    :disabled="setupLoading || !setupPassword"
+                  >
+                    {{ setupLoading ? 'Loading…' : 'Set up 2FA' }}
+                  </BaseButton>
+                </div>
+
+                <div v-else class="setup-flow">
+                  <div class="qr-block">
+                    <p class="step-label">1. Scan with your authenticator app</p>
+                    <canvas ref="qrCanvas" class="qr-canvas" />
+                    <details class="manual-entry">
+                      <summary>Enter key manually</summary>
+                      <code class="secret-key">{{ setupData.secret }}</code>
+                    </details>
+                  </div>
+
+                  <form class="confirm-form" @submit.prevent="handleEnable">
+                    <p class="step-label">2. Enter the 6-digit code to confirm</p>
+                    <BaseInput
+                      v-model="confirmCode"
+                      label="Code"
+                      id="enable-code"
+                      placeholder="000000"
+                      inputmode="numeric"
+                      maxlength="6"
+                      autofocus
+                    />
+                    <p v-if="enableError" class="error-msg">{{ enableError }}</p>
+                    <BaseButton variant="primary" :disabled="confirmCode.length !== 6 || enableLoading">
+                      {{ enableLoading ? 'Verifying…' : 'Enable 2FA' }}
+                    </BaseButton>
+                  </form>
                 </div>
               </template>
-              <span v-else>
-                Checking every 2 seconds
-                {{ restartCountdown > 0 ? `· ${restartCountdown}s until manual controls appear.` : '· reconnecting…' }}
-                This page will reload as soon as the updated backend answers.
-              </span>
-            </div>
-          </div>
 
-          <template v-else>
-            <div class="version-actions">
-              <BaseButton
-                variant="ghost"
-                :disabled="versionInfo?.browser_updates_available === false || versionActionLoading || !!versionInfo?.update_in_progress"
-                @click="checkForUpdates"
-              >
-                {{ versionInfo?.check_in_progress ? 'Checking…' : 'Check for Updates' }}
-              </BaseButton>
-
-              <BaseButton
-                variant="primary"
-                :disabled="
-                  versionInfo?.browser_updates_available === false || versionActionLoading ||
-                    !versionInfo?.update_available ||
-                    !!versionInfo?.update_in_progress ||
-                    !!versionInfo?.check_in_progress
-                "
-                @click="installUpdate"
-              >
-                {{
-                  versionInfo?.update_in_progress
-                    ? 'Installing…'
-                    : versionActionLoading
-                      ? 'Working…'
-                      : 'Install Update'
-                }}
-              </BaseButton>
-
-              <a
-                v-if="versionInfo?.notes_url || versionInfo?.release_url"
-                class="version-link"
-                :href="versionInfo?.notes_url || versionInfo?.release_url || '#'"
-                target="_blank"
-                rel="noreferrer"
-              >
-                View Release Notes
-              </a>
-            </div>
-
-            <div v-if="installing" class="update-progress">
-              <div class="update-progress-copy">
-                <span class="update-progress-label">{{ updateStepLabel }}</span>
-                <span class="update-progress-percent">{{ updateProgressPercent }}%</span>
-              </div>
-              <div
-                class="update-progress-track"
-                role="progressbar"
-                :aria-valuenow="updateProgressPercent"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                <div class="update-progress-fill" :style="{ width: updateProgressPercent + '%' }" />
-              </div>
-            </div>
-
-            <p v-if="versionSuccess" class="success-msg">{{ versionSuccess }}</p>
-            <p v-if="versionError" class="error-msg">{{ versionError }}</p>
-          </template>
-
-          <div class="log-box-wrap">
-            <div class="log-box-header">
-              <span class="log-box-title">Service Logs</span>
-              <span v-if="logsLoading" class="log-box-hint">refreshing…</span>
-              <button class="log-refresh-btn" :disabled="logsLoading" @click="fetchServiceLogs">↺</button>
-            </div>
-            <div ref="logsBox" class="log-box">
-              <template v-if="serviceLogs.length">
-                <div v-for="(line, i) in serviceLogs" :key="i" class="log-line">{{ line }}</div>
+              <!-- Disable flow -->
+              <template v-else>
+                <p class="section-desc">2FA is active. Re-enter your password and current code to disable it.</p>
+                <form class="confirm-form" @submit.prevent="handleDisable">
+                  <BaseInput
+                    v-model="disablePassword"
+                    label="Current Password"
+                    id="disable-password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                  />
+                  <BaseInput
+                    v-model="disableCode"
+                    label="Current TOTP Code"
+                    id="disable-code"
+                    placeholder="000000"
+                    inputmode="numeric"
+                    maxlength="6"
+                  />
+                  <p v-if="disableError" class="error-msg">{{ disableError }}</p>
+                  <BaseButton variant="danger" :disabled="!disablePassword || disableCode.length !== 6 || disableLoading">
+                    {{ disableLoading ? 'Disabling…' : 'Disable 2FA' }}
+                  </BaseButton>
+                </form>
               </template>
-              <div v-else class="log-empty">no logs yet — run a check or update to see output here</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2FA Section -->
-        <div id="section-2fa" class="section">
-          <div class="section-header">
-            <span class="section-title">Two-Factor Authentication</span>
-            <span :class="['badge', auth.user?.totp_enabled ? 'badge-green' : 'badge-gray']">
-              {{ auth.user?.totp_enabled ? 'enabled' : 'disabled' }}
-            </span>
-          </div>
-
-          <!-- Enable flow -->
-          <template v-if="!auth.user?.totp_enabled">
-            <p class="section-desc">Add an extra layer of security with a TOTP authenticator app (Google Authenticator, Authy, etc.)</p>
-
-            <div v-if="!setupData" class="setup-start">
-              <BaseInput
-                v-model="setupPassword"
-                label="Current Password"
-                id="setup-password"
-                type="password"
-                autocomplete="current-password"
-                required
-              />
-              <p v-if="setupError" class="error-msg">{{ setupError }}</p>
-              <BaseButton
-                variant="ghost"
-                @click="startSetup"
-                :disabled="setupLoading || !setupPassword"
-              >
-                {{ setupLoading ? 'Loading…' : 'Set up 2FA' }}
-              </BaseButton>
             </div>
 
-            <div v-else class="setup-flow">
-              <div class="qr-block">
-                <p class="step-label">1. Scan with your authenticator app</p>
-                <canvas ref="qrCanvas" class="qr-canvas" />
-                <details class="manual-entry">
-                  <summary>Enter key manually</summary>
-                  <code class="secret-key">{{ setupData.secret }}</code>
-                </details>
+            <!-- Passkeys Section -->
+            <div id="section-passkeys" v-show="sectionVisible('section-passkeys')" class="section">
+              <div class="section-header">
+                <span class="section-title">Passkeys</span>
+                <span class="badge badge-gray">{{ passkeys.length }}</span>
+              </div>
+              <p class="section-desc">
+                Passkeys are a passwordless sign-in method protected by your device PIN,
+                fingerprint, face, or security key. Password + authenticator code remains
+                available as your fallback sign-in method.
+              </p>
+
+              <p v-if="!passkeySupport.available" class="passkey-compat">
+                {{ passkeySupport.reason }} Open CarbonPanel through a stable HTTPS hostname
+                whose certificate is trusted by this device to enroll or use a passkey.
+              </p>
+
+              <div v-if="passkeysLoading" class="section-loading">Loading…</div>
+              <div v-else-if="!passkeys.length" class="section-empty">No passkeys registered.</div>
+              <div v-else class="device-list">
+                <div v-for="passkey in passkeys" :key="passkey.id" class="device-row">
+                  <div class="device-info">
+                    <span class="device-name">{{ passkey.device_name }}</span>
+                    <span class="device-meta">
+                      {{ passkey.rp_id }} · added {{ fmtDate(passkey.created_at) }}
+                      <template v-if="passkey.last_used_at"> · used {{ fmtDate(passkey.last_used_at) }}</template>
+                    </span>
+                  </div>
+                  <button
+                    class="revoke-btn"
+                    :disabled="passkeyBusy || !passkeyPassword || (auth.user?.totp_enabled && passkeyTotp.length !== 6)"
+                    title="Enter your password and current 2FA code below before removing a passkey"
+                    @click="deletePasskey(passkey)"
+                  >Remove</button>
+                </div>
               </div>
 
-              <form class="confirm-form" @submit.prevent="handleEnable">
-                <p class="step-label">2. Enter the 6-digit code to confirm</p>
+              <div class="passkey-form">
                 <BaseInput
-                  v-model="confirmCode"
-                  label="Code"
-                  id="enable-code"
+                  v-if="passkeySupport.available"
+                  v-model="passkeyName"
+                  label="Passkey Name"
+                  id="passkey-name"
+                  placeholder="MacBook Touch ID, YubiKey, etc."
+                  maxlength="80"
+                />
+                <BaseInput
+                  v-model="passkeyPassword"
+                  label="Current Password"
+                  id="passkey-password"
+                  type="password"
+                  autocomplete="current-password"
+                />
+                <BaseInput
+                  v-if="auth.user?.totp_enabled"
+                  v-model="passkeyTotp"
+                  label="Current TOTP Code"
+                  id="passkey-totp"
                   placeholder="000000"
                   inputmode="numeric"
                   maxlength="6"
-                  autofocus
                 />
-                <p v-if="enableError" class="error-msg">{{ enableError }}</p>
-                <BaseButton variant="primary" :disabled="confirmCode.length !== 6 || enableLoading">
-                  {{ enableLoading ? 'Verifying…' : 'Enable 2FA' }}
+                <BaseButton
+                  v-if="passkeySupport.available"
+                  variant="ghost"
+                  :disabled="passkeyBusy || !passkeyName.trim() || !passkeyPassword || (auth.user?.totp_enabled && passkeyTotp.length !== 6)"
+                  @click="registerPasskey"
+                >
+                  {{ passkeyBusy ? 'Waiting for passkey…' : 'Add passkey' }}
+                </BaseButton>
+              </div>
+              <p v-if="passkeyError" class="error-msg">{{ passkeyError }}</p>
+              <p v-if="passkeySuccess" class="success-msg">{{ passkeySuccess }}</p>
+            </div>
+
+            <!-- Account info + change credentials -->
+            <div id="section-account" v-show="sectionVisible('section-account')" class="section">
+              <div class="section-header">
+                <span class="section-title">Account</span>
+              </div>
+              <div class="account-info">
+                <div class="info-row">
+                  <span class="info-lbl">Username</span>
+                  <span class="info-val">{{ auth.user?.username }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">User ID</span>
+                  <span class="info-val text-muted">{{ auth.user?.id }}</span>
+                </div>
+              </div>
+
+              <div class="change-creds-toggle">
+                <button type="button" class="toggle-link" @click="showChangeCreds = !showChangeCreds">
+                  {{ showChangeCreds ? '▲ hide' : '▼ change username / password' }}
+                </button>
+              </div>
+
+              <form v-if="showChangeCreds" class="confirm-form" @submit.prevent="handleChangeCreds">
+                <BaseInput
+                  v-model="credsForm.currentPassword"
+                  label="Current Password"
+                  id="current-password"
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                />
+                <BaseInput
+                  v-model="credsForm.newUsername"
+                  label="New Username (optional)"
+                  id="new-username"
+                  :placeholder="auth.user?.username ?? ''"
+                />
+                <BaseInput
+                  v-model="credsForm.newPassword"
+                  label="New Password (optional, min 8 chars)"
+                  id="new-password"
+                  type="password"
+                  placeholder="••••••••"
+                />
+                <p v-if="credsError" class="error-msg">{{ credsError }}</p>
+                <p v-if="credsSuccess" class="success-msg">{{ credsSuccess }}</p>
+                <BaseButton
+                  variant="primary"
+                  :disabled="!credsForm.currentPassword || credsLoading"
+                >
+                  {{ credsLoading ? 'Saving…' : 'Save Changes' }}
                 </BaseButton>
               </form>
             </div>
-          </template>
 
-          <!-- Disable flow -->
-          <template v-else>
-            <p class="section-desc">2FA is active. Re-enter your password and current code to disable it.</p>
-            <form class="confirm-form" @submit.prevent="handleDisable">
-              <BaseInput
-                v-model="disablePassword"
-                label="Current Password"
-                id="disable-password"
-                type="password"
-                autocomplete="current-password"
-                required
-              />
-              <BaseInput
-                v-model="disableCode"
-                label="Current TOTP Code"
-                id="disable-code"
-                placeholder="000000"
-                inputmode="numeric"
-                maxlength="6"
-              />
-              <p v-if="disableError" class="error-msg">{{ disableError }}</p>
-              <BaseButton variant="danger" :disabled="!disablePassword || disableCode.length !== 6 || disableLoading">
-                {{ disableLoading ? 'Disabling…' : 'Disable 2FA' }}
-              </BaseButton>
-            </form>
-          </template>
-        </div>
-
-        <!-- Passkeys Section -->
-        <div id="section-passkeys" class="section">
-          <div class="section-header">
-            <span class="section-title">Passkeys</span>
-            <span class="badge badge-gray">{{ passkeys.length }}</span>
-          </div>
-          <p class="section-desc">
-            Passkeys are a passwordless sign-in method protected by your device PIN,
-            fingerprint, face, or security key. Password + authenticator code remains
-            available as your fallback sign-in method.
-          </p>
-
-          <p v-if="!passkeySupport.available" class="passkey-compat">
-            {{ passkeySupport.reason }} Open CarbonPanel through a stable HTTPS hostname
-            whose certificate is trusted by this device to enroll or use a passkey.
-          </p>
-
-          <div v-if="passkeysLoading" class="section-loading">Loading…</div>
-          <div v-else-if="!passkeys.length" class="section-empty">No passkeys registered.</div>
-          <div v-else class="device-list">
-            <div v-for="passkey in passkeys" :key="passkey.id" class="device-row">
-              <div class="device-info">
-                <span class="device-name">{{ passkey.device_name }}</span>
-                <span class="device-meta">
-                  {{ passkey.rp_id }} · added {{ fmtDate(passkey.created_at) }}
-                  <template v-if="passkey.last_used_at"> · used {{ fmtDate(passkey.last_used_at) }}</template>
-                </span>
+            <!-- Language Section -->
+            <div id="section-language" v-show="sectionVisible('section-language')" class="section">
+              <div class="section-header">
+                <span class="section-title">{{ t('settings.language') }}</span>
+                <span class="badge badge-gray">{{ locale.locale.toUpperCase() }}</span>
               </div>
-              <button
-                class="revoke-btn"
-                :disabled="passkeyBusy || !passkeyPassword || (auth.user?.totp_enabled && passkeyTotp.length !== 6)"
-                title="Enter your password and current 2FA code below before removing a passkey"
-                @click="deletePasskey(passkey)"
-              >Remove</button>
-            </div>
-          </div>
-
-          <div class="passkey-form">
-            <BaseInput
-              v-if="passkeySupport.available"
-              v-model="passkeyName"
-              label="Passkey Name"
-              id="passkey-name"
-              placeholder="MacBook Touch ID, YubiKey, etc."
-              maxlength="80"
-            />
-            <BaseInput
-              v-model="passkeyPassword"
-              label="Current Password"
-              id="passkey-password"
-              type="password"
-              autocomplete="current-password"
-            />
-            <BaseInput
-              v-if="auth.user?.totp_enabled"
-              v-model="passkeyTotp"
-              label="Current TOTP Code"
-              id="passkey-totp"
-              placeholder="000000"
-              inputmode="numeric"
-              maxlength="6"
-            />
-            <BaseButton
-              v-if="passkeySupport.available"
-              variant="ghost"
-              :disabled="passkeyBusy || !passkeyName.trim() || !passkeyPassword || (auth.user?.totp_enabled && passkeyTotp.length !== 6)"
-              @click="registerPasskey"
-            >
-              {{ passkeyBusy ? 'Waiting for passkey…' : 'Add passkey' }}
-            </BaseButton>
-          </div>
-          <p v-if="passkeyError" class="error-msg">{{ passkeyError }}</p>
-          <p v-if="passkeySuccess" class="success-msg">{{ passkeySuccess }}</p>
-        </div>
-
-        <!-- Account info + change credentials -->
-        <div id="section-account" class="section">
-          <div class="section-header">
-            <span class="section-title">Account</span>
-          </div>
-          <div class="account-info">
-            <div class="info-row">
-              <span class="info-lbl">Username</span>
-              <span class="info-val">{{ auth.user?.username }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-lbl">User ID</span>
-              <span class="info-val text-muted">{{ auth.user?.id }}</span>
-            </div>
-          </div>
-
-          <div class="change-creds-toggle">
-            <button type="button" class="toggle-link" @click="showChangeCreds = !showChangeCreds">
-              {{ showChangeCreds ? '▲ hide' : '▼ change username / password' }}
-            </button>
-          </div>
-
-          <form v-if="showChangeCreds" class="confirm-form" @submit.prevent="handleChangeCreds">
-            <BaseInput
-              v-model="credsForm.currentPassword"
-              label="Current Password"
-              id="current-password"
-              type="password"
-              placeholder="••••••••"
-              required
-            />
-            <BaseInput
-              v-model="credsForm.newUsername"
-              label="New Username (optional)"
-              id="new-username"
-              :placeholder="auth.user?.username ?? ''"
-            />
-            <BaseInput
-              v-model="credsForm.newPassword"
-              label="New Password (optional, min 8 chars)"
-              id="new-password"
-              type="password"
-              placeholder="••••••••"
-            />
-            <p v-if="credsError" class="error-msg">{{ credsError }}</p>
-            <p v-if="credsSuccess" class="success-msg">{{ credsSuccess }}</p>
-            <BaseButton
-              variant="primary"
-              :disabled="!credsForm.currentPassword || credsLoading"
-            >
-              {{ credsLoading ? 'Saving…' : 'Save Changes' }}
-            </BaseButton>
-          </form>
-        </div>
-
-        <!-- Language Section -->
-        <div id="section-language" class="section">
-          <div class="section-header">
-            <span class="section-title">{{ t('settings.language') }}</span>
-            <span class="badge badge-gray">{{ locale.locale.toUpperCase() }}</span>
-          </div>
-          <p class="section-desc">{{ t('settings.languageDesc') }}</p>
-          <div class="theme-toggle-row">
-            <button
-              type="button"
-              :class="['theme-btn', { active: locale.locale === 'en' }]"
-              @click="locale.setLocale('en')"
-            >English</button>
-            <button
-              type="button"
-              :class="['theme-btn', { active: locale.locale === 'zh' }]"
-              @click="locale.setLocale('zh')"
-            >中文</button>
-          </div>
-        </div>
-
-        <!-- Notifications Section -->
-        <div id="section-webhooks" class="section">
-          <div class="section-header">
-            <span class="section-title">{{ t('settings.webhooks') }}</span>
-            <span class="badge badge-gray">{{ webhooks.length }} configured</span>
-          </div>
-          <p class="section-desc">{{ t('settings.webhooksDesc') }}</p>
-
-          <div v-if="!webhooks.length" class="section-desc">{{ t('settings.noWebhooks') }}</div>
-
-          <div v-for="wh in webhooks" :key="wh.id" class="webhook-row">
-            <div class="webhook-info">
-              <span class="webhook-label-line">
-                <span class="webhook-label">{{ wh.label || channelKindLabel(wh.kind) }}</span>
-                <span class="notification-kind">{{ channelKindLabel(wh.kind) }}</span>
-              </span>
-              <span class="webhook-url">{{ channelTarget(wh) }}</span>
-              <div class="notification-event-chips">
-                <button
-                  v-for="event in webhookEventOptions"
-                  :key="event.value"
-                  type="button"
-                  :class="['notification-event-chip', { active: wh.events.includes(event.value) }]"
-                  :title="event.label"
-                  @click="toggleWebhookEvent(wh, event.value)"
-                >{{ event.short }}</button>
-              </div>
-            </div>
-            <div class="webhook-actions">
-              <button
-                :class="['theme-btn', 'wh-toggle', { active: wh.enabled }]"
-                @click="toggleWebhook(wh)"
-              >{{ wh.enabled ? t('common.enabled') : t('common.disabled') }}</button>
-              <button class="theme-btn wh-test" @click="testWebhook(wh)">{{ t('settings.testWebhook') }}</button>
-              <button class="theme-btn wh-del" @click="deleteWebhook(wh.id)">{{ t('common.delete') }}</button>
-            </div>
-          </div>
-
-          <div class="webhook-add-form">
-            <div class="wh-events">
-              <span class="style-lbl">{{ t('settings.notificationType') }}</span>
+              <p class="section-desc">{{ t('settings.languageDesc') }}</p>
               <div class="theme-toggle-row">
                 <button
-                  v-for="kind in notificationKinds"
-                  :key="kind.value"
                   type="button"
-                  :class="['theme-btn', { active: newWebhookKind === kind.value }]"
-                  @click="selectNotificationKind(kind.value)"
-                >{{ kind.label }}</button>
+                  :class="['theme-btn', { active: locale.locale === 'en' }]"
+                  @click="locale.setLocale('en')"
+                >English</button>
+                <button
+                  type="button"
+                  :class="['theme-btn', { active: locale.locale === 'zh' }]"
+                  @click="locale.setLocale('zh')"
+                >中文</button>
               </div>
             </div>
 
-            <BaseInput
-              v-model="newWebhookLabel"
-              :label="t('settings.webhookLabel')"
-              id="wh-label"
-              :placeholder="t('settings.notificationLabelPlaceholder')"
-            />
-
-            <BaseInput
-              v-if="newWebhookKind === 'webhook'"
-              v-model="newWebhookUrl"
-              :label="t('settings.webhookUrl')"
-              id="wh-url"
-              placeholder="https://example.com/hooks/carbonpanel"
-            />
-
-            <template v-if="newWebhookKind === 'ntfy'">
-              <BaseInput
-                v-model="newWebhookUrl"
-                :label="t('settings.ntfyServer')"
-                id="ntfy-server"
-                placeholder="http://127.0.0.1:8080"
-              />
-              <BaseInput
-                v-model="newNtfyTopic"
-                :label="t('settings.ntfyTopic')"
-                id="ntfy-topic"
-                placeholder="carbonpanel-alerts"
-              />
-              <BaseInput
-                v-model="newNtfyToken"
-                :label="t('settings.ntfyToken')"
-                id="ntfy-token"
-                type="password"
-                :placeholder="t('settings.optionalToken')"
-                autocomplete="new-password"
-              />
-              <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
-            </template>
-
-            <template v-if="newWebhookKind === 'email'">
-              <div class="smtp-grid">
-                <BaseInput
-                  v-model="newSmtpHost"
-                  :label="t('settings.smtpHost')"
-                  id="smtp-host"
-                  placeholder="smtp.example.com"
-                />
-                <BaseInput
-                  v-model="newSmtpPort"
-                  :label="t('settings.smtpPort')"
-                  id="smtp-port"
-                  type="number"
-                  min="1"
-                  max="65535"
-                />
+            <!-- Notifications Section -->
+            <div id="section-webhooks" v-show="sectionVisible('section-webhooks')" class="section">
+              <div class="section-header">
+                <span class="section-title">{{ t('settings.webhooks') }}</span>
+                <span class="badge badge-gray">{{ webhooks.length }} configured</span>
               </div>
-              <div class="wh-events">
-                <span class="style-lbl">{{ t('settings.smtpSecurity') }}</span>
-                <div class="theme-toggle-row">
+              <p class="section-desc">{{ t('settings.webhooksDesc') }}</p>
+
+              <div v-if="!webhooks.length" class="section-desc">{{ t('settings.noWebhooks') }}</div>
+
+              <div v-for="wh in webhooks" :key="wh.id" class="webhook-row">
+                <div class="webhook-info">
+                  <span class="webhook-label-line">
+                    <span class="webhook-label">{{ wh.label || channelKindLabel(wh.kind) }}</span>
+                    <span class="notification-kind">{{ channelKindLabel(wh.kind) }}</span>
+                  </span>
+                  <span class="webhook-url">{{ channelTarget(wh) }}</span>
+                  <div class="notification-event-chips">
+                    <button
+                      v-for="event in webhookEventOptions"
+                      :key="event.value"
+                      type="button"
+                      :class="['notification-event-chip', { active: wh.events.includes(event.value) }]"
+                      :title="event.label"
+                      @click="toggleWebhookEvent(wh, event.value)"
+                    >{{ event.short }}</button>
+                  </div>
+                </div>
+                <div class="webhook-actions">
                   <button
-                    v-for="mode in smtpSecurityModes"
-                    :key="mode.value"
-                    type="button"
-                    :class="['theme-btn', { active: newSmtpSecurity === mode.value }]"
-                    @click="selectSmtpSecurity(mode.value)"
-                  >{{ mode.label }}</button>
+                    :class="['theme-btn', 'wh-toggle', { active: wh.enabled }]"
+                    @click="toggleWebhook(wh)"
+                  >{{ wh.enabled ? t('common.enabled') : t('common.disabled') }}</button>
+                  <button class="theme-btn wh-test" @click="testWebhook(wh)">{{ t('settings.testWebhook') }}</button>
+                  <button class="theme-btn wh-del" @click="deleteWebhook(wh.id)">{{ t('common.delete') }}</button>
                 </div>
               </div>
-              <div class="smtp-grid">
+
+              <div class="webhook-add-form">
+                <div class="wh-events">
+                  <span class="style-lbl">{{ t('settings.notificationType') }}</span>
+                  <div class="theme-toggle-row">
+                    <button
+                      v-for="kind in notificationKinds"
+                      :key="kind.value"
+                      type="button"
+                      :class="['theme-btn', { active: newWebhookKind === kind.value }]"
+                      @click="selectNotificationKind(kind.value)"
+                    >{{ kind.label }}</button>
+                  </div>
+                </div>
+
                 <BaseInput
-                  v-model="newEmailFrom"
-                  :label="t('settings.emailFrom')"
-                  id="email-from"
-                  type="email"
-                  placeholder="carbonpanel@example.com"
+                  v-model="newWebhookLabel"
+                  :label="t('settings.webhookLabel')"
+                  id="wh-label"
+                  :placeholder="t('settings.notificationLabelPlaceholder')"
                 />
+
                 <BaseInput
-                  v-model="newEmailTo"
-                  :label="t('settings.emailTo')"
-                  id="email-to"
-                  type="email"
-                  placeholder="admin@example.com"
+                  v-if="newWebhookKind === 'webhook'"
+                  v-model="newWebhookUrl"
+                  :label="t('settings.webhookUrl')"
+                  id="wh-url"
+                  placeholder="https://example.com/hooks/carbonpanel"
                 />
+
+                <template v-if="newWebhookKind === 'ntfy'">
+                  <BaseInput
+                    v-model="newWebhookUrl"
+                    :label="t('settings.ntfyServer')"
+                    id="ntfy-server"
+                    placeholder="http://127.0.0.1:8080"
+                  />
+                  <BaseInput
+                    v-model="newNtfyTopic"
+                    :label="t('settings.ntfyTopic')"
+                    id="ntfy-topic"
+                    placeholder="carbonpanel-alerts"
+                  />
+                  <BaseInput
+                    v-model="newNtfyToken"
+                    :label="t('settings.ntfyToken')"
+                    id="ntfy-token"
+                    type="password"
+                    :placeholder="t('settings.optionalToken')"
+                    autocomplete="new-password"
+                  />
+                  <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
+                </template>
+
+                <template v-if="newWebhookKind === 'email'">
+                  <div class="smtp-grid">
+                    <BaseInput
+                      v-model="newSmtpHost"
+                      :label="t('settings.smtpHost')"
+                      id="smtp-host"
+                      placeholder="smtp.example.com"
+                    />
+                    <BaseInput
+                      v-model="newSmtpPort"
+                      :label="t('settings.smtpPort')"
+                      id="smtp-port"
+                      type="number"
+                      min="1"
+                      max="65535"
+                    />
+                  </div>
+                  <div class="wh-events">
+                    <span class="style-lbl">{{ t('settings.smtpSecurity') }}</span>
+                    <div class="theme-toggle-row">
+                      <button
+                        v-for="mode in smtpSecurityModes"
+                        :key="mode.value"
+                        type="button"
+                        :class="['theme-btn', { active: newSmtpSecurity === mode.value }]"
+                        @click="selectSmtpSecurity(mode.value)"
+                      >{{ mode.label }}</button>
+                    </div>
+                  </div>
+                  <div class="smtp-grid">
+                    <BaseInput
+                      v-model="newEmailFrom"
+                      :label="t('settings.emailFrom')"
+                      id="email-from"
+                      type="email"
+                      placeholder="carbonpanel@example.com"
+                    />
+                    <BaseInput
+                      v-model="newEmailTo"
+                      :label="t('settings.emailTo')"
+                      id="email-to"
+                      type="email"
+                      placeholder="admin@example.com"
+                    />
+                  </div>
+                  <div class="smtp-grid">
+                    <BaseInput
+                      v-model="newSmtpUsername"
+                      :label="t('settings.smtpUsername')"
+                      id="smtp-username"
+                      autocomplete="username"
+                      :placeholder="t('settings.optionalUsername')"
+                    />
+                    <BaseInput
+                      v-model="newSmtpPassword"
+                      :label="t('settings.smtpPassword')"
+                      id="smtp-password"
+                      type="password"
+                      autocomplete="new-password"
+                      :placeholder="t('settings.optionalPassword')"
+                    />
+                  </div>
+                  <p
+                    v-if="smtpCredentialsMismatch"
+                    class="error-msg credential-validation"
+                  >{{ t('settings.smtpCredentialsPairRequired') }}</p>
+                  <p v-else class="credential-note">
+                    {{ t('settings.smtpCredentialsOptionalPair') }}
+                  </p>
+                  <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
+                </template>
+
+                <div class="wh-events">
+                  <span class="style-lbl">{{ t('settings.webhookEvents') }}</span>
+                  <div class="theme-toggle-row">
+                    <button
+                      v-for="ev in webhookEventOptions"
+                      :key="ev.value"
+                      type="button"
+                      :class="['theme-btn', { active: newWebhookEvents.includes(ev.value) }]"
+                      @click="toggleEvent(ev.value)"
+                    >{{ ev.label }}</button>
+                  </div>
+                </div>
+                <p v-if="webhookError" class="error-msg">{{ webhookError }}</p>
+                <p v-if="webhookSuccess" class="success-msg">{{ webhookSuccess }}</p>
+                <BaseButton variant="ghost" :disabled="!canAddNotification || webhookLoading" @click="addWebhook">
+                  {{ webhookLoading ? t('settings.saving') : t('settings.addWebhook') }}
+                </BaseButton>
               </div>
-              <div class="smtp-grid">
-                <BaseInput
-                  v-model="newSmtpUsername"
-                  :label="t('settings.smtpUsername')"
-                  id="smtp-username"
-                  autocomplete="username"
-                  :placeholder="t('settings.optionalUsername')"
-                />
-                <BaseInput
-                  v-model="newSmtpPassword"
-                  :label="t('settings.smtpPassword')"
-                  id="smtp-password"
-                  type="password"
-                  autocomplete="new-password"
-                  :placeholder="t('settings.optionalPassword')"
-                />
+            </div>
+
+            <!-- Proxy Section -->
+            <!-- Devices Section -->
+            <div id="section-devices" v-show="sectionVisible('section-devices')" class="section">
+              <div class="section-header">
+                <span class="section-title">Active Sessions</span>
+                <span class="badge badge-gray">{{ devices.length }}</span>
               </div>
-              <p
-                v-if="smtpCredentialsMismatch"
-                class="error-msg credential-validation"
-              >{{ t('settings.smtpCredentialsPairRequired') }}</p>
-              <p v-else class="credential-note">
-                {{ t('settings.smtpCredentialsOptionalPair') }}
+              <p class="section-desc">
+                Devices currently signed in. Revoking a session immediately invalidates that login token.
               </p>
-              <p class="credential-note">{{ t('settings.credentialsEncrypted') }}</p>
-            </template>
+              <div v-if="devicesLoading" class="section-loading">Loading…</div>
+              <div v-else-if="!devices.length" class="section-empty">No active sessions.</div>
+              <div v-else class="device-list">
+                <div v-for="dev in devices" :key="dev.id" class="device-row">
+                  <div class="device-info">
+                    <span class="device-name">{{ dev.name }}</span>
+                    <span class="device-meta">{{ dev.ip_address || 'unknown IP' }} · last seen {{ fmtDate(dev.last_seen) }}</span>
+                  </div>
+                  <button class="revoke-btn" @click="revokeDevice(dev.id)">Revoke</button>
+                </div>
+              </div>
+              <p v-if="devicesError" class="error-msg">{{ devicesError }}</p>
+            </div>
 
-            <div class="wh-events">
-              <span class="style-lbl">{{ t('settings.webhookEvents') }}</span>
-              <div class="theme-toggle-row">
+            <!-- Paired Devices Section -->
+            <div id="section-pairing" v-show="sectionVisible('section-pairing')" class="section">
+              <div class="section-header">
+                <span class="section-title">Paired Devices</span>
+                <span class="badge badge-gray">{{ pairedCount }}</span>
+              </div>
+              <p class="section-desc">
+                Pair the CarbonPanel Android app by scanning a QR code. The app gets its own
+                long-lived token, revocable above at any time. Re-authenticate here to create
+                the code; your password and 2FA code are never sent to the phone.
+              </p>
+
+              <div class="pair-endpoints">
+                <div class="pair-subhead">Addresses to embed in the code</div>
+                <p class="pair-hint">
+                  The phone tries these in order until one answers. Include an address that
+                  works away from home — a VPN/Tailscale address or a public domain — or the
+                  app will only work on your LAN.
+                </p>
+                <label
+                  v-for="ep in allEndpoints"
+                  :key="ep.url"
+                  class="pair-ep-row"
+                >
+                  <input type="checkbox" :value="ep.url" v-model="selectedEndpoints" />
+                  <span class="pair-ep-url">{{ ep.url }}</span>
+                  <span :class="['pair-ep-kind', `kind-${ep.kind}`]">{{ endpointKindLabel(ep.kind) }}</span>
+                </label>
+
+                <div class="pair-add-row">
+                  <BaseInput
+                    v-model="newEndpoint"
+                    placeholder="https://panel.example.com"
+                    @keyup.enter="addEndpoint"
+                  />
+                  <button class="theme-btn" :disabled="!newEndpoint.trim()" @click="addEndpoint">
+                    Add
+                  </button>
+                </div>
+                <p v-if="endpointError" class="error-msg">{{ endpointError }}</p>
+              </div>
+
+              <div class="confirm-form">
+                <BaseInput
+                  v-model="pairAuthPassword"
+                  label="Current Password"
+                  id="pair-password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                />
+                <BaseInput
+                  v-if="auth.user?.totp_enabled"
+                  v-model="pairAuthTotp"
+                  label="Current TOTP Code"
+                  id="pair-totp"
+                  placeholder="000000"
+                  inputmode="numeric"
+                  maxlength="6"
+                  required
+                />
+              </div>
+
+              <div class="pair-actions">
                 <button
-                  v-for="ev in webhookEventOptions"
-                  :key="ev.value"
-                  type="button"
-                  :class="['theme-btn', { active: newWebhookEvents.includes(ev.value) }]"
-                  @click="toggleEvent(ev.value)"
-                >{{ ev.label }}</button>
+                  class="theme-btn active"
+                  :disabled="pairingBusy || !selectedEndpoints.length || !pairAuthPassword || (auth.user?.totp_enabled && pairAuthTotp.length !== 6)"
+                  @click="startPairing"
+                >
+                  {{ pairing ? 'New code' : 'Pair a device' }}
+                </button>
+                <button v-if="pairing" class="theme-btn" @click="cancelPairing">Done</button>
               </div>
-            </div>
-            <p v-if="webhookError" class="error-msg">{{ webhookError }}</p>
-            <p v-if="webhookSuccess" class="success-msg">{{ webhookSuccess }}</p>
-            <BaseButton variant="ghost" :disabled="!canAddNotification || webhookLoading" @click="addWebhook">
-              {{ webhookLoading ? t('settings.saving') : t('settings.addWebhook') }}
-            </BaseButton>
-          </div>
-        </div>
 
-        <!-- Proxy Section -->
-        <!-- Devices Section -->
-        <div id="section-devices" class="section">
-          <div class="section-header">
-            <span class="section-title">Active Sessions</span>
-            <span class="badge badge-gray">{{ devices.length }}</span>
-          </div>
-          <p class="section-desc">
-            Devices currently signed in. Revoking a session immediately invalidates that login token.
-          </p>
-          <div v-if="devicesLoading" class="section-loading">Loading…</div>
-          <div v-else-if="!devices.length" class="section-empty">No active sessions.</div>
-          <div v-else class="device-list">
-            <div v-for="dev in devices" :key="dev.id" class="device-row">
-              <div class="device-info">
-                <span class="device-name">{{ dev.name }}</span>
-                <span class="device-meta">{{ dev.ip_address || 'unknown IP' }} · last seen {{ fmtDate(dev.last_seen) }}</span>
-              </div>
-              <button class="revoke-btn" @click="revokeDevice(dev.id)">Revoke</button>
-            </div>
-          </div>
-          <p v-if="devicesError" class="error-msg">{{ devicesError }}</p>
-        </div>
-
-        <!-- Paired Devices Section -->
-        <div id="section-pairing" class="section">
-          <div class="section-header">
-            <span class="section-title">Paired Devices</span>
-            <span class="badge badge-gray">{{ pairedCount }}</span>
-          </div>
-          <p class="section-desc">
-            Pair the CarbonPanel Android app by scanning a QR code. The app gets its own
-            long-lived token, revocable above at any time. Re-authenticate here to create
-            the code; your password and 2FA code are never sent to the phone.
-          </p>
-
-          <div class="pair-endpoints">
-            <div class="pair-subhead">Addresses to embed in the code</div>
-            <p class="pair-hint">
-              The phone tries these in order until one answers. Include an address that
-              works away from home — a VPN/Tailscale address or a public domain — or the
-              app will only work on your LAN.
-            </p>
-            <label
-              v-for="ep in allEndpoints"
-              :key="ep.url"
-              class="pair-ep-row"
-            >
-              <input type="checkbox" :value="ep.url" v-model="selectedEndpoints" />
-              <span class="pair-ep-url">{{ ep.url }}</span>
-              <span :class="['pair-ep-kind', `kind-${ep.kind}`]">{{ endpointKindLabel(ep.kind) }}</span>
-            </label>
-
-            <div class="pair-add-row">
-              <BaseInput
-                v-model="newEndpoint"
-                placeholder="https://panel.example.com"
-                @keyup.enter="addEndpoint"
-              />
-              <button class="theme-btn" :disabled="!newEndpoint.trim()" @click="addEndpoint">
-                Add
-              </button>
-            </div>
-            <p v-if="endpointError" class="error-msg">{{ endpointError }}</p>
-          </div>
-
-          <div class="confirm-form">
-            <BaseInput
-              v-model="pairAuthPassword"
-              label="Current Password"
-              id="pair-password"
-              type="password"
-              autocomplete="current-password"
-              required
-            />
-            <BaseInput
-              v-if="auth.user?.totp_enabled"
-              v-model="pairAuthTotp"
-              label="Current TOTP Code"
-              id="pair-totp"
-              placeholder="000000"
-              inputmode="numeric"
-              maxlength="6"
-              required
-            />
-          </div>
-
-          <div class="pair-actions">
-            <button
-              class="theme-btn active"
-              :disabled="pairingBusy || !selectedEndpoints.length || !pairAuthPassword || (auth.user?.totp_enabled && pairAuthTotp.length !== 6)"
-              @click="startPairing"
-            >
-              {{ pairing ? 'New code' : 'Pair a device' }}
-            </button>
-            <button v-if="pairing" class="theme-btn" @click="cancelPairing">Done</button>
-          </div>
-
-          <div v-if="pairing" class="pair-panel" :class="{ 'pair-panel--done': pairStatus === 'claimed' }">
-            <!-- Corner brackets frame the code the way a scanner viewfinder
+              <div v-if="pairing" class="pair-panel" :class="{ 'pair-panel--done': pairStatus === 'claimed' }">
+                <!-- Corner brackets frame the code the way a scanner viewfinder
                  does, so it reads as "point a camera here" rather than as a
                  decorative image. -->
-            <div class="pair-qr-frame" :class="{ 'is-stale': pairStatus === 'expired' }">
-              <span class="pair-corner pair-corner--tl" />
-              <span class="pair-corner pair-corner--tr" />
-              <span class="pair-corner pair-corner--bl" />
-              <span class="pair-corner pair-corner--br" />
-              <img
-                class="pair-qr"
-                :src="`data:image/png;base64,${pairing.qr_png_b64}`"
-                alt="Pairing QR code"
-              />
-              <div v-if="pairStatus === 'claimed'" class="pair-qr-veil">✓</div>
-              <div v-else-if="pairStatus === 'expired'" class="pair-qr-veil pair-qr-veil--stale">
-                expired
-              </div>
-            </div>
+                <div class="pair-qr-frame" :class="{ 'is-stale': pairStatus === 'expired' }">
+                  <span class="pair-corner pair-corner--tl" />
+                  <span class="pair-corner pair-corner--tr" />
+                  <span class="pair-corner pair-corner--bl" />
+                  <span class="pair-corner pair-corner--br" />
+                  <img
+                    class="pair-qr"
+                    :src="`data:image/png;base64,${pairing.qr_png_b64}`"
+                    alt="Pairing QR code"
+                  />
+                  <div v-if="pairStatus === 'claimed'" class="pair-qr-veil">✓</div>
+                  <div v-else-if="pairStatus === 'expired'" class="pair-qr-veil pair-qr-veil--stale">
+                    expired
+                  </div>
+                </div>
 
-            <div class="pair-side">
-              <div class="pair-steps">
-                <div class="pair-step"><i>1</i><span>Install the CarbonPanel app on your phone</span></div>
-                <div class="pair-step"><i>2</i><span>Open it and tap <b>Scan pairing code</b></span></div>
-                <div class="pair-step"><i>3</i><span>Point the camera at this code</span></div>
-              </div>
+                <div class="pair-side">
+                  <div class="pair-steps">
+                    <div class="pair-step"><i>1</i><span>Install the CarbonPanel app on your phone</span></div>
+                    <div class="pair-step"><i>2</i><span>Open it and tap <b>Scan pairing code</b></span></div>
+                    <div class="pair-step"><i>3</i><span>Point the camera at this code</span></div>
+                  </div>
 
-              <div class="pair-status" :class="pairStatusClass">
-                <template v-if="pairStatus === 'claimed'">
-                  Paired with {{ pairedName || 'device' }} — it's ready to use.
-                </template>
-                <template v-else-if="pairStatus === 'expired'">
-                  Code expired. Generate a new one to try again.
-                </template>
-                <template v-else>
-                  <span class="pair-pulse" />Waiting for a device to scan…
-                </template>
-              </div>
+                  <div class="pair-status" :class="pairStatusClass">
+                    <template v-if="pairStatus === 'claimed'">
+                      Paired with {{ pairedName || 'device' }} — it's ready to use.
+                    </template>
+                    <template v-else-if="pairStatus === 'expired'">
+                      Code expired. Generate a new one to try again.
+                    </template>
+                    <template v-else>
+                      <span class="pair-pulse" />Waiting for a device to scan…
+                    </template>
+                  </div>
 
-              <!-- Time pressure is the point: the code is single-use and
+                  <!-- Time pressure is the point: the code is single-use and
                    short-lived, so the countdown is shown rather than left to
                    expire silently. -->
-              <div v-if="pairStatus === 'pending'" class="pair-timer">
-                <div class="pair-timer-bar">
-                  <div class="pair-timer-fill" :style="{ width: pairTimerPct + '%' }" />
+                  <div v-if="pairStatus === 'pending'" class="pair-timer">
+                    <div class="pair-timer-bar">
+                      <div class="pair-timer-fill" :style="{ width: pairTimerPct + '%' }" />
+                    </div>
+                    <span class="pair-timer-text">{{ pairCountdown }}s</span>
+                  </div>
+
+                  <div v-if="pairStatus !== 'claimed'" class="pair-manual">
+                    <span class="pair-manual-label">Can't scan? Type this code in the app</span>
+                    <code class="pair-code">{{ pairing.code }}</code>
+                  </div>
                 </div>
-                <span class="pair-timer-text">{{ pairCountdown }}s</span>
-              </div>
-
-              <div v-if="pairStatus !== 'claimed'" class="pair-manual">
-                <span class="pair-manual-label">Can't scan? Type this code in the app</span>
-                <code class="pair-code">{{ pairing.code }}</code>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div id="section-proxy" class="section">
-          <div class="section-header">
-            <span class="section-title">Outbound Proxy</span>
-            <span :class="['badge', proxy.enabled ? 'badge-green' : 'badge-gray']">
-              {{ proxy.enabled ? 'enabled' : 'disabled' }}
-            </span>
-          </div>
-          <p class="section-desc">
-            Route update checks through an HTTP or SOCKS5 proxy (e.g. Clash on 7890).
-            Useful if GitHub is blocked on your network.
-          </p>
+            <div id="section-proxy" v-show="sectionVisible('section-proxy')" class="section">
+              <div class="section-header">
+                <span class="section-title">Outbound Proxy</span>
+                <span :class="['badge', proxy.enabled ? 'badge-green' : 'badge-gray']">
+                  {{ proxy.enabled ? 'enabled' : 'disabled' }}
+                </span>
+              </div>
+              <p class="section-desc">
+                Route update checks through an HTTP or SOCKS5 proxy (e.g. Clash on 7890).
+                Useful if GitHub is blocked on your network.
+              </p>
 
-          <div class="proxy-row">
-            <span class="style-lbl">Enable proxy</span>
-            <button
-              :class="['theme-btn', { active: proxy.enabled }]"
-              :disabled="proxySaving"
-              @click="setProxyEnabled(true)"
-            >On</button>
-            <button
-              :class="['theme-btn', { active: !proxy.enabled }]"
-              :disabled="proxySaving"
-              @click="setProxyEnabled(false)"
-            >Off</button>
-          </div>
+              <div class="proxy-row">
+                <span class="style-lbl">Enable proxy</span>
+                <button
+                  :class="['theme-btn', { active: proxy.enabled }]"
+                  :disabled="proxySaving"
+                  @click="setProxyEnabled(true)"
+                >On</button>
+                <button
+                  :class="['theme-btn', { active: !proxy.enabled }]"
+                  :disabled="proxySaving"
+                  @click="setProxyEnabled(false)"
+                >Off</button>
+              </div>
 
-          <div class="proxy-row">
-            <span class="style-lbl">Type</span>
-            <button
-              :class="['theme-btn', { active: proxy.type === 'http' }]"
-              :disabled="proxySaving"
-              @click="setProxyType('http')"
-            >HTTP</button>
-            <button
-              :class="['theme-btn', { active: proxy.type === 'socks5' }]"
-              :disabled="proxySaving"
-              @click="setProxyType('socks5')"
-            >SOCKS5</button>
-          </div>
+              <div class="proxy-row">
+                <span class="style-lbl">Type</span>
+                <button
+                  :class="['theme-btn', { active: proxy.type === 'http' }]"
+                  :disabled="proxySaving"
+                  @click="setProxyType('http')"
+                >HTTP</button>
+                <button
+                  :class="['theme-btn', { active: proxy.type === 'socks5' }]"
+                  :disabled="proxySaving"
+                  @click="setProxyType('socks5')"
+                >SOCKS5</button>
+              </div>
 
-          <div class="proxy-fields">
-            <div class="proxy-field">
-              <span class="style-lbl">Host</span>
-              <BaseInput v-model="proxy.host" placeholder="127.0.0.1" @blur="saveProxy" />
+              <div class="proxy-fields">
+                <div class="proxy-field">
+                  <span class="style-lbl">Host</span>
+                  <BaseInput v-model="proxy.host" placeholder="127.0.0.1" @blur="saveProxy" />
+                </div>
+                <div class="proxy-field proxy-field-port">
+                  <span class="style-lbl">Port</span>
+                  <BaseInput v-model.number="proxy.port" type="number" placeholder="7890" @blur="saveProxy" />
+                </div>
+              </div>
+
+              <p v-if="proxyError" class="error-msg">{{ proxyError }}</p>
+              <p v-if="proxySuccess" class="success-msg">{{ proxySuccess }}</p>
+
+              <div class="proxy-actions">
+                <BaseButton variant="ghost" :disabled="proxyTesting" @click="testProxy">
+                  {{ proxyTesting ? 'Testing…' : 'Test connection' }}
+                </BaseButton>
+              </div>
             </div>
-            <div class="proxy-field proxy-field-port">
-              <span class="style-lbl">Port</span>
-              <BaseInput v-model.number="proxy.port" type="number" placeholder="7890" @blur="saveProxy" />
-            </div>
-          </div>
-
-          <p v-if="proxyError" class="error-msg">{{ proxyError }}</p>
-          <p v-if="proxySuccess" class="success-msg">{{ proxySuccess }}</p>
-
-          <div class="proxy-actions">
-            <BaseButton variant="ghost" :disabled="proxyTesting" @click="testProxy">
-              {{ proxyTesting ? 'Testing…' : 'Test connection' }}
-            </BaseButton>
           </div>
         </div>
       </div>
@@ -1213,6 +1237,7 @@ import { useRoute } from 'vue-router'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useLayoutStore } from '@/stores/layout'
 import { useMetricsStore } from '@/stores/metrics'
 import { useThemeStore, type AnimationLevel } from '@/stores/theme'
 import { useAlertsStore, type AlertRuleKey, type AlertSeverity } from '@/stores/alerts'
@@ -1228,6 +1253,7 @@ import QRCode from 'qrcode'
 
 const auth = useAuthStore()
 const metrics = useMetricsStore()
+const layoutStore = useLayoutStore()
 const theme = useThemeStore()
 const alerts = useAlertsStore()
 const bg = useBackgroundStore()
@@ -1239,30 +1265,54 @@ const { sendInterval } = useWebSocket()
 
 const mainEl = ref<HTMLElement | null>(null)
 
+const settingsSearch = ref('')
+const activeGroup = ref('general')
+const settingsGroups = [
+  { id: 'general', label: 'General', description: 'Dashboard, display, language and refresh rate' },
+  { id: 'appearance', label: 'Appearance', description: 'Theme, backgrounds, colors and motion' },
+  { id: 'notifications', label: 'Notifications', description: 'Alerts and webhook delivery' },
+  { id: 'security', label: 'Account & security', description: 'Password, passkeys, sessions and paired devices' },
+  { id: 'server', label: 'Server', description: 'Updates, service logs and network proxy' },
+]
+const currentGroup = computed(() => settingsGroups.find(group => group.id === activeGroup.value) || settingsGroups[0])
 const navSections = computed(() => [
-  { id: 'section-appearance', label: 'Appearance' },
-  { id: 'section-style',      label: 'Stylistic' },
-  { id: 'section-backgrounds',label: 'Backgrounds' },
-  { id: 'section-display',    label: 'Display' },
-  { id: 'section-frequency',  label: 'Frequency' },
-  { id: 'section-alerts',     label: 'Alerts' },
-  { id: 'section-version',    label: 'Version' },
-  { id: 'section-2fa',        label: '2FA' },
-  { id: 'section-passkeys',   label: 'Passkeys' },
-  { id: 'section-account',    label: 'Account' },
-  { id: 'section-language',   label: t('settings.language') },
-  { id: 'section-webhooks',   label: t('settings.webhooks') },
-  { id: 'section-devices',    label: 'Sessions' },
-  { id: 'section-pairing',    label: 'Paired Devices' },
-  { id: 'section-proxy',      label: 'Proxy' },
+  { id: 'section-dashboard', group: 'general', label: 'Dashboard layout', keywords: 'automatic auto placement arrange cards widgets manual grid screen' },
+  { id: 'section-appearance', group: 'appearance', label: 'Theme & transparency', keywords: 'dark light auto appearance surfaces opacity' },
+  { id: 'section-style', group: 'appearance', label: 'Colors, typography & motion', keywords: 'stylistic style font size animation contrast accent reset' },
+  { id: 'section-backgrounds', group: 'appearance', label: 'Backgrounds', keywords: 'wallpaper image crop login mobile android picture' },
+  { id: 'section-display', group: 'general', label: 'Display', keywords: 'disks network interfaces metrics scale zoom' },
+  { id: 'section-frequency', group: 'general', label: 'Refresh rate', keywords: 'frequency interval polling updates seconds live' },
+  { id: 'section-alerts', group: 'notifications', label: 'Alerts', keywords: 'threshold cpu ram memory disk gpu temperature severity warning critical' },
+  { id: 'section-version', group: 'server', label: 'Updates & service logs', keywords: 'version release install restart backend check progress' },
+  { id: 'section-2fa', group: 'security', label: 'Two-factor authentication', keywords: '2fa totp authenticator otp security' },
+  { id: 'section-passkeys', group: 'security', label: 'Passkeys', keywords: 'fingerprint biometric webauthn security key' },
+  { id: 'section-account', group: 'security', label: 'Account', keywords: 'username password login credentials' },
+  { id: 'section-language', group: 'general', label: t('settings.language'), keywords: 'language locale translation english chinese' },
+  { id: 'section-webhooks', group: 'notifications', label: t('settings.webhooks'), keywords: 'notifications webhook delivery url secret test' },
+  { id: 'section-devices', group: 'security', label: 'Sessions', keywords: 'devices active revoke token browser sign out' },
+  { id: 'section-pairing', group: 'security', label: 'Paired Devices', keywords: 'phone android qr pair endpoint certificate https' },
+  { id: 'section-proxy', group: 'server', label: 'Outbound proxy', keywords: 'network http socks connection host port authentication' },
 ])
-
-function scrollTo(id: string) {
-  const target = document.getElementById(id)
-  const container = mainEl.value
+const visibleSections = computed(() => {
+  const words = settingsSearch.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
+  return navSections.value.filter(section => words.length
+    ? words.every(word => `${section.label} ${section.keywords}`.toLocaleLowerCase().includes(word))
+    : section.group === activeGroup.value)
+})
+function sectionVisible(id: string) { return visibleSections.value.some(section => section.id === id) }
+function selectGroup(id: string) {
+  settingsSearch.value = ''; activeGroup.value = id
+  mainEl.value?.scrollTo({ top: 0, behavior: 'instant' })
+}
+async function scrollTo(id: string) {
+  const section = navSections.value.find(section => section.id === id)
+  if (!section) return
+  settingsSearch.value = ''; activeGroup.value = section.group
+  await nextTick()
+  const target = document.getElementById(id), container = mainEl.value
   if (!target || !container) return
   const delta = target.getBoundingClientRect().top - container.getBoundingClientRect().top
-  container.scrollBy({ top: delta - 16, behavior: 'smooth' })
+  container.scrollBy({ top: delta - 16, behavior: 'instant' })
 }
 
 // Lets the command palette (or any external link) jump straight to a section via #section-id
@@ -2358,6 +2408,7 @@ async function testProxy() {
 }
 
 onMounted(async () => {
+  void layoutStore.loadRemote()
   void loadWebhooks()
   void loadProxy()
   void loadDevices()
@@ -2386,42 +2437,38 @@ onMounted(async () => {
 <style scoped>
 .settings-page { height: 100%; display: flex; flex-direction: column; }
 .settings-main { flex: 1; overflow-y: auto; padding: 20px; display: flex; justify-content: center; }
-.settings-container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; }
+.settings-container { width: 100%; max-width: 1080px; display: flex; flex-direction: column; gap: 20px; }
+
+.back-link { color: var(--fg-muted); font-size: 11px; text-decoration: none; }
+.back-link:hover { color: var(--accent); }
 
 .page-title { display: flex; align-items: center; gap: 14px; }
 
-.settings-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 14px;
-  background: var(--surface-glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.nav-pill {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  font-family: var(--font);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  padding: 4px 10px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
-}
-.nav-pill:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
-.page-title h1 { font-size: 16px; font-weight: 700; }
-.back-link { font-size: 11px; color: var(--fg-muted); text-decoration: none; transition: color var(--transition); }
-.back-link:hover { color: var(--accent); }
-
+.settings-search { display: flex; gap: 10px; align-items: center; border: 1px solid var(--border); background: var(--bg-input); border-radius: var(--radius); padding: 4px 8px; }
+.settings-search input { width: 100%; min-width: 0; background: transparent; border: 0; padding: 12px; color: var(--fg); font-family: var(--font); font-size: 12px; }
+.settings-search button { flex-shrink: 0; }
+.settings-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.settings-nav { position: sticky; top: 0; display: flex; flex-direction: column; gap: 6px; }
+.category-button { background: transparent; border: 1px solid transparent; border-radius: var(--radius); font-family: var(--font); cursor: pointer; text-align: left; padding: 14px; display: flex; flex-direction: column; gap: 7px; border-color: transparent; }
+.category-button strong { font-size: 12px; color: var(--fg); }
+.category-button span { font-size: 10px; color: var(--fg-muted); line-height: 1.6; }
+.category-button[aria-pressed="true"] { background: var(--accent-dim); border-color: var(--accent-border); }
+.category-button[aria-pressed="true"] strong { color: var(--accent); }
+.settings-sections { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.settings-category-header h2 { font-size: 18px; margin-bottom: 6px; }
+.settings-category-header p, .settings-empty p { color: var(--fg-muted); font-size: 11px; line-height: 1.7; }
+.section-shortcuts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+.section-shortcuts button, .settings-search button, .settings-empty button { background: var(--surface-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--fg-muted); font-family: var(--font); cursor: pointer; }
+.section-shortcuts button:hover, .category-button:hover { background: var(--bg-hover); color: var(--fg); }
+.section-shortcuts button { font-size: 10px; padding: 6px 9px; }
+.settings-empty { padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); }
+.settings-empty button { margin-top: 12px; }
+.dashboard-placement { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.dashboard-placement input { margin-top: 3px; accent-color: var(--accent); }
+.dashboard-placement strong { font-size: 12px; }
+.dashboard-placement small { display: block; margin-top: 8px; font-size: 11px; color: var(--fg-muted); line-height: 1.7; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (max-width: 800px) { .settings-workspace { grid-template-columns: minmax(0, 1fr); gap: 18px; } .settings-nav { position: static; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } .category-button { border-color: var(--border); padding: 12px; } .category-button span { display: none; } }
 .section {
   background: var(--surface-glass);
   backdrop-filter: blur(14px);
@@ -2434,7 +2481,6 @@ onMounted(async () => {
   gap: 14px;
   transition: border-color var(--transition), background var(--transition);
 }
-
 .section-header { display: flex; align-items: center; gap: 10px; }
 .section-title { font-size: 12px; font-weight: 600; color: var(--fg); }
 .section-desc { font-size: 11px; color: var(--fg-muted); line-height: 1.6; }
@@ -2690,7 +2736,6 @@ onMounted(async () => {
 @media (max-width: 640px) {
   .settings-main { padding: 12px; }
   .settings-nav { gap: 4px; padding: 8px 10px; }
-  .nav-pill { font-size: 9px; padding: 3px 8px; }
 
   .style-grid,
   .typography-grid {

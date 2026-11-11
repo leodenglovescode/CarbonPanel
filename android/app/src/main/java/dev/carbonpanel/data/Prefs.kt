@@ -119,6 +119,10 @@ class Prefs internal constructor(
         private const val KEY_WIDGET_REFRESH = "widget_refresh_minutes"
     }
 
+    var filesGrid: Boolean
+        get() = prefs.getBoolean(scoped("files_grid"), false)
+        set(value) = prefs.edit().putBoolean(scoped("files_grid"), value).apply()
+
     var token: String?
         get() = prefs.getString(scoped(KEY_TOKEN), null)
         set(v) = prefs.edit().putString(scoped(KEY_TOKEN), v).apply()

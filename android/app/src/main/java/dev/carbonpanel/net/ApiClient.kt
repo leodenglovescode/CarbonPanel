@@ -61,6 +61,12 @@ object ApiClient {
             sharedClient ?: okHttp(context).also { sharedClient = it }
         }
 
+    /** Files may stream for hours; retain pins/auth but time out only inactivity. */
+    fun fileClient(context: Context): OkHttpClient = imageClient(context).newBuilder()
+        .callTimeout(0, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     /** Absolute URL of the panel's app background image, or null if unpaired. */
     fun backgroundImageUrl(context: Context, target: String = "android-app", version: Long = 0): String? {
         val base = activeBaseUrl ?: Prefs.get(context).lastGoodEndpoint ?: return null

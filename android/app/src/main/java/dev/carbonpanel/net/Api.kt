@@ -56,7 +56,11 @@ import retrofit2.http.Query
  */
 interface Api {
     @GET("api/v1/files")
-    suspend fun files(@Query("path") path: String, @Query("offset") offset: Int = 0): dev.carbonpanel.data.FileListing
+    suspend fun files(
+        @Query("path") path: String, @Query("offset") offset: Int = 0,
+        @Query("search") search: String = "", @Query("sort") sort: String = "name",
+        @Query("descending") descending: Boolean = false, @Query("show_hidden") showHidden: Boolean = true,
+    ): dev.carbonpanel.data.FileListing
 
     @GET("api/v1/files/preview")
     suspend fun filePreview(@Query("path") path: String): okhttp3.ResponseBody

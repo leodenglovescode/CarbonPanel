@@ -116,7 +116,15 @@ def kind(path: str):
     return "file", "application/octet-stream"
 
 
-def list_directory(path: str, offset: int = 0, limit: int = 200):
+def list_directory(
+    path: str,
+    offset: int = 0,
+    limit: int = 200,
+    search: str = "",
+    sort: str = "name",
+    descending: bool = False,
+    show_hidden: bool = True,
+):
     resolved, descriptor, _ = open_path(path, directory=True)
     entries = []
     try:
@@ -153,7 +161,26 @@ def list_directory(path: str, offset: int = 0, limit: int = 200):
         raise map_error(exc) from exc
     finally:
         os.close(descriptor)
-    entries.sort(key=lambda e: (not e["directory"], e["name"].casefold(), e["name"]))
+    needle = search.casefold()
+    entries = [
+        e
+        for e in entries
+        if (show_hidden or not e["name"].startswith(".")) and needle in e["name"].casefold()
+    ]
+
+    def order(entry):
+        name = (entry["name"].casefold(), entry["name"])
+        if sort == "modified":
+            return (entry["modified"], *name)
+        if sort == "size":
+            return (entry["size"] or 0, *name)
+        if sort == "kind":
+            return (entry["kind"], *name)
+        return name
+
+    entries.sort(key=order, reverse=descending)
+    entries.sort(key=lambda e: not e["directory"])
+
     return {
         "path": str(resolved),
         "parent": str(resolved.parent) if resolved != Path("/") else None,

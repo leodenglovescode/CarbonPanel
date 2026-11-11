@@ -28,7 +28,8 @@ class PanelRepository(private val context: Context) {
 
     private val prefs = Prefs.get(context)
 
-    suspend fun files(path: String, offset: Int = 0) = call { it.files(path, offset) }
+    suspend fun files(path: String, offset: Int = 0, search: String = "", sort: String = "name", showHidden: Boolean = true) =
+        call { it.files(path, offset, search, sort, sort == "modified" || sort == "size", showHidden) }
     suspend fun filePreview(path: String) = call { api ->
         withContext(Dispatchers.IO) { api.filePreview(path).use { it.string() } }
     }
