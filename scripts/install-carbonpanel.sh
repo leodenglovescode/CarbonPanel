@@ -35,6 +35,7 @@ COMMAND="${1:-}"
 shift || true
 
 REQUESTED_REF=""
+PURGE_DRY_RUN=false
 
 # ── Colors (disabled when not a tty) ─────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -834,6 +835,7 @@ build_release() {
   [[ -t 1 ]] && printf '\n'
 
   run_silent install -m 0755 "$release_dir/scripts/install-carbonpanel.sh" "$CONTROL_SCRIPT"
+  run_silent install -m 0755 "$release_dir/scripts/purge-releases.py" "$BIN_DIR/purge-releases.py"
   # $BIN_DIR isn't on PATH by default — symlink onto it so `carbonpanelctl`
   # works bare, as the README and systemd ExecStart units document.
   ln -sf "$CONTROL_SCRIPT" /usr/local/bin/carbonpanelctl
@@ -1275,23 +1277,27 @@ chown_shared_db() {
 }
 
 cleanup_old_releases() {
-  local keep_targets
-  keep_targets="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
-  keep_targets+=" $(readlink -f "$PREVIOUS_LINK" 2>/dev/null || true)"
-
-  mapfile -t release_paths < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort -r)
-  local count=0
-  local release_path
-  for release_path in "${release_paths[@]}"; do
-    count=$((count + 1))
-    if [[ " $keep_targets " == *" $release_path "* ]]; then
-      continue
-    fi
-    if (( count > 4 )); then
-      rm -rf "$release_path"
-    fi
-  done
+  python3 "$BIN_DIR/purge-releases.py" "$INSTALL_ROOT" "$@"
 }
+
+purge_old_releases() {
+  require_root
+  acquire_update_lock || die "Another update, check or purge is already running."
+  if [[ "$PURGE_DRY_RUN" == true ]]; then
+    cleanup_old_releases --dry-run
+  else
+    cleanup_old_releases
+  fi
+}
+
+bootstrap_installer() (
+  # A supervising shell owns the temporary clone even when the target updater
+  # exits unsuccessfully. exec used to abandon the clone on every update.
+  local bootstrap_dir="$1" install_mode="$2" ref="$3"
+  trap 'rm -rf -- "$bootstrap_dir"' EXIT
+  CARBONPANEL_REEXECED=1 CARBONPANEL_FORCE="${CARBONPANEL_FORCE:-}" \
+    bash "$bootstrap_dir/scripts/install-carbonpanel.sh" "$install_mode" --ref "$ref"
+)
 
 persist_success_status() {
   local version="$1"
@@ -1379,7 +1385,8 @@ deploy_release() {
 
   set_update_progress 98 verifying "Backend is healthy; finalizing update" false
   persist_success_status "$version" "$commit" "$source_type" "$installed_at" "$release_url"
-  cleanup_old_releases
+  # A cleanup error must not turn a healthy deployment into a failed update.
+  cleanup_old_releases || warn "Release cleanup failed; run carbonpanelctl purge to retry."
 }
 
 check_for_updates() {
@@ -1503,10 +1510,9 @@ install_or_update() {
   local install_mode="$1"
   local source_type ref release_url release_id release_dir commit installed_at
 
+  acquire_update_lock || die "Another update, check or purge is already running."
+
   if [[ "$install_mode" == "update" ]]; then
-    if ! acquire_update_lock; then
-      die "Another update or version check is already running."
-    fi
     begin_update_progress
     trap update_operation_exit_guard EXIT
   fi
@@ -1544,6 +1550,9 @@ install_or_update() {
       if [[ -d "$SHARED_DIR" ]]; then
         persist_success_status "$ref" "$current_commit" "$source_type" "$(now_iso)" "$release_url"
       fi
+      if [[ -f "$BIN_DIR/purge-releases.py" ]]; then
+        cleanup_old_releases || warn "Release cleanup failed; run carbonpanelctl purge to retry."
+      fi
       finish_update_progress succeeded "Already on the latest revision" up_to_date
       return 0
     fi
@@ -1568,8 +1577,11 @@ install_or_update() {
     bootstrap_dir="$(mktemp -d)"
     if git clone --quiet --depth 1 --branch "$ref" "$REPO_URL" "$bootstrap_dir" >/dev/null 2>&1 \
        && [[ -f "$bootstrap_dir/scripts/install-carbonpanel.sh" ]]; then
-      CARBONPANEL_REEXECED=1 CARBONPANEL_FORCE="${CARBONPANEL_FORCE:-}" \
-        exec bash "$bootstrap_dir/scripts/install-carbonpanel.sh" "$install_mode" --ref "$ref"
+      if bootstrap_installer "$bootstrap_dir" "$install_mode" "$ref"; then
+        exit 0
+      else
+        exit "$?"
+      fi
     fi
     rm -rf "$bootstrap_dir"
     warn "Couldn't bootstrap the latest install script — continuing with the version already running."
@@ -1602,6 +1614,10 @@ install_or_update() {
   release_dir="$(clone_release "$ref" "$release_id")"
   commit="$(git -C "$release_dir" rev-parse HEAD)"
   installed_at="$(now_iso)"
+  # Identify interrupted builds for a later purge without treating arbitrary
+  # directories as disposable. Deployment metadata is still written on deploy.
+  write_release_metadata "$release_dir" "$ref" "$commit" "$source_type" "$installed_at"
+  mv "$release_dir/.carbonpanel-release.json" "$release_dir/.carbonpanel-build.json"
 
   CP_STATUS_REPO_URL="$REPO_URL" \
   CP_STATUS_CURRENT_VERSION="$(read_json_file_field "$CURRENT_LINK/.carbonpanel-release.json" version)" \
@@ -1663,6 +1679,7 @@ install_or_update() {
 
 rollback_release() {
   require_root
+  acquire_update_lock || die "Another update, check or purge is already running."
 
   local previous_target current_target
   previous_target="$(readlink -f "$PREVIOUS_LINK" 2>/dev/null || true)"
@@ -1760,8 +1777,9 @@ show_menu() {
   printf "  ${CYAN}${BOLD}4${NC}  Uninstall      ${DIM}scorched earth 🔥${NC}\n"
   printf "  ${CYAN}${BOLD}5${NC}  Version info   ${DIM}see what's poppin${NC}\n"
   printf "  ${CYAN}${BOLD}6${NC}  Fix            ${DIM}repair permissions & common issues${NC}\n"
+  printf "  ${CYAN}${BOLD}7${NC}  Purge          ${DIM}remove obsolete releases${NC}\n"
   printf "\n"
-  printf "  ${BOLD}Pick one [1-6]:${NC} "
+  printf "  ${BOLD}Pick one [1-7]:${NC} "
   read -r choice
   printf '\n'
   case "$choice" in
@@ -1771,7 +1789,8 @@ show_menu() {
     4) COMMAND="uninstall" ;;
     5) COMMAND="current-version" ;;
     6) COMMAND="fix" ;;
-    *) die "that's not a valid option bud — pick a number between 1 and 6" ;;
+    7) COMMAND="purge" ;;
+    *) die "that's not a valid option bud — pick a number between 1 and 7" ;;
   esac
 }
 
@@ -1968,6 +1987,11 @@ while [[ $# -gt 0 ]]; do
       export CARBONPANEL_FORCE
       shift
       ;;
+    --dry-run)
+      [[ "$COMMAND" == purge ]] || die "--dry-run is only supported for purge"
+      PURGE_DRY_RUN=true
+      shift
+      ;;
     *)
       die "Unknown argument: $1"
       ;;
@@ -2001,6 +2025,9 @@ case "$COMMAND" in
     ;;
   rollback)
     rollback_release
+    ;;
+  purge)
+    purge_old_releases
     ;;
   uninstall)
     uninstall_carbonpanel

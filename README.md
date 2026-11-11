@@ -99,6 +99,22 @@ manually:
 sudo carbonpanelctl rollback
 ```
 
+Successful updates automatically remove obsolete release directories, keeping
+the running release and the previous release for rollback. Interrupted builds
+created by the updated installer are also eligible for cleanup. To preview or
+run cleanup manually (serialized with updates and rollbacks):
+
+```bash
+sudo carbonpanelctl purge --dry-run
+sudo carbonpanelctl purge
+```
+
+Purge validates release names and metadata and skips unrecognized entries and
+symlinks. It refuses unsafe release layouts or mounted directories. Shared data,
+configuration, certificates and database backups are preserved. Older temporary
+bootstrap clones without ownership markers are not automatically deleted; new
+updates clean up their bootstrap clone on exit.
+
 ## Configuration
 
 Local development reads `backend/.env`; managed installations read
