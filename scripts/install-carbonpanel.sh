@@ -780,7 +780,9 @@ clone_release() {
   # --progress forces git's real progress meter (%, speed) to stderr even when
   # not run silently — stdout stays clean so the `$(clone_release ...)` capture
   # below still only picks up the destination path.
-  git clone --progress --depth 1 --branch "$ref" "$REPO_URL" "$destination" || \
+  # The SysV supervisor intentionally uses umask 077 for private runtime files.
+  # Release code must also be readable/traversable by the service user and nginx.
+  ( umask 022; git clone --progress --depth 1 --branch "$ref" "$REPO_URL" "$destination" ) || \
     die "Failed to clone $REPO_URL at ref $ref. If you are behind a firewall, set your proxy first: export https_proxy=http://host:port"
 
   printf '%s\n' "$destination"
@@ -811,7 +813,9 @@ build_step() {
   local _tmp _rc=0
   _tmp=$(mktemp)
   # Package hooks and services may daemonize; they must not retain our lock.
-  ( unset CARBONPANEL_LOCK_HELD; "$@" ) 9>&- >"$_tmp" 2>&1 || _rc=$?
+  # Build artifacts (venv packages and frontend assets) are served by unprivileged
+  # users. Keep this mask local; configuration and updater files stay private.
+  ( umask 022; unset CARBONPANEL_LOCK_HELD; "$@" ) 9>&- >"$_tmp" 2>&1 || _rc=$?
   if [[ $_rc -ne 0 ]]; then
     printf '\n' >&2
     cat "$_tmp" >&2
